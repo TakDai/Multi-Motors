@@ -221,13 +221,24 @@ def parse_motor_from_text(
         logger.debug("Skipping non-motor product: %s", title)
         return []
 
+    if title.lower().startswith("collection"):
+        logger.debug("Skipping category page: %s", title)
+        return []
+
     if not brand:
         brand = detect_brand(title, url)
 
     # Extract base specs. The title describes the product itself, while the
     # rest of the page may list related products with other sizes and KVs.
     classe = extract_stator_class(title) or extract_stator_class(full_text)
-    kv_values = extract_kv_values(title) or extract_kv_values(full_text)
+    title_kvs = extract_kv_values(title)
+    kv_values = title_kvs or extract_kv_values(full_text)
+
+    # A page whose title names no size and no KV but lists many KVs is a
+    # category/listing page, not a single motor: skip it.
+    if not title_kvs and not extract_stator_class(title) and len(set(kv_values)) > 4:
+        logger.debug("Skipping listing page: %s", title)
+        return []
     weight = _first_match(RE_WEIGHT, full_text) or _first_match(RE_WEIGHT_ALT, full_text)
     shaft_dia = _first_match(RE_SHAFT_DIA, full_text) or _first_match(RE_SHAFT_DIA_ALT, full_text)
     motor_height = _first_match(RE_MOTOR_HEIGHT, full_text)

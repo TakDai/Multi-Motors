@@ -1,6 +1,7 @@
 """Base scraper with common functionality."""
 
 import logging
+from urllib.parse import urljoin
 import random
 import time
 from typing import Optional
@@ -133,7 +134,8 @@ class BaseScraper:
 
         # Extract images
         images = self._extract_images(soup)
-        image_url = images[0] if images else ""
+        # Make protocol-relative / relative URLs absolute; fill Shopify size placeholder
+        image_url = urljoin(url, images[0]).replace("{width}", "800") if images else ""
 
         motors = parse_product_listing(
             title=title,
