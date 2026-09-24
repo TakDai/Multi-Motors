@@ -138,3 +138,42 @@ multi_motors_ai/
 
 ### Boutiques FPV scrapées
 GetFPV, RaceDayQuads, Pyrodrone, BetaFPV, iFlight-RC
+
+## Recherche quotidienne et site catalogue
+
+### Catalogue dans le dépôt
+
+Le workflow `.github/workflows/nouveaux-moteurs.yml` s'exécute chaque jour à 06:00 UTC :
+
+- lance un cycle de recherche : `python -m multi_motors_ai.main --once --output github`
+- ajoute les nouveaux moteurs à `catalogue/moteurs.csv`
+- écrit le rapport du jour dans `catalogue/nouveautes/AAAA-MM-JJ.md`
+- commit le tout s'il y a des nouveautés
+
+Il peut aussi être lancé à la main depuis l'onglet **Actions**.
+
+### Site (`site/`)
+
+Site statique (HTML/CSS/JS, sans serveur) qui affiche `data/moteurs.csv` avec recherche, filtres par marque, stator et LiPo, et une fiche détaillée par moteur.
+
+Aperçu en local :
+
+```bash
+python -m http.server 8000
+# puis ouvrir http://localhost:8000/site/
+```
+
+### Mise en ligne sur OVH
+
+Le workflow `.github/workflows/deploy-ovh.yml` envoie le site par FTP sur l'hébergement OVH après chaque recherche quotidienne et à chaque modification de `site/` sur `Moteurs`. Il n'efface aucun fichier existant sur l'hébergement.
+
+À configurer une fois dans **Settings → Secrets and variables → Actions** du dépôt :
+
+| Nom | Type | Valeur |
+|-----|------|--------|
+| `OVH_FTP_HOST` | Secret | Serveur FTP (ex. `ftp.cluster0XX.hosting.ovh.net`) |
+| `OVH_FTP_USER` | Secret | Identifiant FTP |
+| `OVH_FTP_PASSWORD` | Secret | Mot de passe FTP |
+| `OVH_REMOTE_DIR` | Variable (optionnelle) | Dossier du site, `www` par défaut |
+
+Ces informations se trouvent dans l'espace client OVH : **Web Cloud → Hébergements → votre hébergement → FTP - SSH**.

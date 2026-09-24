@@ -1,0 +1,78 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Multi-Motors</title>
+<meta name="description" content="Catalogue des moteurs brushless FPV : stator, KV, poids, LiPo, fixation. Mis à jour chaque jour.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@500;600;700&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<link rel="stylesheet" href="assets/style.css">
+</head>
+<body>
+<!--APP-->
+<header class="top">
+  <div class="wrap top-inner">
+    <a class="brand" href="./" aria-label="Multi-Motors, accueil">
+      <svg class="brand-mark" viewBox="0 0 32 32" aria-hidden="true"><circle cx="16" cy="16" r="13" fill="none" stroke="currentColor" stroke-width="3"/><circle cx="16" cy="16" r="4" fill="currentColor"/><path d="M16 3v6M16 23v6M3 16h6M23 16h6" stroke="currentColor" stroke-width="3"/></svg>
+      <span>Multi<b>Motors</b></span>
+    </a>
+    <p class="top-stats" id="stats">Chargement du catalogue…</p>
+  </div>
+</header>
+
+<main class="wrap">
+  <section class="intro">
+    <h1>Le catalogue des moteurs brushless FPV</h1>
+    <p>Stator, KV, poids, tension et fixation de chaque moteur, relevés chez les fabricants et les boutiques spécialisées. Le catalogue se met à jour chaque jour.</p>
+  </section>
+
+  <section class="filters" aria-label="Filtres">
+    <label class="field field-search">
+      <span>Rechercher</span>
+      <input id="q" type="search" placeholder="Marque, modèle, référence…" autocomplete="off">
+    </label>
+    <label class="field">
+      <span>Marque</span>
+      <select id="brand"><option value="">Toutes</option></select>
+    </label>
+    <label class="field">
+      <span>Stator</span>
+      <select id="stator"><option value="">Tous</option></select>
+    </label>
+    <label class="field">
+      <span>LiPo</span>
+      <select id="lipo"><option value="">Toutes</option></select>
+    </label>
+    <label class="field">
+      <span>Trier par</span>
+      <select id="sort">
+        <option value="recent">Plus récents</option>
+        <option value="kv-asc">KV croissant</option>
+        <option value="kv-desc">KV décroissant</option>
+        <option value="weight-asc">Poids croissant</option>
+        <option value="stator">Taille de stator</option>
+      </select>
+    </label>
+  </section>
+
+  <div class="size-strip" id="sizes" aria-label="Tailles de stator"></div>
+
+  <p class="result-count" id="count" aria-live="polite"></p>
+  <section class="grid" id="grid" aria-label="Moteurs"></section>
+  <p class="empty" id="empty" hidden>Aucun moteur ne correspond à ces filtres.</p>
+</main>
+
+<footer class="foot wrap">
+  <p>Données relevées automatiquement sur les sites des fabricants et boutiques FPV. Vérifiez toujours la fiche officielle avant achat.</p>
+</footer>
+
+<dialog id="detail" aria-labelledby="d-title">
+  <form method="dialog" class="d-close-row"><button class="d-close" aria-label="Fermer">×</button></form>
+  <div id="d-body"></div>
+</dialog>
+<!--/APP-->
+<script src="assets/app.js"></script>
+</body>
+</html>
