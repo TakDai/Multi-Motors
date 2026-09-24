@@ -104,6 +104,12 @@ button, input, select { font: inherit; color: inherit; }
   cursor: pointer; transition: border-color .15s, transform .15s;
 }
 .card:hover { border-color: var(--accent); transform: translateY(-2px); }
+.card-img {
+  margin: -16px -16px 0; aspect-ratio: 4 / 3; max-width: calc(100% + 32px);
+  display: grid; place-items: center; overflow: hidden;
+  background: #fff; border-bottom: 1px solid var(--line); border-radius: 8px 8px 0 0;
+}
+.card-img img { width: 100%; height: 100%; object-fit: contain; padding: 12px; }
 .card-head { display: flex; align-items: center; gap: 14px; }
 .stator-glyph { flex: 0 0 56px; width: 56px; height: 56px; color: var(--accent); }
 .card-class { font: 700 30px/1 var(--display); letter-spacing: .02em; font-variant-numeric: tabular-nums; }

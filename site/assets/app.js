@@ -48,6 +48,12 @@
   const num = (s) => { const n = parseFloat(String(s).replace(",", ".")); return Number.isFinite(n) ? n : null; };
   const safeUrl = (u) => (/^https?:\/\//i.test(u) ? u : "");
   const fmtInt = (n) => n.toLocaleString("fr-FR");
+  // "1.5895" -> "1,59", "07" -> "7"; leaves non-numeric values untouched
+  const fmtNum = (s) => {
+    const n = num(s);
+    return n === null || !/^\s*[\d.,]+\s*$/.test(s) ? s : n.toLocaleString("fr-FR", { maximumFractionDigits: 2 });
+  };
+  const imgUrl = (m) => safeUrl(m.IMG);
 
   // "2207" -> { d: 22, h: 7 }, "0802" -> { d: 8, h: 2 }
   function statorDims(m) {
@@ -77,6 +83,7 @@
   }
 
   function spec(label, value, unit) {
+    value = value && fmtNum(value);
     const v = value ? `${esc(value)}${unit ? " " + unit : ""}` : "—";
     return `<div><dt>${label}</dt><dd class="${value ? "" : "na"}">${v}</dd></div>`;
   }
@@ -84,7 +91,9 @@
   // --- Rendering -----------------------------------------------------------
   function card(m, i) {
     const cls = m.CLASSE || "—";
+    const img = imgUrl(m);
     return `<button class="card" type="button" data-i="${i}">
+      ${img ? `<div class="card-img"><img src="${esc(img)}" alt="" loading="lazy" onerror="this.parentNode.remove()"></div>` : ""}
       <div class="card-head">
         ${statorGlyph(m)}
         <div class="card-class">${esc(cls)}<small>stator</small></div>
@@ -92,7 +101,7 @@
       <p class="card-title">${esc(m.MARQUE)}<span>${esc(m.NOM || m.REF)}</span></p>
       ${m.LIPO ? `<span class="badge">${esc(m.LIPO)}</span>` : ""}
       <dl class="specs">
-        ${spec("KV", m.KV && fmtInt(num(m.KV) ?? m.KV))}
+        ${spec("KV", m.KV)}
         ${spec("Poids", m.POIDS, "g")}
         ${spec("Axe", m["D SHAFT"], "mm")}
       </dl>
@@ -138,15 +147,15 @@
   }
 
   function openDetail(m) {
-    const row = (label, value, unit) => value ? `<tr><th>${label}</th><td>${esc(value)}${unit ? " " + unit : ""}</td></tr>` : "";
+    const row = (label, value, unit) => value ? `<tr><th>${label}</th><td>${esc(fmtNum(value))}${unit ? " " + unit : ""}</td></tr>` : "";
     const group = (title, rows) => rows.trim() ? `<div class="d-group"><h3>${title}</h3><table class="d-table">${rows}</table></div>` : "";
-    const img = safeUrl(m.IMG), link = safeUrl(m.LIEN);
+    const img = imgUrl(m), link = safeUrl(m.LIEN);
     $("d-body").innerHTML = `
       <div class="d-head">${statorGlyph(m)}<div>
         <h2 id="d-title">${esc(m.MARQUE)} ${esc(m.NOM)}</h2>
         <p>${esc(m.REF)}</p>
       </div></div>
-      ${img ? `<img class="d-img" src="${esc(img)}" alt="${esc(m.MARQUE + " " + m.NOM)}" loading="lazy">` : ""}
+      ${img ? `<img class="d-img" src="${esc(img)}" alt="${esc(m.MARQUE + " " + m.NOM)}" loading="lazy" onerror="this.remove()">` : ""}
       ${group("Moteur", row("Classe de stator", m.CLASSE) + row("KV", m.KV) + row("Poids", m.POIDS, "g") + row("Version", m.VERSION) + row("Configuration", m.CONFIG) + row("Aimants", m.AIMANT) + row("Cloche", m.CLOCHE))}
       ${group("Dimensions", row("Diamètre stator", m["D STATOR"], "mm") + row("Hauteur stator", m["H STATOR"], "mm") + row("Diamètre moteur", m["D MOTEUR"], "mm") + row("Hauteur moteur", m["H MOTEUR"], "mm"))}
       ${group("Axe et fixation", row("Diamètre d'axe", m["D SHAFT"], "mm") + row("Longueur d'axe", m["L SHAFT"], "mm") + row("Type d'axe", m["TYPE SHAFT"]) + row("Écrou d'hélice", m["VIS HEL"]) + row("Vis de fixation", m["VIS FIX"]) + row("Entraxe", m["ENTRAXE FIX"], "mm"))}
