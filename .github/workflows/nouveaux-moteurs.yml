@@ -1,0 +1,56 @@
+name: Recherche quotidienne des nouveaux moteurs
+
+on:
+  schedule:
+    # Tous les jours à 06:00 UTC (08:00 heure de Paris en été)
+    - cron: "0 6 * * *"
+  workflow_dispatch: {}
+
+permissions:
+  contents: write
+
+concurrency:
+  group: nouveaux-moteurs
+  cancel-in-progress: false
+
+jobs:
+  scan:
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: multi_motors_ai/requirements.txt
+
+      - name: Installer les dépendances
+        run: pip install -r multi_motors_ai/requirements.txt
+
+      - name: Rechercher les nouveaux moteurs
+        env:
+          REQUEST_DELAY_MIN: "1"
+          REQUEST_DELAY_MAX: "3"
+        run: python -m multi_motors_ai.main --once --output github
+
+      - name: Publier sur GitHub
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add catalogue/
+          if git diff --cached --quiet; then
+            echo "Aucun nouveau moteur aujourd'hui."
+            exit 0
+          fi
+          git commit -m "catalogue: nouveaux moteurs du $(date -u +%Y-%m-%d)"
+          git push
+
+      - name: Conserver le journal
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: journal-${{ github.run_id }}
+          path: multi_motors_ai.log
+          if-no-files-found: ignore

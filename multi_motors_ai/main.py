@@ -5,6 +5,7 @@ This application continuously searches the web for brushless motors,
 extracts their specifications, and adds them to a Google Sheet catalog.
 """
 
+import argparse
 import logging
 import random
 import signal
@@ -20,7 +21,7 @@ from .config import (
     SCAN_INTERVAL_MINUTES,
     LOG_LEVEL,
 )
-from .sheets import SheetsManager
+from .github_store import GitHubStore
 from .scrapers.search_engine import SearchEngineScraper
 from .scrapers.shop_scraper import ShopScraper, ManufacturerScraper
 from .models import MotorSpec
@@ -64,7 +65,7 @@ def deduplicate_motors(motors: list[MotorSpec]) -> list[MotorSpec]:
     return unique
 
 
-def run_scan_cycle(sheets: SheetsManager) -> int:
+def run_scan_cycle(sheets) -> int:
     """Run one complete scan cycle across all sources.
 
     Returns the number of new motors added.
@@ -182,26 +183,56 @@ def run_scan_cycle(sheets: SheetsManager) -> int:
     return added
 
 
-def main():
+def parse_args(argv=None):
+    parser = argparse.ArgumentParser(description="Multi-Motors AI catalog builder")
+    parser.add_argument(
+        "--output",
+        choices=["sheets", "github"],
+        default="sheets",
+        help="sheets: Google Sheet (default). github: CSV + daily report in catalogue/",
+    )
+    parser.add_argument(
+        "--once",
+        action="store_true",
+        help="Run a single scan cycle and exit (used by the daily GitHub Action)",
+    )
+    return parser.parse_args(argv)
+
+
+def main(argv=None):
     """Main entry point - runs the continuous scraping loop."""
+    args = parse_args(argv)
+
     logger.info("=" * 60)
     logger.info("  Multi-Motors AI - Brushless Motor Catalog Builder")
     logger.info("=" * 60)
 
-    # Connect to Google Sheets
-    sheets = SheetsManager()
+    if args.output == "github":
+        sheets = GitHubStore()
+    else:
+        # Imported lazily so the github output does not need Google libraries
+        from .sheets import SheetsManager
+        sheets = SheetsManager()
     try:
         sheets.connect()
     except Exception as e:
-        logger.critical("Cannot connect to Google Sheets: %s", e)
-        logger.critical(
-            "Make sure credentials.json is present and the service account "
-            "has access to the spreadsheet."
-        )
+        logger.critical("Cannot connect to catalog storage: %s", e)
+        if args.output == "sheets":
+            logger.critical(
+                "Make sure credentials.json is present and the service account "
+                "has access to the spreadsheet."
+            )
         sys.exit(1)
 
     total_in_sheet = sheets.get_row_count()
     logger.info("Current catalog size: %d motors", total_in_sheet)
+
+    if args.once:
+        added = run_scan_cycle(sheets)
+        if isinstance(sheets, GitHubStore):
+            sheets.write_daily_report()
+        logger.info("Single run finished: %d new motors", added)
+        return
 
     # Run first scan immediately
     logger.info("Running initial scan...")
