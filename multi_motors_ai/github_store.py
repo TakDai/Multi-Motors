@@ -30,6 +30,7 @@ class GitHubStore:
         self.catalog_dir = Path(catalog_dir)
         self.csv_path = self.catalog_dir / "moteurs.csv"
         self.reports_dir = self.catalog_dir / "nouveautes"
+        self.excluded_path = self.catalog_dir / "exclus.txt"
         self._existing_refs: set[str] = set()
         self._row_count = 0
         self.added_today: list[MotorSpec] = []
@@ -48,6 +49,12 @@ class GitHubStore:
             rows = list(csv.reader(f))[1:]
         self._row_count = len(rows)
         self._existing_refs = {r[1].strip() for r in rows if len(r) > 1 and r[1].strip()}
+        # Refs removed by hand (category pages, drones...) must not come back
+        if self.excluded_path.exists():
+            for line in self.excluded_path.read_text(encoding="utf-8").splitlines():
+                line = line.strip()
+                if line and not line.startswith("#"):
+                    self._existing_refs.add(line)
         logger.info("Loaded %d existing motor references", len(self._existing_refs))
 
     def add_motors(self, motors: list[MotorSpec]) -> int:

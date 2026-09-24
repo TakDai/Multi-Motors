@@ -1,0 +1,10 @@
+# Références que la recherche automatique ne doit jamais ajouter au catalogue
+# (pages catégorie, drones complets, KV inexistants). Une référence par ligne.
+BETA-0702-4200
+BETA-0702-12000
+BETA-0702-4600
+BETA-2306-4200
+BETA-2306-4600
+FLYW-1002-19800
+BETA-0702-22000
+BETA-0702-28000
