@@ -4,6 +4,7 @@ import re
 import logging
 from typing import Optional
 
+from .config import MOTOR_BRANDS
 from .models import MotorSpec
 
 logger = logging.getLogger(__name__)
@@ -173,6 +174,33 @@ def extract_lipo(text: str) -> str:
     return ""
 
 
+# Product titles that describe something other than a bare motor
+RE_NOT_A_MOTOR = re.compile(
+    r'\b(quadcopter|whoop|drone|bnf|pnp|rtf|frame|kit|esc|stack|propellers?|props?|'
+    r'flight controller|receiver|goggles?|camera|battery|batteries)\b',
+    re.IGNORECASE,
+)
+
+
+def is_motor_title(title: str) -> bool:
+    """Reject titles for drones, frames, ESCs... unless they say "motor"."""
+    if not title:
+        return True
+    return bool(re.search(r'motor', title, re.IGNORECASE)) or not RE_NOT_A_MOTOR.search(title)
+
+
+def detect_brand(*texts: str) -> str:
+    """Find a known brand in the title (or URL). Longest names win (e.g. "BrotherHobby" over "Hobby")."""
+    for text in texts:
+        if not text:
+            continue
+        norm = re.sub(r'[^a-z0-9]', '', text.lower())
+        for brand in sorted(MOTOR_BRANDS, key=len, reverse=True):
+            if re.sub(r'[^a-z0-9]', '', brand.lower()) in norm:
+                return brand
+    return ""
+
+
 def parse_motor_from_text(
     text: str,
     brand: str = "",
@@ -189,9 +217,17 @@ def parse_motor_from_text(
     # Clean text
     full_text = f"{title}\n{text}"
 
-    # Extract base specs
-    classe = extract_stator_class(full_text)
-    kv_values = extract_kv_values(full_text)
+    if not is_motor_title(title):
+        logger.debug("Skipping non-motor product: %s", title)
+        return []
+
+    if not brand:
+        brand = detect_brand(title, url)
+
+    # Extract base specs. The title describes the product itself, while the
+    # rest of the page may list related products with other sizes and KVs.
+    classe = extract_stator_class(title) or extract_stator_class(full_text)
+    kv_values = extract_kv_values(title) or extract_kv_values(full_text)
     weight = _first_match(RE_WEIGHT, full_text) or _first_match(RE_WEIGHT_ALT, full_text)
     shaft_dia = _first_match(RE_SHAFT_DIA, full_text) or _first_match(RE_SHAFT_DIA_ALT, full_text)
     motor_height = _first_match(RE_MOTOR_HEIGHT, full_text)
