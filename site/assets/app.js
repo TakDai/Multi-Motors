@@ -286,36 +286,59 @@
     const legend = dims.map((d, i) => `<li><button type="button" class="lg ${d.value ? "" : "na"}" data-k="${d.k}" aria-pressed="false">
         <span class="lg-n">${i + 1}</span><span class="lg-l">${esc(d.label)}</span><span class="lg-v">${esc(d.value || "—")}</span></button></li>`).join("");
     const stator = has(m["D STATOR"]) ? `<li class="lg-extra"><span class="lg-l">Stator</span><span class="lg-v">${fmt(m["D STATOR"])} × ${fmt(m["H STATOR"])} mm</span></li>` : "";
-    return `<div class="schema box" data-schema>
+    return `<div class="schema" data-schema>
       <div class="schema-draw">${svg}</div>
       <ul class="schema-legend">${legend}${stator}</ul>
-      <p class="schema-hint">Survolez ou touchez une cote pour la mettre en évidence · cliquez pour la garder</p>
     </div>`;
   }
 
+  // Icons of the tabs and section headers
+  const ICON = {
+    dimension: '<svg viewBox="0 0 24 24"><path d="M3 17L17 3l4 4L7 21z"/><path d="M7 13l2 2M10 10l2 2M13 7l2 2"/></svg>',
+    tech: '<svg viewBox="0 0 24 24"><rect x="4" y="3" width="16" height="18" rx="2"/><path d="M8 8h8M8 12h8M8 16h5"/></svg>',
+    videos: '<svg viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="14" rx="3"/><path d="M10 9v6l5-3z"/></svg>',
+    photos: '<svg viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="14" rx="2"/><circle cx="9" cy="10" r="1.8"/><path d="M21 16l-5-5-8 8"/></svg>',
+    info: '<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 11v6M12 7.5v.5"/></svg>',
+    bolt: '<svg viewBox="0 0 24 24"><path d="M13 3L5 14h6l-1 7 8-11h-6z"/></svg>',
+    target: '<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="8"/><circle cx="12" cy="12" r="3"/></svg>',
+    price: '<svg viewBox="0 0 24 24"><path d="M3 12l9-9h8v8l-9 9z"/><circle cx="15.5" cy="8.5" r="1.5"/></svg>',
+    chat: '<svg viewBox="0 0 24 24"><path d="M4 5h16v11H9l-5 4z"/></svg>',
+  };
+  // Same section header everywhere: icon, title, optional note on the right
+  const secH = (icon, title, note = "") => `<header class="sec-h"><span class="sec-ico" aria-hidden="true">${ICON[icon] || ""}</span><h3>${title}</h3>${note ? `<small>${note}</small>` : ""}</header>`;
+  // Aligned "label → value" list; missing values stay discreet
+  const kvRows = (rows) => `<dl class="kv-list">${rows.map(([l, v]) => `<div class="kv-row ${has(v) ? "" : "na"}"><dt>${esc(l)}</dt><dd>${has(v) ? `<span>${esc(v)}</span>` : "—"}</dd></div>`).join("")}</dl>`;
+
   function panelDimension(m) {
-    return `<div class="dim">
-      <div class="dim-thumb">${photo(m, "hero-moteur.png")}</div>
-      <div class="dim-info">
-        <div class="head"><p class="cap">Information général</p><h2>${esc(m.NOM)}</h2>${brandMark(m)}</div>
-        <div class="box"><div class="pvs">
-          ${pv("Classe", m.CLASSE, "", "classe")}${pv("Poids", weight(m), "", "poids")}${pv("Configuration", m.CONFIG, "", "config")}
-          ${pv("KV", kvList(m).slice(0, 4), "", "kv")}${pv("Câble", cable(m), "", "cable")}
-        </div></div>
-      </div>
-      <div class="dim-draw">
-        <p class="cap">Dimension</p>
-        ${dimSchema(m)}
-      </div>
-      <div class="dim-side">
-        <div><p class="cap big">Caractéristiques</p>
-          <div class="box pvs col">
-            ${pv("Voltage", m.VOLTAGE || m.LIPO, "", "voltage")}${pv("Ampérage", unit(m.AMP, "A"), "", "amp")}${pv("Puissance", unit(m.PUISSANCE, "W"), "", "puissance")}
-            ${pv("Résistance", m.RESISTANCE, "", "resistance")}${pv("Aimant", m.AIMANT, "", "aimant")}${pv("Type de shaft", m["TYPE SHAFT"], "", "typeshaft")}
-            ${pv("Type de cloche", m.CLOCHE, "", "cloche")}${pv("Vis hélice", m["VIS HEL"], "", "vishel")}
-          </div></div>
-        <div><p class="cap">Recommandation</p>
-          <div class="box pvs col">${pv("Hélice", m.HELICE, "", "helice")}${pv("Utilisation", m.UTILISATION, "", "usage")}</div></div>
+    const kv = kvList(m).slice(0, 4).join(" · ");
+    return `<div class="dim2">
+      <section class="card info-card">
+        <div class="info-img">${photo(m, "hero-moteur.png")}</div>
+        <div class="info-main">
+          <p class="eyebrow">Informations générales</p>
+          <div class="info-title"><h2>${esc(m.NOM)}</h2>${brandMark(m)}</div>
+          <div class="info-chips">
+            ${[["Classe", m.CLASSE], ["Poids", weight(m)], ["KV", kv], ["Configuration", m.CONFIG], ["Câble", cable(m)]].map(([l, v]) =>
+              `<span class="ichip ${has(v) ? "" : "na"}"><b>${l}</b><em>${esc(has(v) ? v : "—")}</em></span>`).join("")}
+          </div>
+        </div>
+      </section>
+      <div class="dim2-grid">
+        <section class="card schema-card">
+          ${secH("dimension", "Schéma coté", "Survolez ou touchez une cote")}
+          ${dimSchema(m)}
+        </section>
+        <aside class="dim2-side">
+          <section class="card">
+            ${secH("bolt", "Caractéristiques")}
+            ${kvRows([["Voltage", m.VOLTAGE || m.LIPO], ["Ampérage", unit(m.AMP, " A")], ["Puissance", unit(m.PUISSANCE, " W")],
+              ["Résistance", m.RESISTANCE], ["Aimant", m.AIMANT], ["Type de shaft", m["TYPE SHAFT"]], ["Cloche", m.CLOCHE], ["Fixation hélice", m["VIS HEL"]]])}
+          </section>
+          <section class="card">
+            ${secH("target", "Recommandation")}
+            ${kvRows([["Hélice", m.HELICE], ["Utilisation", m.UTILISATION], ["LiPo", m.LIPO]])}
+          </section>
+        </aside>
       </div>
     </div>`;
   }
@@ -391,18 +414,22 @@
   function panelVideos(m) {
     const list = state.videos[famKey(m)] || [];
     const q = encodeURIComponent(`${m.MARQUE} ${m.NOM} motor review`);
-    const more = `<p class="note"><a class="official yt-more" href="https://www.youtube.com/results?search_query=${q}" target="_blank" rel="noopener">Plus de vidéos sur YouTube</a></p>`;
-    if (!list.length) return `<p class="note">Aucune vidéo de review trouvée pour ce moteur pour l'instant.</p>${more}`;
-    return `<div class="videos">${list.map((v) => `
-      <a class="video" href="https://www.youtube.com/watch?v=${esc(v.id)}" target="_blank" rel="noopener" data-yt="${esc(v.id)}">
+    const more = `<p class="more-row"><a class="ghost-btn" href="https://www.youtube.com/results?search_query=${q}" target="_blank" rel="noopener">Plus de vidéos sur YouTube →</a></p>`;
+    if (!list.length) return `<section class="card">${secH("videos", "Vidéos de review")}<p class="note">Aucune vidéo de review trouvée pour ce moteur pour l'instant.</p>${more}</section>`;
+    const card = (v, big) => `
+      <a class="video ${big ? "featured" : ""}" href="https://www.youtube.com/watch?v=${esc(v.id)}" target="_blank" rel="noopener" data-yt="${esc(v.id)}">
         <span class="video-media">
-          <img src="https://i.ytimg.com/vi/${esc(v.id)}/hqdefault.jpg" alt="" loading="lazy" onerror="this.remove()">
+          <img src="https://i.ytimg.com/vi/${esc(v.id)}/${big ? "hqdefault" : "mqdefault"}.jpg" alt="" loading="lazy" onerror="this.remove()">
           <span class="play" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg></span>
           ${v.d ? `<span class="dur">${esc(v.d)}</span>` : ""}
         </span>
-        <span class="video-t">${esc(v.t)}</span>
-        <span class="video-m">${esc(v.c)}${v.v ? ` · ${esc(v.v)}` : ""}</span>
-      </a>`).join("")}</div>${more}`;
+        <span class="video-txt"><span class="video-t">${esc(v.t)}</span><span class="video-m">${esc(v.c)}${v.v ? ` · ${esc(v.v)}` : ""}</span></span>
+      </a>`;
+    return `<section class="card">
+      ${secH("videos", "Vidéos de review", `${list.length} vidéo${list.length > 1 ? "s" : ""} trouvée${list.length > 1 ? "s" : ""} sur YouTube`)}
+      <div class="videos2">${card(list[0], true)}${list.length > 1 ? `<div class="video-list">${list.slice(1).map((v) => card(v, false)).join("")}</div>` : ""}</div>
+      ${more}
+    </section>`;
   }
 
   // Photo gallery: hosted thumbnail, shop photos (tools/photos.py), original image
@@ -414,14 +441,14 @@
     const list = gallery(m);
     const link = safeUrl(m.LIEN);
     // Only real photos here, never the default drawing
-    if (!list.length) return `<p class="note">Pas encore de photo pour ce moteur.</p>${link ? `<p class="note"><a class="official yt-more" href="${esc(link)}" target="_blank" rel="noopener">Lien officiel</a></p>` : ""}`;
-    return `<div class="gallery" data-gallery>
+    const linkBtn = link ? `<p class="more-row"><a class="ghost-btn" href="${esc(link)}" target="_blank" rel="noopener">Voir la fiche officielle →</a></p>` : "";
+    if (!list.length) return `<section class="card">${secH("photos", "Photos")}<p class="note">Pas encore de photo pour ce moteur.</p>${linkBtn}</section>`;
+    return `<section class="card">${secH("photos", "Photos", `${list.length} photo${list.length > 1 ? "s" : ""}`)}<div class="gallery" data-gallery>
         <div class="g-main"><img src="${esc(list[0])}" alt="${esc(`${m.MARQUE} ${m.NOM}`)}" class="is-photo" onerror="this.closest('[data-gallery]').querySelector('.g-th[aria-current=true]')?.remove();this.remove()">
           ${list.length > 1 ? `<button class="g-nav prev" type="button" aria-label="Photo précédente">‹</button><button class="g-nav next" type="button" aria-label="Photo suivante">›</button>` : ""}
           <span class="g-count">1 / ${list.length}</span></div>
         ${list.length > 1 ? `<div class="g-thumbs">${list.map((u, i) => `<button type="button" class="g-th" data-i="${i}" aria-label="Photo ${i + 1}" aria-current="${i === 0}"><img src="${esc(u)}" alt="" loading="lazy" onerror="this.closest('button').remove()"></button>`).join("")}</div>` : ""}
-      </div>
-      ${link ? `<p class="note"><a class="official yt-more" href="${esc(link)}" target="_blank" rel="noopener">Lien officiel</a></p>` : ""}`;
+      </div>${linkBtn}</section>`;
   }
 
 
@@ -449,10 +476,8 @@
       <a class="chevron" href="#m/${encodeURIComponent(m.REF)}" data-scroll="d-tabs" aria-label="Voir le détail"><svg viewBox="0 0 48 48" width="48" height="48"><path d="M10 18l14 12 14-12" fill="none" stroke="currentColor" stroke-width="3"/></svg></a>
       <div class="d-body">
         <div class="d-tabs" id="d-tabs" role="tablist">
-          <button class="d-tab" role="tab" data-panel="dimension" aria-selected="${panel === "dimension"}">Dimension</button>
-          <button class="d-tab" role="tab" data-panel="tech" aria-selected="${panel === "tech"}">Fiche technique</button>
-          <button class="d-tab" role="tab" data-panel="videos" aria-selected="${panel === "videos"}">Vidéos</button>
-          <button class="d-tab" role="tab" data-panel="photos" aria-selected="${panel === "photos"}">Photos</button>
+          ${[["dimension", "Dimension"], ["tech", "Fiche technique"], ["videos", "Vidéos", (state.videos[famKey(m)] || []).length], ["photos", "Photos", gallery(m).length]].map(([k, l, n]) =>
+            `<button class="d-tab" role="tab" data-panel="${k}" aria-selected="${panel === k}"><span class="d-tab-ico" aria-hidden="true">${ICON[k]}</span><span class="d-tab-l">${l}</span>${n ? `<span class="d-tab-n">${n}</span>` : ""}</button>`).join("")}
         </div>
         <div class="d-panel" id="d-panel">${PANELS[panel](m)}</div>
       </div>`;
@@ -519,10 +544,12 @@
       const t = ev.target.closest(".tab"); if (!t) return;
       state.tab = t.dataset.tab; state.sort = ""; $("sort").value = ""; state.shown = PAGE; renderList();
     });
+    // Advanced filters unfold smoothly (height, then fields in cascade)
     $("adv-toggle").addEventListener("click", () => {
-      const open = $("adv").hidden;
-      $("adv").hidden = !open;
+      const open = !$("filters").classList.contains("open");
+      $("filters").classList.toggle("open", open);
       $("adv-toggle").setAttribute("aria-expanded", String(open));
+      document.querySelector(".adv-inner").inert = !open;
     });
     $("more").addEventListener("click", () => { state.shown += PAGE; renderList(); });
     // Dimension schema: highlight on hover / focus, pin on click
@@ -589,7 +616,14 @@
         return;
       }
       const t = ev.target.closest(".d-tab");
-      if (t) { renderDetail($("detail").dataset.ref, t.dataset.panel); $("d-tabs").scrollIntoView({ block: "start" }); return; }
+      if (t) {
+        const m = state.motors.find((x) => x.REF === $("detail").dataset.ref);
+        document.querySelectorAll(".d-tab").forEach((b) => b.setAttribute("aria-selected", String(b === t)));
+        $("d-panel").innerHTML = PANELS[t.dataset.panel](m);
+        $("detail").dataset.panel = t.dataset.panel;
+        if ($("d-tabs").getBoundingClientRect().top < 0) $("d-tabs").scrollIntoView({ block: "start" });
+        return;
+      }
       const c = ev.target.closest("[data-scroll]");
       if (c) { ev.preventDefault(); $(c.dataset.scroll).scrollIntoView({ block: "start" }); }
     });

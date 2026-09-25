@@ -60,7 +60,8 @@
 
     <section class="list" id="liste" aria-label="Moteurs" hidden>
       <div class="filters" id="filters">
-        <div class="adv" id="adv" hidden>
+        <div class="adv-wrap" id="adv-wrap"><div class="adv-inner" inert>
+        <div class="adv" id="adv">
           <div class="adv-grid">
             <label class="adv-cell w3"><span>Marque</span><select id="a-marque"><option value="">- - - - - - -</option></select></label>
             <label class="adv-cell w3"><span>Modèle</span><input id="a-modele" placeholder="- - - - - - -"></label>
@@ -87,6 +88,7 @@
             </div>
           </div>
         </div>
+        </div></div>
         <div class="bar">
           <div class="tabs" role="tablist">
             <button type="button" role="tab" class="tab" data-tab="populaire" aria-selected="true">Populaire</button>

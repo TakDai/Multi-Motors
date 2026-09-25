@@ -209,6 +209,11 @@
   }
 
   // ------------------------------------------------------------ motor page
+  const HICON = {
+    price: '<svg viewBox="0 0 24 24"><path d="M3 12l9-9h8v8l-9 9z"/><circle cx="15.5" cy="8.5" r="1.5"/></svg>',
+    chat: '<svg viewBox="0 0 24 24"><path d="M4 5h16v11H9l-5 4z"/></svg>',
+  };
+  const head = (icon, title, note = "") => `<header class="sec-h"><span class="sec-ico" aria-hidden="true">${HICON[icon]}</span><h3>${title}</h3>${note ? `<small>${note}</small>` : ""}</header>`;
   hooks.onDetail = (m) => {
     const top = document.querySelector("#detail .d-top");
     const p = C.prices[m.REF];
@@ -219,18 +224,18 @@
       ${m._community ? `<span class="community-badge" title="${esc(m._community.map((f) => FIELD_LABELS[f] || f).join(", "))}">Corrigé par la communauté</span>` : ""}
     </div>`);
     document.querySelector("#detail .d-body").insertAdjacentHTML("beforeend", `
-      <section class="d-extra" id="d-prix">${pricesBlock(m)}</section>
-      <section class="d-extra" id="d-comments"><h2 class="x-title">Commentaires</h2><div id="c-list"><p class="note">Chargement…</p></div></section>`);
+      <section class="d-extra card" id="d-prix">${pricesBlock(m)}</section>
+      <section class="d-extra card" id="d-comments">${head("chat", "Commentaires")}<div id="c-list"><p class="note">Chargement…</p></div></section>`);
     loadSocial(m.REF);
   };
 
   function pricesBlock(m) {
     const p = C.prices[m.REF];
     if (!p || !p.offers?.length) {
-      return `<h2 class="x-title">Comparateur de prix</h2><p class="note">Aucune offre relevée pour ce moteur pour l'instant.</p>`;
+      return `${head("price", "Comparateur de prix")}<p class="note">Aucune offre relevée pour ce moteur pour l'instant.</p>`;
     }
     const best = Math.min(...p.offers.map((o) => o.eur));
-    return `<h2 class="x-title">Comparateur de prix</h2>
+    return `${head("price", "Comparateur de prix", `${p.offers.length} boutique${p.offers.length > 1 ? "s" : ""}`)}
       <div class="price-head"><div class="price-big">≈ ${euro(p.eur)}<small>prix indicatif par moteur</small></div>
         <p>Médiane de ${p.offers.length} offre${p.offers.length > 1 ? "s" : ""} relevée${p.offers.length > 1 ? "s" : ""} le ${new Date(p.date).toLocaleDateString("fr-FR")}. Prix convertis en euros au taux BCE du jour, hors frais de port et de douane.</p></div>
       <div class="offers">${p.offers.map((o) => `
