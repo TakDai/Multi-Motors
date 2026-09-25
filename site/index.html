@@ -62,28 +62,32 @@
       <div class="filters" id="filters">
         <div class="adv-wrap" id="adv-wrap"><div class="adv-inner" inert>
         <div class="adv" id="adv">
-          <div class="adv-grid">
-            <div class="adv-cell w3"><span id="l-marque">Marque</span><div class="combo" id="c-marque" data-f="marque" aria-labelledby="l-marque"></div></div>
-            <label class="adv-cell w3"><span>Modèle</span><input id="a-modele" type="search" placeholder="ex. Xing, Velox…"></label>
-            <div class="adv-cell w3"><span id="l-cable">Câble</span><div class="chips" data-f="cable" aria-labelledby="l-cable"></div></div>
-            <div class="adv-cell w3"><span id="l-res">Résistance</span><div class="rng" data-f="res" aria-labelledby="l-res"></div></div>
-            <div class="adv-cell w3"><span id="l-lcable">Longueur câble</span><div class="rng" data-f="lcable" aria-labelledby="l-lcable"></div></div>
-            <div class="adv-cell w3"><span id="l-vish">Vis hélice</span><div class="seg" data-f="vish" role="radiogroup" aria-labelledby="l-vish"></div></div>
-            <div class="adv-cell w3"><span id="l-aimant">Aimant</span><div class="chips" data-f="aimant" aria-labelledby="l-aimant"></div></div>
-            <div class="adv-cell w3"><span id="l-cloche">Cloche</span><div class="chips" data-f="cloche" aria-labelledby="l-cloche"></div></div>
-            <div class="adv-cell w3"><span id="l-avec">Fiche avec</span><div class="chips" data-f="avec" aria-labelledby="l-avec"></div></div>
-          </div>
-          <div class="adv-draw">
-            <div class="adv-plan">
-              <img class="p-profil" src="assets/img/plan-profil.png" alt="">
-              <div class="p-field"><span id="l-tshaft">Type de shaft</span><div class="chips" data-f="tshaft" aria-labelledby="l-tshaft"></div></div>
-              <div class="p-field"><span id="l-lshaft">L shaft</span><div class="rng" data-f="lshaft" aria-labelledby="l-lshaft"></div></div>
-              <div class="p-field"><span id="l-visfix">Vis fixation</span><div class="chips" data-f="visfix" aria-labelledby="l-visfix"></div></div>
+          <div class="adv-groups">
+            <div class="ag ag-gen">
+              <h3 class="ag-h"><span class="ag-ico"><svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path d="M11 4a7 7 0 1 0 0 14 7 7 0 0 0 0-14zM20 20l-4-4" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg></span><span>Général</span><b class="ag-n" hidden></b></h3>
+              <div class="af"><span class="af-l" id="l-marque">Marque</span><div class="combo" id="c-marque" data-f="marque" aria-labelledby="l-marque"></div></div>
+              <label class="af"><span class="af-l">Modèle</span><input id="a-modele" type="search" placeholder="ex. Xing, Velox…"></label>
+              <div class="af"><span class="af-l" id="l-avec">Fiche avec</span><div class="chips" data-f="avec" aria-labelledby="l-avec"></div></div>
             </div>
-            <div class="adv-plan">
-              <img class="p-dessus" src="assets/img/plan-dessus.png" alt="">
-              <div class="p-field"><span id="l-dstat">Ø stator</span><div class="rng" data-f="dstat" aria-labelledby="l-dstat"></div></div>
-              <div class="p-field"><span id="l-hstat">Hauteur stator</span><div class="rng" data-f="hstat" aria-labelledby="l-hstat"></div></div>
+            <div class="ag ag-cab">
+              <h3 class="ag-h"><span class="ag-ico"><svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path d="M3 7h6a3 3 0 0 1 3 3v4a3 3 0 0 0 3 3h6M3 5v4M21 15v4" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg></span><span>Câblage</span><b class="ag-n" hidden></b></h3>
+              <div class="af"><span class="af-l" id="l-cable">Section</span><div class="chips" data-f="cable" aria-labelledby="l-cable"></div></div>
+              <div class="af"><span class="af-l" id="l-lcable">Longueur</span><div class="rng" data-f="lcable" aria-labelledby="l-lcable"></div></div>
+              <div class="af"><span class="af-l" id="l-res">Résistance</span><div class="rng" data-f="res" aria-labelledby="l-res"></div></div>
+            </div>
+            <div class="ag ag-mot">
+              <h3 class="ag-h"><span class="ag-ico ag-img"><img class="i-dessus" src="assets/img/plan-dessus.png" alt=""></span><span>Moteur</span><b class="ag-n" hidden></b></h3>
+              <div class="af"><span class="af-l" id="l-dstat">Ø stator</span><div class="rng" data-f="dstat" aria-labelledby="l-dstat"></div></div>
+              <div class="af"><span class="af-l" id="l-hstat">H stator</span><div class="rng" data-f="hstat" aria-labelledby="l-hstat"></div></div>
+              <div class="af"><span class="af-l" id="l-aimant">Aimant</span><div class="chips" data-f="aimant" aria-labelledby="l-aimant"></div></div>
+              <div class="af"><span class="af-l" id="l-cloche">Cloche</span><div class="chips" data-f="cloche" aria-labelledby="l-cloche"></div></div>
+            </div>
+            <div class="ag ag-sha">
+              <h3 class="ag-h"><span class="ag-ico ag-img"><img class="i-profil" src="assets/img/plan-profil-debout.png" alt=""></span><span>Shaft &amp; fixation</span><b class="ag-n" hidden></b></h3>
+              <div class="af"><span class="af-l" id="l-tshaft">Type de shaft</span><div class="chips" data-f="tshaft" aria-labelledby="l-tshaft"></div></div>
+              <div class="af"><span class="af-l" id="l-lshaft">L shaft</span><div class="rng" data-f="lshaft" aria-labelledby="l-lshaft"></div></div>
+              <div class="af"><span class="af-l" id="l-visfix">Vis fixation</span><div class="chips" data-f="visfix" aria-labelledby="l-visfix"></div></div>
+              <div class="af"><span class="af-l" id="l-vish">Vis hélice</span><div class="seg" data-f="vish" role="radiogroup" aria-labelledby="l-vish"></div></div>
             </div>
           </div>
           <div class="adv-foot"><span id="adv-sum">Aucun filtre avancé</span><button type="button" class="adv-reset" id="adv-reset" disabled>Réinitialiser</button></div>

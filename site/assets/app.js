@@ -342,6 +342,14 @@
     $("adv-badge").textContent = n;
     $("adv-sum").textContent = n ? `${n} filtre${n > 1 ? "s" : ""} avancé${n > 1 ? "s" : ""} actif${n > 1 ? "s" : ""}` : "Aucun filtre avancé";
     $("adv-reset").disabled = !n;
+    // Same count per group, next to its title
+    document.querySelectorAll("#adv .ag").forEach((g) => {
+      const c = [...g.querySelectorAll("[data-f]")].filter((el) => state.adv[el.dataset.f] && isOn(el.dataset.f)).length
+        + (g.contains($("a-modele")) && state.f.modele ? 1 : 0);
+      const b = g.querySelector(".ag-n");
+      b.hidden = !c; b.textContent = c;
+      g.classList.toggle("on", !!c);
+    });
   }
 
   function sorted(list) {
