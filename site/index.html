@@ -14,41 +14,46 @@
 
   <!-- ================= ACCUEIL ================= -->
   <section id="view-home" class="view">
-    <header class="home-head">
-      <h1 class="big-title"><a href="#">Multi-Motors</a></h1>
-      <label class="search" for="q">
-        <span class="sr">Rechercher votre moteur</span>
-        <input id="q" type="search" placeholder="Rechercher votre moteur" autocomplete="off">
-      </label>
-    </header>
+    <form class="screen" id="spec-form" autocomplete="off" aria-label="Recherche de moteur">
+      <header class="home-head">
+        <h1 class="big-title"><a href="#">Multi-Motors</a></h1>
+        <label class="search" for="q">
+          <span class="sr">Rechercher votre moteur</span>
+          <input id="q" type="search" placeholder="Rechercher votre moteur" autocomplete="off" enterkeyhint="search">
+        </label>
+      </header>
 
-    <form class="hero" id="spec-form" autocomplete="off" aria-label="Recherche par caractéristiques">
-      <div class="side side-left">
-        <div class="field"><label class="tag" for="f-kv">KV</label><input id="f-kv" inputmode="numeric" placeholder="1900"></div>
-        <div class="field"><label class="tag" for="f-poids">Poids</label><input id="f-poids" inputmode="decimal" placeholder="max. g"></div>
-        <div class="field"><label class="tag" for="f-classe">Classe</label><input id="f-classe" placeholder="2207"></div>
-        <div class="field"><label class="tag" for="f-voltage">Voltage</label><input id="f-voltage" placeholder="6S"></div>
-        <div class="field"><label class="tag" for="f-amp">Intensité max</label><input id="f-amp" inputmode="decimal" placeholder="min. A"></div>
-        <div class="field"><label class="tag" for="f-pmax">Puissance max</label><input id="f-pmax" inputmode="numeric" placeholder="min. W"></div>
+      <div class="hero">
+        <div class="side side-left">
+          <div class="field"><label class="tag" for="f-kv">KV</label><input id="f-kv" inputmode="numeric" placeholder="1900"></div>
+          <div class="field"><label class="tag" for="f-poids">Poids</label><input id="f-poids" inputmode="decimal" placeholder="max. g"></div>
+          <div class="field"><label class="tag" for="f-classe">Classe</label><input id="f-classe" placeholder="2207"></div>
+          <div class="field"><label class="tag" for="f-voltage">Voltage</label><input id="f-voltage" placeholder="6S"></div>
+          <div class="field"><label class="tag" for="f-amp">Intensité max</label><input id="f-amp" inputmode="decimal" placeholder="min. A"></div>
+          <div class="field"><label class="tag" for="f-pmax">Puissance max</label><input id="f-pmax" inputmode="numeric" placeholder="min. W"></div>
+        </div>
+
+        <div class="hero-img"><img src="assets/img/hero-moteur.png" alt="" width="296" height="296"></div>
+
+        <div class="side side-right">
+          <div class="field"><input id="f-shaft" placeholder="M5"><label class="tag" for="f-shaft">Shaft</label></div>
+          <div class="field"><input id="f-usage" placeholder="Freestyle"><label class="tag" for="f-usage">Utilisation</label></div>
+          <div class="field duo"><input id="f-dmot" inputmode="decimal" placeholder="Ø" aria-label="Diamètre moteur max"><input id="f-hmot" inputmode="decimal" placeholder="H" aria-label="Hauteur moteur max"><label class="tag" for="f-dmot">Dimensions</label></div>
+          <div class="field"><input id="f-config" placeholder="12N14P"><label class="tag" for="f-config">Configuration</label></div>
+          <div class="field"><input id="f-entraxe" placeholder="16x16"><label class="tag" for="f-entraxe">Entraxe fixation</label></div>
+          <div class="field"><input id="f-helice" placeholder='5"'><label class="tag" for="f-helice">Hélice recommandé</label></div>
+        </div>
       </div>
 
-      <div class="hero-img"><img src="assets/img/hero-moteur.png" alt="" width="296" height="296"></div>
-
-      <div class="side side-right">
-        <div class="field"><input id="f-shaft" placeholder="M5"><label class="tag" for="f-shaft">Shaft</label></div>
-        <div class="field"><input id="f-usage" placeholder="Freestyle"><label class="tag" for="f-usage">Utilisation</label></div>
-        <div class="field duo"><input id="f-dmot" inputmode="decimal" placeholder="Ø" aria-label="Diamètre moteur max"><input id="f-hmot" inputmode="decimal" placeholder="H" aria-label="Hauteur moteur max"><label class="tag" for="f-dmot">Dimensions</label></div>
-        <div class="field"><input id="f-config" placeholder="12N14P"><label class="tag" for="f-config">Configuration</label></div>
-        <div class="field"><input id="f-entraxe" placeholder="16x16"><label class="tag" for="f-entraxe">Entraxe fixation</label></div>
-        <div class="field"><input id="f-helice" placeholder='5"'><label class="tag" for="f-helice">Hélice recommandé</label></div>
-      </div>
+      <button class="chevron" type="submit" aria-label="Voir les résultats">
+        <span class="chevron-hint">Voir les moteurs</span>
+        <svg viewBox="0 0 48 48" width="48" height="48" aria-hidden="true"><path d="M10 18l14 12 14-12" fill="none" stroke="currentColor" stroke-width="3"/></svg>
+      </button>
     </form>
 
-    <a class="chevron" href="#liste" aria-label="Voir les moteurs"><svg viewBox="0 0 48 48" width="48" height="48"><path d="M10 18l14 12 14-12" fill="none" stroke="currentColor" stroke-width="3"/></svg></a>
+    <div class="sep" role="presentation" hidden id="sep"></div>
 
-    <div class="sep" role="presentation"></div>
-
-    <section class="list" id="liste" aria-label="Moteurs">
+    <section class="list" id="liste" aria-label="Moteurs" hidden>
       <div class="filters" id="filters">
         <div class="adv" id="adv" hidden>
           <div class="adv-grid">

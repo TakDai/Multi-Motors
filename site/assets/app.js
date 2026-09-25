@@ -12,7 +12,7 @@
   const asset = (name) => (window.MM_ASSETS && window.MM_ASSETS[name]) || IMG + name;
   // Brand logos available in the Figma file; other brands use a text mark
   const LOGOS = { "T-MOTOR": "logo-t-motor.png" };
-  const state = { motors: [], tab: "populaire", sort: "", q: "", shown: PAGE, f: {} };
+  const state = { motors: [], thumbs: {}, tab: "populaire", sort: "", q: "", shown: PAGE, f: {}, revealed: false };
 
   // --- CSV -----------------------------------------------------------------
   function parseCSV(text) {
@@ -49,6 +49,16 @@
     throw new Error("Catalogue introuvable");
   }
 
+  // Thumbnails hosted with the site (tools/thumbs.py): REF -> image path
+  async function loadThumbs() {
+    if (window.MM_THUMBS) return window.MM_THUMBS;
+    try {
+      const res = await fetch("data/thumbs.json", { cache: "no-cache" });
+      if (res.ok) return await res.json();
+    } catch (e) { /* no thumbnails */ }
+    return {};
+  }
+
   // --- Helpers -------------------------------------------------------------
   const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
   const num = (s) => { const n = parseFloat(String(s ?? "").replace(",", ".")); return Number.isFinite(n) ? n : null; };
@@ -82,24 +92,26 @@
       : `<span class="brand-word${big ? " big" : ""}">${esc(m.MARQUE)}</span>`;
   }
 
-  // Product photo, or the line drawing from the mockup when there is none / it fails to load
+  // Motor photo (our thumbnail first, then the shop image), or the line drawing
+  // from the mockup when there is none or it fails to load
   function photo(m, fallback = "moteur-trait.png") {
-    const u = safeUrl(m.IMG), alt = esc(`${m.MARQUE} ${m.NOM}`);
+    const u = state.thumbs[m.REF] || safeUrl(m.IMG), alt = esc(`${m.MARQUE} ${m.NOM}`);
     return u
-      ? `<img src="${esc(u)}" alt="${alt}" loading="lazy" onerror="this.onerror=null;this.src='${asset(fallback)}'">`
+      ? `<img class="is-photo" src="${esc(u)}" alt="${alt}" loading="lazy" onerror="this.onerror=null;this.classList.remove('is-photo');this.src='${asset(fallback)}'">`
       : `<img src="${asset(fallback)}" alt="${alt}" loading="lazy">`;
   }
 
   // --- Home: motor cards ---------------------------------------------------
   const lbl = (t) => `<span class="lbl">${esc(t)}</span>`;
-  const val = (v) => (has(v) ? `<span class="val">${esc(v)}</span>` : `<span class="val na">—</span>`);
-  const pair = (a, b) => (has(a) || has(b) ? `${val(a)}<span class="x">X</span>${val(b)}` : val(""));
-  const kvVals = (m) => kvList(m).slice(0, 3).map((k) => val(k)).join(`<span class="x">X</span>`) || val("");
+  const one = (v) => (has(v) ? `<span class="val">${esc(v)}</span>` : `<span class="val na">—</span>`);
+  const val = (v) => `<span class="vals">${one(v)}</span>`;
+  const pair = (a, b) => `<span class="vals">${has(a) || has(b) ? `${one(a)}<span class="x">X</span>${one(b)}` : one("")}</span>`;
+  const kvVals = (m) => `<span class="vals">${kvList(m).slice(0, 3).map(one).join(`<span class="x">X</span>`) || one("")}</span>`;
 
-  function row(m) {
+  function row(m, i) {
     const href = `#m/${encodeURIComponent(m.REF)}`;
     const link = safeUrl(m.LIEN);
-    return `<article class="row">
+    return `<article class="row" style="--i:${i % PAGE}">
       <div class="row-id">${brandMark(m)}<a class="name" href="${href}">${esc(m.NOM || m.REF)}</a></div>
       <a class="row-img" href="${href}" tabindex="-1" aria-hidden="true">${photo(m)}</a>
       <div class="specs">
@@ -172,8 +184,11 @@
   }
 
   function renderList() {
+    if (!state.revealed) return;
     const list = sorted(state.motors.filter(matches));
     $("rows").innerHTML = list.slice(0, state.shown).map(row).join("");
+    // "Afficher plus" only animates the newly added rows
+    [...$("rows").children].slice(0, state.shown - PAGE).forEach((r) => (r.style.animation = "none"));
     $("more").hidden = list.length <= state.shown;
     $("empty").hidden = list.length > 0;
     $("count").textContent = `${list.length} moteur${list.length > 1 ? "s" : ""} sur ${state.motors.length}`;
@@ -223,7 +238,7 @@
       <div class="dim-side">
         <div><p class="cap big">Caractéristiques</p>
           <div class="box pvs col">
-            ${pv("Voltage", m.VOLTAGE ? `${fmt(m.VOLTAGE)}V` : m.LIPO)}${pv("Ampérage", unit(m.AMP, "A"))}${pv("Puissance", unit(m.PUISSANCE, "W"))}
+            ${pv("Voltage", m.VOLTAGE || m.LIPO)}${pv("Ampérage", unit(m.AMP, "A"))}${pv("Puissance", unit(m.PUISSANCE, "W"))}
             ${pv("Résistance", m.RESISTANCE)}${pv("Aimant", m.AIMANT)}${pv("Type de shaft", m["TYPE SHAFT"])}
             ${pv("Type de cloche", m.CLOCHE)}${pv("Vis hélice", m["VIS HEL"])}
           </div></div>
@@ -312,7 +327,7 @@
   // --- Boot ----------------------------------------------------------------
   async function start() {
     try {
-      state.motors = parseCSV(await loadCSV());
+      [state.motors, state.thumbs] = await Promise.all([loadCSV().then(parseCSV), loadThumbs()]);
     } catch (err) {
       $("empty").textContent = "Le catalogue n'a pas pu être chargé. Réessayez dans quelques minutes.";
       $("empty").hidden = false;
@@ -324,7 +339,17 @@
 
     const refresh = () => { readFilters(); state.shown = PAGE; renderList(); };
     ["spec-form", "adv"].forEach((id) => { $(id).addEventListener("input", refresh); $(id).addEventListener("change", refresh); });
-    $("spec-form").addEventListener("submit", (ev) => { ev.preventDefault(); $("liste").scrollIntoView(); });
+    // Results appear below the search screen once the search is validated
+    $("spec-form").addEventListener("submit", (ev) => {
+      ev.preventDefault();
+      document.activeElement?.blur?.();
+      state.revealed = true;
+      $("sep").hidden = false;
+      $("liste").hidden = false;
+      $("liste").classList.add("reveal");
+      refresh();
+      $("sep").scrollIntoView({ block: "start" });
+    });
     $("q").addEventListener("input", (ev) => { state.q = ev.target.value.trim(); state.shown = PAGE; renderList(); });
     $("sort").addEventListener("change", (ev) => { state.sort = ev.target.value; renderList(); });
     document.querySelector(".tabs").addEventListener("click", (ev) => {
