@@ -655,3 +655,104 @@ img.is-photo { mix-blend-mode: multiply; }
   .d-top { padding-top: 10px; }
   .page { padding-top: 24px; }
 }
+
+/* ================= Responsive (révision) ================= */
+/* Navigation always in the flow: never over the title */
+.topnav { position: static; justify-content: flex-end; padding: 12px 14px 0; flex-wrap: wrap; }
+.home-head { padding-top: 4px; }
+.d-top { padding-top: 6px; }
+.page { padding-top: 20px; }
+
+/* Result cards: grid of "label + value" pairs that folds cleanly at any width */
+.specs { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 200px), 1fr)); gap: 6px 10px; align-items: center; }
+.pair { display: flex; align-items: center; gap: 6px; min-width: 0; }
+.pair .lbl { flex: 0 0 auto; min-width: 0; max-width: 62%; overflow: hidden; text-overflow: ellipsis; }
+.pair .vals { flex: 1 1 auto; flex-wrap: nowrap; min-width: 0; }
+.pair .vals .val { flex: 0 1 auto; }
+.pair .x { flex: 0 0 auto; font-size: 20px; }
+.official { grid-column: auto; justify-self: stretch; }
+@media (min-width: 1241px) { .specs { grid-template-columns: repeat(4, minmax(0, 1fr)); } }
+@media (max-width: 1240px) { .specs { grid-column: 1 / -1; } }
+
+/* Large screens: everything grows with the screen */
+@media (min-width: 1600px) {
+  body { font-size: 15px; }
+  .big-title { font-size: clamp(54px, 3.6vw, 76px); }
+  .search { width: min(480px, 100%); }
+  .search input { height: 56px; font-size: 18px; }
+  .field { max-width: 560px; }
+  .tag { height: clamp(48px, 5.4vh, 60px); font-size: 18px; padding-inline: 12px 18px; }
+  .field input, .field select { height: clamp(48px, 5.4vh, 60px); font-size: 17px; }
+  .hero { grid-template-columns: minmax(0, 1fr) minmax(300px, min(30vw, 56vh, 560px)) minmax(0, 1fr); }
+  .list { max-width: 1480px; }
+  .row { grid-template-columns: 190px 130px 1fr; min-height: 150px; }
+  .row-img { width: 130px; height: 140px; }
+  .name { width: 190px; font-size: 16px; }
+  .lbl, .val, .official { height: 28px; font-size: 12px; }
+  .d-hero { grid-template-columns: minmax(0, 1fr) minmax(300px, min(28vw, 480px)) minmax(0, 1fr); }
+  .d-spec strong { font-size: clamp(30px, 2.1vw, 40px); }
+  .d-body { max-width: 1240px; }
+  .nav-pill { height: 34px; font-size: 12px; }
+}
+
+/* Tablets: motor on top, criteria in two columns stuck to the edges (like on a computer) */
+@media (min-width: 601px) and (max-width: 820px) {
+  .hero, .d-hero { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); grid-template-areas: "img img" "left right"; gap: 14px 18px; }
+  .hero-img, .d-img { grid-area: img; grid-row: auto; max-width: 240px; justify-self: center; }
+  .side-left, .d-left { grid-area: left; }
+  .side-right, .d-right { grid-area: right; }
+  .side-left, .side-right { align-items: stretch; }
+  .field { max-width: none; }
+  .side-right .field, .d-right .d-spec { flex-direction: row; justify-content: flex-end; }
+  .side-right .field .tag, .d-right .d-spec .tag { order: 2; padding: 0 7px 0 12px; border-radius: 15px 0 0 15px; }
+  .side-right .field input, .side-right .field select { border-right: 2px dashed var(--dash); border-radius: 10px; }
+  .tag { min-width: 0; font-size: 13px; }
+  .field input, .field select { border-right: 2px dashed var(--dash); border-radius: 10px; }
+  .d-spec { gap: 10px; }
+  .d-spec strong { font-size: clamp(16px, 3vw, 22px); white-space: normal; }
+  .d-right .d-spec strong { text-align: right; }
+}
+
+/* Phones */
+@media (max-width: 600px) {
+  .topnav { justify-content: center; gap: 6px; padding-top: 10px; }
+  .nav-pill { height: 28px; padding: 0 10px; font-size: 10px; letter-spacing: .1em; }
+  .hero-img, .d-img { max-width: 170px; }
+  .hero { gap: 10px; padding-block: 8px 12px; }
+  .side { gap: 8px; }
+  .tag { flex: 0 0 150px; min-width: 150px; height: 42px; font-size: 12px; }
+  .field input, .field select { height: 42px; font-size: 14px; }
+  .d-spec .tag { flex: 0 0 150px; }
+  .d-spec strong { font-size: 18px; white-space: normal; overflow-wrap: anywhere; }
+  .d-actions { gap: 8px; }
+  .d-actions > * { flex: 1 1 auto; justify-content: center; }
+  .d-tabs { gap: 8px; }
+  .d-tab { height: 42px; font-size: 14px; }
+  .d-panel { padding-inline: 4px; }
+  .d-extra { margin-inline: 4px; }
+  .x-title { font-size: 17px; }
+  .price-big { font-size: 28px; }
+  .dim { gap: 12px; }
+  .dim-info .head h2 { font-size: 19px; }
+  .tech-grid { grid-template-columns: 1fr; }
+  .bench-grid { grid-template-columns: 1fr; }
+  .stats { grid-template-columns: 1fr 1fr; }
+  .adm-card footer { justify-content: stretch; }
+  .adm-card footer button { flex: 1; }
+  #modal { padding: 22px 18px 18px; }
+}
+/* Cards between phone and desktop: pairs use the full card width */
+@media (max-width: 1240px) { .row { grid-template-columns: 156px 110px minmax(0, 1fr); } }
+@media (max-width: 600px) { .row { grid-template-columns: minmax(0, 1fr) 96px; } }
+/* Motor page: long values wrap inside their pill, grids never exceed the screen */
+.dim > *, .dim-side > *, .tech-grid > * { min-width: 0; }
+.pv { max-width: 100%; height: auto; min-height: 28px; }
+.pv > span { flex-wrap: wrap; min-width: 0; }
+.pv > span em { height: auto; min-height: 24px; white-space: normal; overflow-wrap: anywhere; }
+@media (max-width: 600px) {
+  .dim { grid-template-columns: minmax(0, 1fr); grid-template-areas: "info" "draw" "side"; }
+  .dim-thumb { display: none; }
+}
+/* Slide-in animations start off-screen: never let them create a horizontal scroll */
+html, body { overflow-x: hidden; }
+@supports (overflow: clip) { html, body { overflow-x: clip; } }

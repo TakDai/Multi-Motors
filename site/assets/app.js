@@ -105,6 +105,8 @@
 
   // --- Home: motor cards ---------------------------------------------------
   const lbl = (t) => `<span class="lbl">${esc(t)}</span>`;
+  // One "label + value" cell of a result card
+  const pr = (label, valuesHtml) => `<span class="pair">${lbl(label)}${valuesHtml}</span>`;
   const one = (v) => (has(v) ? `<span class="val" title="${esc(v)}">${esc(v)}</span>` : `<span class="val na">—</span>`);
   const val = (v) => `<span class="vals">${one(v)}</span>`;
   const pair = (a, b) => `<span class="vals">${has(a) || has(b) ? `${one(a)}<span class="x">X</span>${one(b)}` : one("")}</span>`;
@@ -117,11 +119,11 @@
       <div class="row-id">${brandMark(m)}<a class="name" href="${href}">${esc(m.NOM || m.REF)}</a>${hooks.rowExtra ? hooks.rowExtra(m) : ""}</div>
       <a class="row-img" href="${href}" tabindex="-1" aria-hidden="true">${photo(m)}</a>
       <div class="specs">
-        <div class="spec-line">${lbl("Classe")}${val(m.CLASSE)}${lbl("Poids")}${val(weight(m))}${lbl("Configuration")}${val(m.CONFIG)}${lbl("KV")}${kvVals(m)}</div>
-        <div class="spec-line">${lbl("Shaft")}${val(shaft(m))}${lbl("Entraxe de fixation")}${val(m["ENTRAXE FIX"])}${lbl("Dimension")}${pair(fmt(m["D MOTEUR"]), fmt(m["H MOTEUR"]))}${lbl("L shaft")}${val(fmt(m["L SHAFT"]))}</div>
-        <div class="spec-line">${lbl("Résistance")}${val(m.RESISTANCE)}${lbl("Utilisation")}${val(m.UTILISATION)}${lbl("Hélice")}${val(m.HELICE)}${lbl("Câble")}${val(cable(m))}</div>
-        <div class="spec-line">${lbl("Amp max")}${val(fmt(m.AMP))}${lbl("Voltage")}${val(m.LIPO)}${lbl("Vis hélice")}${val(m["VIS HEL"])}
-          ${link ? `<a class="official" href="${esc(link)}" target="_blank" rel="noopener">Lien officiel</a>` : `<span class="official off">Lien officiel</span>`}</div>
+        ${pr("Classe", val(m.CLASSE))}${pr("Poids", val(weight(m)))}${pr("Configuration", val(m.CONFIG))}${pr("KV", kvVals(m))}
+        ${pr("Shaft", val(shaft(m)))}${pr("Entraxe de fixation", val(m["ENTRAXE FIX"]))}${pr("Dimension", pair(fmt(m["D MOTEUR"]), fmt(m["H MOTEUR"])))}${pr("L shaft", val(fmt(m["L SHAFT"])))}
+        ${pr("Résistance", val(m.RESISTANCE))}${pr("Utilisation", val(m.UTILISATION))}${pr("Hélice", val(m.HELICE))}${pr("Câble", val(cable(m)))}
+        ${pr("Amp max", val(fmt(m.AMP)))}${pr("Voltage", val(m.LIPO))}${pr("Vis hélice", val(m["VIS HEL"]))}
+        ${link ? `<a class="official" href="${esc(link)}" target="_blank" rel="noopener">Lien officiel</a>` : `<span class="official off">Lien officiel</span>`}
       </div>
     </article>`;
   }
