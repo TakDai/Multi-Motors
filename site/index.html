@@ -4,86 +4,116 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Multi-Motors</title>
-<meta name="description" content="Catalogue des moteurs brushless FPV : stator, KV, poids, LiPo, fixation. Mis à jour chaque jour.">
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Montserrat:wght@500;600;700;800;900&display=swap">
+<meta name="description" content="Catalogue des moteurs brushless : classe, KV, poids, shaft, fixation, voltage. Mis à jour chaque jour.">
+<link rel="preload" href="assets/fonts/glacial-indifference-700.woff2" as="font" type="font/woff2" crossorigin>
 <link rel="stylesheet" href="assets/style.css">
 </head>
 <body>
 <!--APP-->
 <div id="app">
 
-  <!-- ============ ACCUEIL ============ -->
+  <!-- ================= ACCUEIL ================= -->
   <section id="view-home" class="view">
-    <header class="home-head wrap">
-      <h1 class="logo-title"><a href="#">Multi-Motors</a></h1>
-      <label class="search-box" for="q">
+    <header class="home-head">
+      <h1 class="big-title"><a href="#">Multi-Motors</a></h1>
+      <label class="search" for="q">
         <span class="sr">Rechercher votre moteur</span>
         <input id="q" type="search" placeholder="Rechercher votre moteur" autocomplete="off">
       </label>
     </header>
 
     <form class="hero" id="spec-form" autocomplete="off" aria-label="Recherche par caractéristiques">
-      <div class="hero-side hero-left">
-        <div class="spec-field"><label class="pill" for="f-kv">KV</label><input id="f-kv" inputmode="numeric" placeholder="ex. 1900"></div>
-        <div class="spec-field"><label class="pill" for="f-poids">Poids</label><input id="f-poids" inputmode="decimal" placeholder="max. g"></div>
-        <div class="spec-field"><label class="pill" for="f-classe">Classe</label><input id="f-classe" placeholder="ex. 2207"></div>
-        <div class="spec-field"><label class="pill" for="f-voltage">Voltage</label><input id="f-voltage" placeholder="ex. 6S"></div>
-        <div class="spec-field"><label class="pill" for="f-vmax">Vitesse max</label><input id="f-vmax" inputmode="numeric" placeholder="min. tr/min"></div>
-        <div class="spec-field"><label class="pill" for="f-pmax">Puissance max</label><input id="f-pmax" inputmode="numeric" placeholder="min. W"></div>
+      <div class="side side-left">
+        <div class="field"><label class="tag" for="f-kv">KV</label><input id="f-kv" inputmode="numeric" placeholder="1900"></div>
+        <div class="field"><label class="tag" for="f-poids">Poids</label><input id="f-poids" inputmode="decimal" placeholder="max. g"></div>
+        <div class="field"><label class="tag" for="f-classe">Classe</label><input id="f-classe" placeholder="2207"></div>
+        <div class="field"><label class="tag" for="f-voltage">Voltage</label><input id="f-voltage" placeholder="6S"></div>
+        <div class="field"><label class="tag" for="f-amp">Intensité max</label><input id="f-amp" inputmode="decimal" placeholder="min. A"></div>
+        <div class="field"><label class="tag" for="f-pmax">Puissance max</label><input id="f-pmax" inputmode="numeric" placeholder="min. W"></div>
       </div>
 
-      <div class="hero-motor" aria-hidden="true"><!--MOTOR--></div>
+      <div class="hero-img"><img src="assets/img/hero-moteur.png" alt="" width="296" height="296"></div>
 
-      <div class="hero-side hero-right">
-        <div class="spec-field"><input id="f-shaft" inputmode="decimal" placeholder="ex. 5"><label class="pill" for="f-shaft">Shaft</label></div>
-        <div class="spec-field"><select id="f-marque"><option value="">Toutes</option></select><label class="pill" for="f-marque">Marque</label></div>
-        <div class="spec-field spec-duo"><input id="f-dmot" inputmode="decimal" placeholder="Ø max"><input id="f-hmot" inputmode="decimal" placeholder="H max" aria-label="Hauteur moteur max"><label class="pill" for="f-dmot">Dimensions</label></div>
-        <div class="spec-field"><input id="f-config" placeholder="ex. 12N14P"><label class="pill" for="f-config">Configuration</label></div>
-        <div class="spec-field"><input id="f-entraxe" placeholder="ex. 16x16"><label class="pill" for="f-entraxe">Entraxe fixation</label></div>
-        <div class="spec-field"><input id="f-helice" placeholder='ex. 5"'><label class="pill" for="f-helice">Hélice recommandée</label></div>
+      <div class="side side-right">
+        <div class="field"><input id="f-shaft" placeholder="M5"><label class="tag" for="f-shaft">Shaft</label></div>
+        <div class="field"><input id="f-usage" placeholder="Freestyle"><label class="tag" for="f-usage">Utilisation</label></div>
+        <div class="field duo"><input id="f-dmot" inputmode="decimal" placeholder="Ø" aria-label="Diamètre moteur max"><input id="f-hmot" inputmode="decimal" placeholder="H" aria-label="Hauteur moteur max"><label class="tag" for="f-dmot">Dimensions</label></div>
+        <div class="field"><input id="f-config" placeholder="12N14P"><label class="tag" for="f-config">Configuration</label></div>
+        <div class="field"><input id="f-entraxe" placeholder="16x16"><label class="tag" for="f-entraxe">Entraxe fixation</label></div>
+        <div class="field"><input id="f-helice" placeholder='5"'><label class="tag" for="f-helice">Hélice recommandé</label></div>
       </div>
-      <button type="reset" class="reset-link" id="reset">Effacer les critères</button>
     </form>
 
-    <a class="chevron" href="#liste" aria-label="Voir les moteurs"><svg viewBox="0 0 40 20"><path d="M4 4l16 12L36 4" fill="none" stroke="currentColor" stroke-width="3"/></svg></a>
+    <a class="chevron" href="#liste" aria-label="Voir les moteurs"><svg viewBox="0 0 48 48" width="48" height="48"><path d="M10 18l14 12 14-12" fill="none" stroke="currentColor" stroke-width="3"/></svg></a>
 
-    <section class="list wrap" id="liste" aria-label="Moteurs">
-      <div class="tabs-bar">
-        <div class="tabs" role="tablist">
-          <button role="tab" class="tab" data-tab="populaire" aria-selected="true">Populaire</button>
-          <button role="tab" class="tab" data-tab="nouveautes" aria-selected="false">Nouveautés</button>
-          <button role="tab" class="tab" data-tab="tous" aria-selected="false">Tous</button>
+    <div class="sep" role="presentation"></div>
+
+    <section class="list" id="liste" aria-label="Moteurs">
+      <div class="filters" id="filters">
+        <div class="adv" id="adv" hidden>
+          <div class="adv-grid">
+            <label class="adv-cell w3"><span>Marque</span><select id="a-marque"><option value="">- - - - - - -</option></select></label>
+            <label class="adv-cell w3"><span>Modèle</span><input id="a-modele" placeholder="- - - - - - -"></label>
+            <label class="adv-cell w3"><span>Câble</span><input id="a-cable" placeholder="- - - - - - -"></label>
+            <label class="adv-cell w4"><span>Résistance</span><input id="a-res" placeholder="- - - - - -"></label>
+            <label class="adv-cell w4"><span>Connecteur</span><input id="a-conn" placeholder="- - - - - -"></label>
+            <label class="adv-cell w4"><span>Efficacité</span><input id="a-eff" placeholder="- - - - - -"></label>
+            <label class="adv-cell w4"><span>Vis hélice</span><input id="a-vish" type="checkbox" class="switch"></label>
+            <label class="adv-cell w3"><span>Roulement</span><input id="a-roul" placeholder="- - - - - - -"></label>
+            <label class="adv-cell w3"><span>Aimant</span><input id="a-aimant" placeholder="- - - - - - -"></label>
+            <label class="adv-cell w3"><span>Cloche</span><input id="a-cloche" placeholder="- - - - - - -"></label>
+          </div>
+          <div class="adv-draw">
+            <div class="adv-plan">
+              <img class="p-profil" src="assets/img/plan-profil.png" alt="">
+              <label class="p-field p-tshaft"><span>Type de shaft</span><input id="a-tshaft"></label>
+              <label class="p-field p-lshaft"><span>L shaft</span><input id="a-lshaft" inputmode="decimal"></label>
+              <label class="p-field p-visfix"><span>Vis fixation</span><input id="a-visfix"></label>
+            </div>
+            <div class="adv-plan">
+              <img class="p-dessus" src="assets/img/plan-dessus.png" alt="">
+              <label class="p-field p-evh"><span>Entraxe vis hélice</span><input id="a-evh"></label>
+              <label class="p-field p-refr"><span>Refroidissement</span><input id="a-refr"></label>
+            </div>
+          </div>
         </div>
-        <label class="sort"><span class="sr">Trier</span>
-          <select id="sort">
-            <option value="">Trier</option>
-            <option value="kv-asc">KV croissant</option>
-            <option value="kv-desc">KV décroissant</option>
-            <option value="poids-asc">Poids croissant</option>
-            <option value="classe">Classe</option>
-            <option value="marque">Marque</option>
-          </select>
-        </label>
+        <div class="bar">
+          <div class="tabs" role="tablist">
+            <button type="button" role="tab" class="tab" data-tab="populaire" aria-selected="true">Populaire</button>
+            <button type="button" role="tab" class="tab" data-tab="nouveautes" aria-selected="false">Nouveauté</button>
+            <button type="button" role="tab" class="tab" data-tab="bestseller" aria-selected="false">Best-seller</button>
+          </div>
+          <label class="sort"><span class="sr">Trier</span>
+            <select id="sort">
+              <option value="">Trier</option>
+              <option value="kv-asc">KV croissant</option>
+              <option value="kv-desc">KV décroissant</option>
+              <option value="poids-asc">Poids croissant</option>
+              <option value="classe">Classe</option>
+              <option value="marque">Marque</option>
+            </select>
+          </label>
+        </div>
+        <button type="button" class="adv-toggle" id="adv-toggle" aria-expanded="false" aria-controls="adv">
+          Filtres avancées
+          <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path d="M6 9l6 6 6-6" fill="none" stroke="currentColor" stroke-width="2.5"/></svg>
+        </button>
       </div>
+
       <p class="count" id="count" aria-live="polite"></p>
       <div id="rows"></div>
       <button class="more" id="more" type="button" hidden>Afficher plus</button>
       <p class="empty" id="empty" hidden>Aucun moteur ne correspond à ces critères.</p>
     </section>
 
-    <footer class="foot wrap">
-      <p>Données relevées sur les sites des fabricants et des boutiques FPV, mises à jour chaque jour. Vérifiez la fiche officielle avant achat.</p>
+    <footer class="foot">
+      <p>Données relevées sur les sites des fabricants et des boutiques, mises à jour chaque jour. Vérifiez la fiche officielle avant achat.</p>
     </footer>
   </section>
 
-  <!-- ============ FICHE MOTEUR ============ -->
+  <!-- ================= PAGE MOTEUR ================= -->
   <section id="view-detail" class="view" hidden>
-    <div class="wrap">
-      <a class="back" href="#">← Tous les moteurs</a>
-      <div id="detail"></div>
-    </div>
+    <div id="detail"></div>
   </section>
 
 </div>
