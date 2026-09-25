@@ -35,11 +35,17 @@ jobs:
           REQUEST_DELAY_MAX: "3"
         run: python -m multi_motors_ai.main --once --output github
 
+      - name: Compléter les fiches (500 familles par jour)
+        run: python tools/enrich.py --limit 500 || true
+
+      - name: Miniatures des photos
+        run: python tools/thumbs.py || true
+
       - name: Publier sur GitHub
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add catalogue/
+          git add catalogue/ site/assets/motors site/data
           if git diff --cached --quiet; then
             echo "Aucun nouveau moteur aujourd'hui."
             exit 0
