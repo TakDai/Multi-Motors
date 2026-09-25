@@ -36,6 +36,25 @@ jobs:
           fi
           ls -R build
 
+      - name: Configuration du serveur communautaire (api/config.php)
+        env:
+          MM_DB_HOST: ${{ secrets.MM_DB_HOST }}
+          MM_DB_NAME: ${{ secrets.MM_DB_NAME }}
+          MM_DB_USER: ${{ secrets.MM_DB_USER }}
+          MM_DB_PASS: ${{ secrets.MM_DB_PASS }}
+          MM_ADMIN_EMAIL: ${{ secrets.MM_ADMIN_EMAIL }}
+          MM_GOOGLE_CLIENT_ID: ${{ secrets.MM_GOOGLE_CLIENT_ID }}
+          MM_MAIL_FROM: ${{ secrets.MM_MAIL_FROM }}
+          MM_SITE_URL: ${{ secrets.MM_SITE_URL }}
+          MM_EXPORT_KEY: ${{ secrets.MM_EXPORT_KEY }}
+        run: |
+          if [ -z "$MM_DB_HOST" ]; then
+            echo "Base de données non configurée : le catalogue fonctionne, les comptes et commentaires resteront désactivés."
+            exit 0
+          fi
+          python3 tools/make_config.py build/api/config.php
+          php -l build/api/config.php
+
       - name: Envoyer sur l'hébergement OVH (FTP)
         env:
           OVH_FTP_HOST: ${{ secrets.OVH_FTP_HOST }}

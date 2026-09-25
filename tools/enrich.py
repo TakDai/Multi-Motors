@@ -163,6 +163,9 @@ def best_match(brand, name, kvs):
             tt = set(tokens(title)) | set(tokens(title.replace("-", "")))
             if NOT_MOTOR.search(tl) and "motor" not in tl:
                 continue
+            # Props / frames sold "for" a motor mention the motor too
+            if re.search(r"\b(props?|propellers?|frames?|replacement bell|screws?)\b", tl):
+                continue
             if not all(t in tt for t in need):
                 continue
             if btoks and not any(b in tt or b in tl.replace("-", "") for b in btoks):

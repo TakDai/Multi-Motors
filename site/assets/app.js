@@ -12,6 +12,8 @@
   const asset = (name) => (window.MM_ASSETS && window.MM_ASSETS[name]) || IMG + name;
   // Brand logos available in the Figma file; other brands use a text mark
   const LOGOS = { "T-MOTOR": "logo-t-motor.png" };
+  // Extension points used by community.js (accounts, likes, prices, news…)
+  const hooks = (window.MM_HOOKS = window.MM_HOOKS || {});
   const state = { motors: [], thumbs: {}, videos: {}, photos: {}, tab: "populaire", sort: "", q: "", shown: PAGE, f: {}, revealed: false };
 
   // --- CSV -----------------------------------------------------------------
@@ -103,7 +105,7 @@
 
   // --- Home: motor cards ---------------------------------------------------
   const lbl = (t) => `<span class="lbl">${esc(t)}</span>`;
-  const one = (v) => (has(v) ? `<span class="val">${esc(v)}</span>` : `<span class="val na">—</span>`);
+  const one = (v) => (has(v) ? `<span class="val" title="${esc(v)}">${esc(v)}</span>` : `<span class="val na">—</span>`);
   const val = (v) => `<span class="vals">${one(v)}</span>`;
   const pair = (a, b) => `<span class="vals">${has(a) || has(b) ? `${one(a)}<span class="x">X</span>${one(b)}` : one("")}</span>`;
   const kvVals = (m) => `<span class="vals">${kvList(m).slice(0, 3).map(one).join(`<span class="x">X</span>`) || one("")}</span>`;
@@ -112,7 +114,7 @@
     const href = `#m/${encodeURIComponent(m.REF)}`;
     const link = safeUrl(m.LIEN);
     return `<article class="row" style="--i:${i % PAGE}">
-      <div class="row-id">${brandMark(m)}<a class="name" href="${href}">${esc(m.NOM || m.REF)}</a></div>
+      <div class="row-id">${brandMark(m)}<a class="name" href="${href}">${esc(m.NOM || m.REF)}</a>${hooks.rowExtra ? hooks.rowExtra(m) : ""}</div>
       <a class="row-img" href="${href}" tabindex="-1" aria-hidden="true">${photo(m)}</a>
       <div class="specs">
         <div class="spec-line">${lbl("Classe")}${val(m.CLASSE)}${lbl("Poids")}${val(weight(m))}${lbl("Configuration")}${val(m.CONFIG)}${lbl("KV")}${kvVals(m)}</div>
@@ -177,7 +179,7 @@
       "marque": (a, b) => a.MARQUE.localeCompare(b.MARQUE) || (a.NOM || "").localeCompare(b.NOM || ""),
       // No sales data yet: "Best-seller" and "Populaire" both show the most complete sheets first
       "populaire": (a, b) => completeness(b) - completeness(a) || (num(a.ID) ?? 0) - (num(b.ID) ?? 0),
-      "bestseller": (a, b) => completeness(b) - completeness(a) || a.MARQUE.localeCompare(b.MARQUE),
+      "bestseller": (a, b) => (hooks.likes?.(b) || 0) - (hooks.likes?.(a) || 0) || completeness(b) - completeness(a),
       "nouveautes": (a, b) => (num(b.ID) ?? 0) - (num(a.ID) ?? 0),
     }[state.sort || state.tab];
     return list.slice().sort(by);
@@ -196,7 +198,7 @@
   }
 
   // --- Motor page ----------------------------------------------------------
-  // Short explanations shown by the "i" icons
+  // Short explanations shown by the "i" icons of the technical sheet
   const GLOSSARY = {
     kv: "Tours par minute et par volt, à vide. KV élevé : le moteur tourne vite (petites hélices, basse tension). KV bas : plus de couple (grandes hélices, haute tension).",
     classe: "Taille du stator : les deux premiers chiffres donnent son diamètre, les deux derniers sa hauteur, en mm. 2207 = stator de 22 × 7 mm.",
@@ -223,8 +225,8 @@
   };
   const info = (k) => (GLOSSARY[k] ? `<span class="info" tabindex="0" role="note" aria-label="${esc(GLOSSARY[k])}" data-tip="${esc(GLOSSARY[k])}">i</span>` : "");
 
-  const dSpec = (label, value, k) => `<div class="d-spec"><span class="tag">${esc(label)}${info(k)}</span><strong class="${value ? "" : "na"}">${value || "—"}</strong></div>`;
-  const dSpecR = (label, value, k) => `<div class="d-spec"><strong class="${value ? "" : "na"}">${value || "—"}</strong><span class="tag">${esc(label)}${info(k)}</span></div>`;
+  const dSpec = (label, value) => `<div class="d-spec"><span class="tag">${esc(label)}</span><strong class="${value ? "" : "na"}">${value || "—"}</strong></div>`;
+  const dSpecR = (label, value) => `<div class="d-spec"><strong class="${value ? "" : "na"}">${value || "—"}</strong><span class="tag">${esc(label)}</span></div>`;
   const e = (v) => (has(v) ? esc(v) : "");
   const famKey = (m) => `${m.MARQUE}|${m.NOM}`;
   function vmax(m) {
@@ -233,10 +235,10 @@
   }
 
   // Label + red value capsule(s)
-  function pv(label, values, cls = "", k = "") {
+  function pv(label, values, cls = "") {
     const list = (Array.isArray(values) ? values : [values]).filter(has);
     const inner = list.length ? list.map((v) => `<em>${esc(v)}</em>`).join("") : "<em>—</em>";
-    return `<span class="pv ${list.length ? "" : "na"} ${cls}"><b>${esc(label)}${info(k)}</b><span>${inner}</span></span>`;
+    return `<span class="pv ${list.length ? "" : "na"} ${cls}"><b>${esc(label)}</b><span>${inner}</span></span>`;
   }
 
   // Interactive dimension schema: the two plans from the mockup with real
@@ -280,7 +282,7 @@
         ${badge("hmot", 720, 180)}${val("hmot", 736, 184, "start")}`)}
     </svg>`;
     const legend = dims.map((d, i) => `<li><button type="button" class="lg ${d.value ? "" : "na"}" data-k="${d.k}" aria-pressed="false">
-        <span class="lg-n">${i + 1}</span><span class="lg-l">${esc(d.label)}${info(d.i)}</span><span class="lg-v">${esc(d.value || "—")}</span></button></li>`).join("");
+        <span class="lg-n">${i + 1}</span><span class="lg-l">${esc(d.label)}</span><span class="lg-v">${esc(d.value || "—")}</span></button></li>`).join("");
     const stator = has(m["D STATOR"]) ? `<li class="lg-extra"><span class="lg-l">Stator</span><span class="lg-v">${fmt(m["D STATOR"])} × ${fmt(m["H STATOR"])} mm</span></li>` : "";
     return `<div class="schema box" data-schema>
       <div class="schema-draw">${svg}</div>
@@ -430,7 +432,7 @@
     document.title = `${m.MARQUE} ${m.NOM} — Multi-Motors`;
     const dims = has(m["D MOTEUR"]) && has(m["H MOTEUR"]) ? `${fmt(m["D MOTEUR"])}X${fmt(m["H MOTEUR"])}` : "";
     $("detail").innerHTML = `
-      <div class="d-top">${brandMark(m, true)}<h1>${esc(m.NOM)}</h1><a class="back" href="#">← Tous les moteurs</a></div>
+      <div class="d-top">${brandMark(m, true)}<h1>${esc(m.NOM)}</h1></div>
       <div class="d-hero">
         <div class="d-side d-left">
           ${dSpec("Classe", e(m.CLASSE), "classe")}${dSpec("KV", kvs ? `<span class="kvs">${kvs}</span>` : "", "kv")}${dSpec("Shaft", e(shaft(m)), "shaft")}
@@ -453,11 +455,20 @@
         <div class="d-panel" id="d-panel">${PANELS[panel](m)}</div>
       </div>`;
     $("detail").dataset.ref = ref;
+    $("detail").dataset.panel = panel;
+    hooks.onDetail?.(m);
   }
 
   // --- Routing -------------------------------------------------------------
   function route() {
     const h = location.hash;
+    const other = document.querySelectorAll(".view[data-extra]");
+    if (hooks.route?.(h)) {
+      $("view-home").hidden = true;
+      $("view-detail").hidden = true;
+      return;
+    }
+    other.forEach((v) => (v.hidden = true));
     if (h.startsWith("#m/")) {
       $("view-home").hidden = true;
       $("view-detail").hidden = false;
@@ -472,6 +483,8 @@
 
   // --- Boot ----------------------------------------------------------------
   async function start() {
+    // community.js is loaded after this file: wait until every script has run
+    if (document.readyState === "loading") await new Promise((r) => document.addEventListener("DOMContentLoaded", r));
     try {
       [state.motors, state.thumbs, state.videos, state.photos] = await Promise.all([
         loadCSV().then(parseCSV), loadJSON("thumbs", window.MM_THUMBS), loadJSON("videos", window.MM_VIDEOS), loadJSON("photos", window.MM_PHOTOS),
@@ -580,23 +593,17 @@
     });
     window.addEventListener("hashchange", route);
 
-    // "i" icons of the search screen
-    document.querySelectorAll(".info[data-i]").forEach((el) => {
-      const tip = GLOSSARY[el.dataset.i];
-      if (!tip) return el.remove();
-      el.textContent = "i";
-      el.tabIndex = 0;
-      el.setAttribute("role", "note");
-      el.setAttribute("aria-label", tip);
-      el.dataset.tip = tip;
-      // Clicking the icon must not focus the input behind the label
-      el.addEventListener("click", (ev) => ev.preventDefault());
-    });
+    await hooks.onBoot?.();
 
     readFilters();
     renderList();
     route();
   }
+
+  Object.assign(window.MM = window.MM || {}, {
+    state, esc, has, fmt, num, safeUrl, photo, brandMark, asset, info, famKey, renderList, route,
+    rerender: () => $("detail").dataset.ref && renderDetail($("detail").dataset.ref, $("detail").dataset.panel || "dimension"),
+  });
 
   start();
 })();

@@ -177,3 +177,40 @@ Le workflow `.github/workflows/deploy-ovh.yml` envoie le site par FTP sur l'héb
 | `OVH_REMOTE_DIR` | Variable (optionnelle) | Dossier du site, `www` par défaut |
 
 Ces informations se trouvent dans l'espace client OVH : **Web Cloud → Hébergements → votre hébergement → FTP - SSH**.
+
+## Espace communautaire (comptes, likes, commentaires, suggestions, modération)
+
+Le serveur communautaire est une petite API PHP (`site/api/`) avec la base MySQL de l'hébergement OVH. Tant qu'il n'est pas configuré, le catalogue fonctionne normalement et ces fonctions restent désactivées.
+
+### 1. Créer la base de données (espace client OVH)
+
+**Web Cloud → Hébergements → votre hébergement → Bases de données → Créer une base de données** (MySQL). Notez le serveur (`xxxx.mysql.db`), le nom de la base, l'utilisateur et le mot de passe. Les tables sont créées automatiquement au premier appel.
+
+### 2. Connexion Google (facultatif)
+
+[Google Cloud Console](https://console.cloud.google.com/) → **API et services → Identifiants → Créer des identifiants → ID client OAuth**, type « Application Web », origine JavaScript autorisée : l'adresse du site. Copiez l'**ID client**.
+
+### 3. Secrets GitHub (Settings → Secrets and variables → Actions)
+
+| Secret | Valeur |
+|--------|--------|
+| `MM_DB_HOST` | Serveur MySQL OVH (`xxxx.mysql.db`) |
+| `MM_DB_NAME` | Nom de la base |
+| `MM_DB_USER` | Utilisateur MySQL |
+| `MM_DB_PASS` | Mot de passe MySQL |
+| `MM_ADMIN_EMAIL` | Votre email : le compte créé avec cette adresse devient administrateur |
+| `MM_SITE_URL` | Adresse publique du site, ex. `https://multi-motors.fr/` |
+| `MM_MAIL_FROM` | Expéditeur des emails, une adresse de votre domaine OVH |
+| `MM_EXPORT_KEY` | Une longue phrase secrète (permet à la tâche quotidienne de récupérer les corrections validées) |
+| `MM_GOOGLE_CLIENT_ID` | ID client Google (facultatif) |
+
+Au déploiement, `tools/make_config.py` écrit `api/config.php` à partir de ces secrets (ce fichier n'est jamais dans le dépôt).
+
+### Fonctionnement
+
+- **Comptes** : email + mot de passe (lien de confirmation par email, mot de passe oublié) ou Google.
+- **J'aime** et **commentaires** par moteur ; l'onglet « Best-seller » trie par nombre de j'aime.
+- **Suggestions de modification** : un membre propose une nouvelle valeur (avec sa source) ; un modérateur la valide (éventuellement corrigée) ou la refuse depuis **#admin**. Validée, elle s'affiche tout de suite sur la fiche (« Corrigé par la communauté ») et la tâche quotidienne l'intègre au catalogue (`tools/community_sync.py`).
+- **Panneau d'administration** (`#admin`) : suggestions, commentaires (masquer / supprimer), membres (rôles modérateur / admin, suspension), actualités du site.
+- **Prix indicatif et comparateur** : `tools/prices.py` relève les prix dans les boutiques, convertis en euros au taux BCE du jour (prix par moteur pour les lots).
+- **Fil d'actualité** (`#actus`) : nouveaux moteurs (rapports quotidiens) et actualités publiées depuis le panneau d'administration.

@@ -38,8 +38,22 @@ jobs:
       - name: Compléter les fiches (500 familles par jour)
         run: python tools/enrich.py --limit 500 || true
 
-      - name: Miniatures des photos
-        run: python tools/thumbs.py || true
+      - name: Corrections validées par la communauté
+        env:
+          MM_SITE_URL: ${{ secrets.MM_SITE_URL }}
+          MM_EXPORT_KEY: ${{ secrets.MM_EXPORT_KEY }}
+        run: python tools/community_sync.py || true
+
+      - name: Prix, vidéos et photos (300 familles par jour)
+        run: |
+          python tools/prices.py --limit 300 || true
+          python tools/videos.py --limit 300 || true
+          python tools/photos.py || true
+
+      - name: Miniatures et fil d'actualité
+        run: |
+          python tools/thumbs.py || true
+          python tools/actus.py || true
 
       - name: Publier sur GitHub
         run: |
