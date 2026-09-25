@@ -14,7 +14,7 @@
   const LOGOS = { "T-MOTOR": "logo-t-motor.png" };
   // Extension points used by community.js (accounts, likes, prices, news…)
   const hooks = (window.MM_HOOKS = window.MM_HOOKS || {});
-  const state = { motors: [], thumbs: {}, videos: {}, photos: {}, tab: "populaire", sort: "", q: "", shown: PAGE, f: {}, revealed: false };
+  const state = { motors: [], thumbs: {}, videos: {}, photos: {}, tab: "populaire", sort: "", q: "", shown: PAGE, f: {}, adv: {}, revealed: false };
 
   // --- CSV -----------------------------------------------------------------
   function parseCSV(text) {
@@ -135,10 +135,7 @@
       amp: num(v("f-amp")), pmax: num(v("f-pmax")), shaft: norm(v("f-shaft")), usage: v("f-usage").toLowerCase(),
       dmot: num(v("f-dmot")), hmot: num(v("f-hmot")), config: norm(v("f-config")), entraxe: norm(v("f-entraxe")),
       helice: v("f-helice").replace(/[^\d.]/g, ""),
-      marque: v("a-marque"), modele: v("a-modele").toLowerCase(), cable: norm(v("a-cable")), res: v("a-res").toLowerCase(),
-      aimant: v("a-aimant").toLowerCase(), cloche: v("a-cloche").toLowerCase(), vish: v("a-vish"),
-      tshaft: v("a-tshaft").toLowerCase(), lshaft: num(v("a-lshaft")), visfix: v("a-visfix").toLowerCase(),
-      // Fields from the mockup the catalogue has no column for yet (connecteur, efficacité, roulement…) are not filtered
+      modele: v("a-modele").toLowerCase(),
     };
   }
 
@@ -159,17 +156,192 @@
     if (f.config && !norm(m.CONFIG).includes(f.config)) return false;
     if (f.entraxe && !norm(m["ENTRAXE FIX"]).includes(f.entraxe)) return false;
     if (f.helice && !(m.HELICE || "").includes(f.helice)) return false;
-    if (f.marque && m.MARQUE !== f.marque) return false;
     if (f.modele && !inc(m.NOM, f.modele)) return false;
-    if (f.cable && !norm(m["TYPE CABLE"]).includes(f.cable)) return false;
-    if (f.res && !inc(m.RESISTANCE, f.res)) return false;
-    if (f.aimant && !inc(m.AIMANT, f.aimant)) return false;
-    if (f.cloche && !inc(m.CLOCHE, f.cloche)) return false;
-    if (f.vish && !(has(m["VIS HEL"]) && !/^non$/i.test(m["VIS HEL"]))) return false;
-    if (f.tshaft && !inc(m["TYPE SHAFT"], f.tshaft)) return false;
-    if (f.lshaft !== null && !(num(m["L SHAFT"]) !== null && Math.abs(num(m["L SHAFT"]) - f.lshaft) <= 1)) return false;
-    if (f.visfix && !inc(m["VIS FIX"], f.visfix)) return false;
+    if (!advMatch(m)) return false;
     return true;
+  }
+
+  // --- Advanced filters: one control type per kind of data -----------------
+  // chips = multiple choice among the values found in the catalogue, rng = min/max slider,
+  // seg = yes/no/all, combo = searchable multi-select (brands)
+  const clean = (v) => String(v ?? "").trim();
+  const firstNum = (s) => num(String(s || "").replace(/^[^\d]+/, ""));
+  const awg = (s) => num(String(s).replace(/\D+/g, "")) ?? 99;
+  const ADV = {
+    marque: { type: "combo", get: (m) => clean(m.MARQUE).toUpperCase() },
+    cable: { type: "chips", get: (m) => m["TYPE CABLE"], order: (a, b) => awg(a) - awg(b), label: (v) => v.replace(/awg/i, " AWG") },
+    aimant: { type: "chips", get: (m) => m.AIMANT, max: 6 },
+    cloche: { type: "chips", get: (m) => m.CLOCHE, max: 6 },
+    tshaft: { type: "chips", get: (m) => m["TYPE SHAFT"], max: 6 },
+    visfix: { type: "chips", get: (m) => m["VIS FIX"], max: 7 },
+    avec: { type: "chips", flags: {
+      "Photo": (m) => !!(state.thumbs[m.REF] || safeUrl(m.IMG)),
+      "Vidéos": (m) => (state.videos[famKey(m)] || []).length > 0,
+      "Lien officiel": (m) => !!safeUrl(m.LIEN),
+    } },
+    res: { type: "rng", get: (m) => firstNum(m.RESISTANCE), unit: "mΩ", step: 1 },
+    lcable: { type: "rng", get: (m) => num(m["L CABLE"]), unit: "mm", step: 5 },
+    lshaft: { type: "rng", get: (m) => num(m["L SHAFT"]), unit: "mm", step: 0.5 },
+    dstat: { type: "rng", get: (m) => num(m["D STATOR"]), unit: "mm", step: 0.5 },
+    hstat: { type: "rng", get: (m) => num(m["H STATOR"]), unit: "mm", step: 0.5 },
+    vish: { type: "seg", opts: [["", "Tous"], ["oui", "Oui"], ["non", "Non"]],
+      get: (m) => (/^non$/i.test(m["VIS HEL"] || "") ? "non" : has(m["VIS HEL"]) ? "oui" : "") },
+  };
+  const isOn = (k) => {
+    const d = ADV[k], v = state.adv[k];
+    if (d.type === "rng") return v[0] > d.min || v[1] < d.max;
+    return d.type === "seg" ? !!v : v.size > 0;
+  };
+  function advMatch(m) {
+    for (const k in ADV) {
+      if (!state.adv[k] || !isOn(k)) continue;
+      const d = ADV[k], v = state.adv[k];
+      if (d.flags) { for (const f of v) if (!d.flags[f](m)) return false; continue; }
+      const x = d.get(m);
+      if (d.type === "rng") { if (x === null || (v[0] > d.min && x < v[0]) || (v[1] < d.max && x > v[1])) return false; }
+      else if (d.type === "seg") { if (x !== v) return false; }
+      else if (!v.has(clean(x))) return false;
+    }
+    return true;
+  }
+  const chipBtn = (v, n, label = v) =>
+    `<button type="button" class="chip" aria-pressed="false" data-v="${esc(v)}">${esc(label)}${n ? `<i>${n}</i>` : ""}</button>`;
+  const quantile = (xs, q) => xs[Math.min(xs.length - 1, Math.max(0, Math.round(q * (xs.length - 1))))];
+  const rngText = (d, [a, b]) => (a <= d.min && b >= d.max ? "Tous"
+    : a <= d.min ? `≤ ${fmt(b)} ${d.unit}` : b >= d.max ? `≥ ${fmt(a)} ${d.unit}` : `${fmt(a)} – ${fmt(b)} ${d.unit}`);
+
+  function buildAdv(refresh) {
+    const counts = (get) => {
+      const c = new Map();
+      state.motors.forEach((m) => { const v = clean(get(m)); if (v) c.set(v, (c.get(v) || 0) + 1); });
+      return c;
+    };
+    document.querySelectorAll("#adv [data-f]").forEach((el) => {
+      const k = el.dataset.f, d = ADV[k], name = $(el.getAttribute("aria-labelledby"))?.textContent || k;
+      if (d.type === "chips") {
+        state.adv[k] = new Set();
+        if (d.flags) el.innerHTML = Object.keys(d.flags).map((f) => chipBtn(f, state.motors.filter(d.flags[f]).length)).join("");
+        else {
+          let vals = [...counts(d.get)].sort((a, b) => b[1] - a[1]).slice(0, d.max || 12);
+          if (d.order) vals.sort((a, b) => d.order(a[0], b[0]));
+          el.innerHTML = vals.map(([v, n]) => chipBtn(v, n, d.label ? d.label(v) : v)).join("");
+        }
+        el.addEventListener("click", (ev) => {
+          const b = ev.target.closest(".chip"); if (!b) return;
+          const on = b.getAttribute("aria-pressed") !== "true";
+          b.setAttribute("aria-pressed", String(on));
+          state.adv[k][on ? "add" : "delete"](b.dataset.v);
+          refresh();
+        });
+      } else if (d.type === "rng") {
+        const xs = state.motors.map(d.get).filter((x) => x !== null && x > 0).sort((a, b) => a - b);
+        d.min = Math.floor(quantile(xs, 0.02) / d.step) * d.step;
+        d.max = Math.ceil(quantile(xs, 0.98) / d.step) * d.step;
+        state.adv[k] = [d.min, d.max];
+        const attrs = `min="${d.min}" max="${d.max}" step="${d.step}"`;
+        el.innerHTML = `<div class="rng-track"><i class="rng-fill"></i>
+          <input type="range" class="lo" ${attrs} value="${d.min}" aria-label="${esc(name)} minimum">
+          <input type="range" class="hi" ${attrs} value="${d.max}" aria-label="${esc(name)} maximum"></div>
+          <output class="rng-out">Tous</output>`;
+        const [lo, hi] = el.querySelectorAll("input");
+        d.paint = () => {
+          const [a, b] = state.adv[k], pc = (x) => ((x - d.min) / (d.max - d.min || 1)) * 100;
+          lo.value = a; hi.value = b;
+          el.style.setProperty("--a", `${pc(a)}%`); el.style.setProperty("--b", `${pc(b)}%`);
+          el.querySelector("output").textContent = rngText(d, state.adv[k]);
+          el.classList.toggle("on", isOn(k));
+        };
+        el.addEventListener("input", (ev) => {
+          let a = +lo.value, b = +hi.value;
+          if (a > b) { if (ev.target === lo) a = b; else b = a; }
+          state.adv[k] = [a, b];
+          d.paint();
+        });
+        d.paint();
+      } else if (d.type === "seg") {
+        state.adv[k] = "";
+        el.innerHTML = d.opts.map(([v, l]) => `<button type="button" role="radio" aria-checked="${!v}" data-v="${v}">${l}</button>`).join("");
+        el.addEventListener("click", (ev) => {
+          const b = ev.target.closest("button"); if (!b) return;
+          state.adv[k] = b.dataset.v;
+          el.querySelectorAll("button").forEach((x) => x.setAttribute("aria-checked", String(x === b)));
+          refresh();
+        });
+      } else if (d.type === "combo") {
+        // Same brand written differently in the sheet (Emax / EMAX): one entry, shown with its most common spelling
+        const spell = new Map();
+        state.motors.forEach((m) => { const u = d.get(m), c = spell.get(u) || new Map(); c.set(m.MARQUE, (c.get(m.MARQUE) || 0) + 1); spell.set(u, c); });
+        d.label = (u) => [...(spell.get(u) || [[u]])].sort((a, b) => b[1] - a[1])[0][0];
+        buildCombo(el, k, counts(d.get), refresh);
+      }
+    });
+    $("adv-reset").addEventListener("click", () => {
+      for (const k in ADV) {
+        const d = ADV[k];
+        state.adv[k] = d.type === "rng" ? [d.min, d.max] : d.type === "seg" ? "" : new Set();
+        d.paint?.();
+      }
+      document.querySelectorAll("#adv .chip, #adv .combo-list [role=option]").forEach((b) => b.setAttribute(b.matches(".chip") ? "aria-pressed" : "aria-selected", "false"));
+      document.querySelectorAll("#adv .seg button").forEach((b) => b.setAttribute("aria-checked", String(!b.dataset.v)));
+      ADV.marque.paint?.();
+      $("a-modele").value = "";
+      refresh();
+    });
+  }
+
+  // Brands: type to narrow the list, pick several, remove with the ✕ of each tag
+  function buildCombo(el, k, counts, refresh) {
+    state.adv[k] = new Set();
+    const label = ADV[k].label;
+    const brands = [...counts].map(([v, n]) => [v, n, label(v)]).sort((a, b) => a[2].localeCompare(b[2]));
+    el.innerHTML = `<div class="combo-box"><span class="combo-sel"></span>
+      <input type="search" placeholder="Toutes les marques" role="combobox" aria-expanded="false" aria-controls="combo-list-${k}" aria-autocomplete="list" aria-label="Chercher une marque"></div>
+      <div class="combo-list" id="combo-list-${k}" role="listbox" aria-multiselectable="true" hidden>
+        ${brands.map(([v, n, l]) => `<button type="button" role="option" aria-selected="false" data-v="${esc(v)}">${esc(l)}<i>${n}</i></button>`).join("")}
+        <p class="combo-none" hidden>Aucune marque</p></div>`;
+    const input = el.querySelector("input"), list = el.querySelector(".combo-list"), sel = el.querySelector(".combo-sel");
+    const opts = [...list.querySelectorAll("[role=option]")];
+    const show = (open) => { list.hidden = !open; input.setAttribute("aria-expanded", String(open)); el.classList.toggle("open", open); };
+    const narrow = () => {
+      const q = input.value.trim().toLowerCase();
+      let n = 0;
+      opts.forEach((o) => { const ok = !q || o.textContent.toLowerCase().includes(q); o.hidden = !ok; n += ok; });
+      list.querySelector(".combo-none").hidden = n > 0;
+    };
+    ADV[k].paint = () => {
+      const s = state.adv[k];
+      opts.forEach((o) => o.setAttribute("aria-selected", String(s.has(o.dataset.v))));
+      sel.innerHTML = [...s].map((v) => `<button type="button" class="combo-tag" data-v="${esc(v)}" aria-label="Retirer ${esc(label(v))}">${esc(label(v))}<b aria-hidden="true">✕</b></button>`).join("");
+      input.placeholder = s.size ? "Ajouter…" : "Toutes les marques";
+    };
+    const toggle = (v) => { const s = state.adv[k]; s.has(v) ? s.delete(v) : s.add(v); ADV[k].paint(); refresh(); };
+    input.addEventListener("focus", () => { narrow(); show(true); });
+    input.addEventListener("input", (ev) => { ev.stopPropagation(); narrow(); show(true); });
+    input.addEventListener("keydown", (ev) => {
+      const vis = opts.filter((o) => !o.hidden);
+      if (ev.key === "ArrowDown" && vis[0]) { ev.preventDefault(); show(true); vis[0].focus(); }
+      else if (ev.key === "Enter") { ev.preventDefault(); if (vis[0] && input.value.trim()) { toggle(vis[0].dataset.v); input.value = ""; narrow(); show(false); } }
+      else if (ev.key === "Escape") { show(false); }
+      else if (ev.key === "Backspace" && !input.value && state.adv[k].size) toggle([...state.adv[k]].pop());
+    });
+    list.addEventListener("keydown", (ev) => {
+      const vis = opts.filter((o) => !o.hidden), i = vis.indexOf(document.activeElement);
+      if (ev.key === "ArrowDown" || ev.key === "ArrowUp") { ev.preventDefault(); const j = i + (ev.key === "ArrowDown" ? 1 : -1); (j < 0 ? input : vis[Math.min(j, vis.length - 1)]).focus(); }
+      else if (ev.key === "Escape") { show(false); input.focus(); }
+    });
+    list.addEventListener("click", (ev) => { const o = ev.target.closest("[role=option]"); if (o) toggle(o.dataset.v); });
+    sel.addEventListener("click", (ev) => { const t = ev.target.closest(".combo-tag"); if (t) { toggle(t.dataset.v); input.focus(); } });
+    document.addEventListener("pointerdown", (ev) => { if (!el.contains(ev.target)) show(false); });
+    el.addEventListener("focusout", (ev) => { if (ev.relatedTarget && !el.contains(ev.relatedTarget)) show(false); });
+  }
+
+  // Badge on the toggle + summary line under the panel
+  function advSummary() {
+    const n = Object.keys(ADV).filter((k) => state.adv[k] && isOn(k)).length + (state.f.modele ? 1 : 0);
+    $("adv-badge").hidden = !n;
+    $("adv-badge").textContent = n;
+    $("adv-sum").textContent = n ? `${n} filtre${n > 1 ? "s" : ""} avancé${n > 1 ? "s" : ""} actif${n > 1 ? "s" : ""}` : "Aucun filtre avancé";
+    $("adv-reset").disabled = !n;
   }
 
   function sorted(list) {
@@ -522,10 +694,8 @@
       return;
     }
 
-    [...new Set(state.motors.map((m) => m.MARQUE))].sort((a, b) => a.localeCompare(b))
-      .forEach((b) => $("a-marque").insertAdjacentHTML("beforeend", `<option value="${esc(b)}">${esc(b)}</option>`));
-
-    const refresh = () => { readFilters(); state.shown = PAGE; renderList(); };
+    const refresh = () => { readFilters(); state.shown = PAGE; advSummary(); renderList(); };
+    buildAdv(refresh);
     ["spec-form", "adv"].forEach((id) => { $(id).addEventListener("input", refresh); $(id).addEventListener("change", refresh); });
     // Results appear below the search screen once the search is validated
     $("spec-form").addEventListener("submit", (ev) => {
@@ -550,6 +720,9 @@
       $("filters").classList.toggle("open", open);
       $("adv-toggle").setAttribute("aria-expanded", String(open));
       document.querySelector(".adv-inner").inert = !open;
+      // Dropdowns (brands) may overflow the panel once it has finished unfolding
+      $("filters").classList.remove("shown");
+      if (open) setTimeout(() => $("filters").classList.toggle("shown", $("filters").classList.contains("open")), 520);
     });
     $("more").addEventListener("click", () => { state.shown += PAGE; renderList(); });
     // Dimension schema: highlight on hover / focus, pin on click

@@ -63,30 +63,30 @@
         <div class="adv-wrap" id="adv-wrap"><div class="adv-inner" inert>
         <div class="adv" id="adv">
           <div class="adv-grid">
-            <label class="adv-cell w3"><span>Marque</span><select id="a-marque"><option value="">- - - - - - -</option></select></label>
-            <label class="adv-cell w3"><span>Modèle</span><input id="a-modele" placeholder="- - - - - - -"></label>
-            <label class="adv-cell w3"><span>Câble</span><input id="a-cable" placeholder="- - - - - - -"></label>
-            <label class="adv-cell w4"><span>Résistance</span><input id="a-res" placeholder="- - - - - -"></label>
-            <label class="adv-cell w4"><span>Connecteur</span><input id="a-conn" placeholder="- - - - - -"></label>
-            <label class="adv-cell w4"><span>Efficacité</span><input id="a-eff" placeholder="- - - - - -"></label>
-            <label class="adv-cell w4"><span>Vis hélice</span><input id="a-vish" type="checkbox" class="switch"></label>
-            <label class="adv-cell w3"><span>Roulement</span><input id="a-roul" placeholder="- - - - - - -"></label>
-            <label class="adv-cell w3"><span>Aimant</span><input id="a-aimant" placeholder="- - - - - - -"></label>
-            <label class="adv-cell w3"><span>Cloche</span><input id="a-cloche" placeholder="- - - - - - -"></label>
+            <div class="adv-cell w3"><span id="l-marque">Marque</span><div class="combo" id="c-marque" data-f="marque" aria-labelledby="l-marque"></div></div>
+            <label class="adv-cell w3"><span>Modèle</span><input id="a-modele" type="search" placeholder="ex. Xing, Velox…"></label>
+            <div class="adv-cell w3"><span id="l-cable">Câble</span><div class="chips" data-f="cable" aria-labelledby="l-cable"></div></div>
+            <div class="adv-cell w3"><span id="l-res">Résistance</span><div class="rng" data-f="res" aria-labelledby="l-res"></div></div>
+            <div class="adv-cell w3"><span id="l-lcable">Longueur câble</span><div class="rng" data-f="lcable" aria-labelledby="l-lcable"></div></div>
+            <div class="adv-cell w3"><span id="l-vish">Vis hélice</span><div class="seg" data-f="vish" role="radiogroup" aria-labelledby="l-vish"></div></div>
+            <div class="adv-cell w3"><span id="l-aimant">Aimant</span><div class="chips" data-f="aimant" aria-labelledby="l-aimant"></div></div>
+            <div class="adv-cell w3"><span id="l-cloche">Cloche</span><div class="chips" data-f="cloche" aria-labelledby="l-cloche"></div></div>
+            <div class="adv-cell w3"><span id="l-avec">Fiche avec</span><div class="chips" data-f="avec" aria-labelledby="l-avec"></div></div>
           </div>
           <div class="adv-draw">
             <div class="adv-plan">
               <img class="p-profil" src="assets/img/plan-profil.png" alt="">
-              <label class="p-field p-tshaft"><span>Type de shaft</span><input id="a-tshaft"></label>
-              <label class="p-field p-lshaft"><span>L shaft</span><input id="a-lshaft" inputmode="decimal"></label>
-              <label class="p-field p-visfix"><span>Vis fixation</span><input id="a-visfix"></label>
+              <div class="p-field"><span id="l-tshaft">Type de shaft</span><div class="chips" data-f="tshaft" aria-labelledby="l-tshaft"></div></div>
+              <div class="p-field"><span id="l-lshaft">L shaft</span><div class="rng" data-f="lshaft" aria-labelledby="l-lshaft"></div></div>
+              <div class="p-field"><span id="l-visfix">Vis fixation</span><div class="chips" data-f="visfix" aria-labelledby="l-visfix"></div></div>
             </div>
             <div class="adv-plan">
               <img class="p-dessus" src="assets/img/plan-dessus.png" alt="">
-              <label class="p-field p-evh"><span>Entraxe vis hélice</span><input id="a-evh"></label>
-              <label class="p-field p-refr"><span>Refroidissement</span><input id="a-refr"></label>
+              <div class="p-field"><span id="l-dstat">Ø stator</span><div class="rng" data-f="dstat" aria-labelledby="l-dstat"></div></div>
+              <div class="p-field"><span id="l-hstat">Hauteur stator</span><div class="rng" data-f="hstat" aria-labelledby="l-hstat"></div></div>
             </div>
           </div>
+          <div class="adv-foot"><span id="adv-sum">Aucun filtre avancé</span><button type="button" class="adv-reset" id="adv-reset" disabled>Réinitialiser</button></div>
         </div>
         </div></div>
         <div class="bar">
@@ -107,7 +107,7 @@
           </label>
         </div>
         <button type="button" class="adv-toggle" id="adv-toggle" aria-expanded="false" aria-controls="adv">
-          Filtres avancées
+          <span>Filtres avancées <b class="adv-badge" id="adv-badge" hidden></b></span>
           <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path d="M6 9l6 6 6-6" fill="none" stroke="currentColor" stroke-width="2.5"/></svg>
         </button>
       </div>
