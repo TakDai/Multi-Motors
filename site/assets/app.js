@@ -489,6 +489,7 @@
     target: '<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="8"/><circle cx="12" cy="12" r="3"/></svg>',
     price: '<svg viewBox="0 0 24 24"><path d="M3 12l9-9h8v8l-9 9z"/><circle cx="15.5" cy="8.5" r="1.5"/></svg>',
     chat: '<svg viewBox="0 0 24 24"><path d="M4 5h16v11H9l-5 4z"/></svg>',
+    similar: '<svg viewBox="0 0 24 24"><circle cx="8" cy="12" r="5"/><circle cx="16" cy="12" r="5"/></svg>',
   };
   // Same section header everywhere: icon, title, optional note on the right
   const secH = (icon, title, note = "") => `<header class="sec-h"><span class="sec-ico" aria-hidden="true">${ICON[icon] || ""}</span><h3>${title}</h3>${note ? `<small>${note}</small>` : ""}</header>`;
@@ -640,6 +641,57 @@
 
   const PANELS = { dimension: panelDimension, tech: panelTech, videos: panelVideos, photos: panelPhotos };
 
+  // --- Similar motors: same stator size (± a little), closest KV, weight and shaft -----
+  const stator = (m) => {
+    const d = num(m["D STATOR"]), h = num(m["H STATOR"]);
+    if (d && h) return [d, h];
+    const c = String(m.CLASSE || "").match(/^(\d{2})(\d{2})/);
+    return c ? [+c[1], +c[2]] : null;
+  };
+  const gimbal = (m) => /gimbal/i.test(`${m.NOM} ${m.VERSION} ${m.UTILISATION}`);
+  function similar(m, max = 8) {
+    const s0 = stator(m), kv0 = num(m.KV), w0 = num(m.POIDS), sh0 = norm(shaft(m)), self = famKey(m);
+    if (!s0) return [];
+    const best = new Map();
+    for (const x of state.motors) {
+      const k = famKey(x);
+      if (k === self || gimbal(x) !== gimbal(m)) continue;
+      const s = stator(x);
+      if (!s || Math.abs(s[0] - s0[0]) > 2 || Math.abs(s[1] - s0[1]) > 2) continue;
+      const kv = num(x.KV), w = num(x.POIDS);
+      let score = Math.abs(s[0] - s0[0]) / 1.5 + Math.abs(s[1] - s0[1]);
+      score += kv0 && kv ? Math.abs(Math.log(kv / kv0)) * 5 : 1.5;
+      score += w0 && w ? Math.min(2, (Math.abs(w - w0) / w0) * 3) : 0.8;
+      if (sh0 && norm(shaft(x)) !== sh0) score += 0.5;
+      score -= completeness(x) * 0.04 + (state.thumbs[x.REF] || safeUrl(x.IMG) ? 0.3 : 0);
+      const cur = best.get(k);
+      if (!cur || score < cur.score) best.set(k, { m: x, score });
+    }
+    return [...best.values()].sort((a, b) => a.score - b.score).slice(0, max).map((r) => r.m);
+  }
+  const delta = (v, v0, unit, digits = 0) => {
+    if (v === null || v0 === null) return "";
+    const d = Math.round((v - v0) * 10 ** digits) / 10 ** digits;
+    return d ? `<em class="${d > 0 ? "up" : "down"}">${d > 0 ? "+" : "−"}${Math.abs(d)}${unit}</em>` : `<em class="eq">=</em>`;
+  };
+  function similarBlock(m) {
+    const list = similar(m);
+    if (!list.length) return "";
+    const kv0 = num(m.KV), w0 = num(m.POIDS), cls = String(m.CLASSE || "");
+    return `${secH("similar", "Moteurs similaires", `Même taille de stator${has(m.KV) ? `, KV proche de ${esc(fmt(m.KV))}` : ""}`)}
+      <div class="sim-list">${list.map((x, i) => `
+        <a class="sim" href="#m/${encodeURIComponent(x.REF)}" style="--i:${i}">
+          <span class="sim-img">${photo(x)}</span>
+          <span class="sim-brand">${brandMark(x)}</span>
+          <strong class="sim-name">${esc(x.NOM || x.REF)}</strong>
+          <span class="sim-specs">
+            <span><small>Classe</small><b>${esc(x.CLASSE || "—")}</b>${x.CLASSE && x.CLASSE === cls ? `<em class="eq">=</em>` : ""}</span>
+            <span><small>KV</small><b>${esc(fmt(x.KV) || "—")}</b>${delta(num(x.KV), kv0, "")}</span>
+            <span><small>Poids</small><b>${has(x.POIDS) ? `${esc(fmt(x.POIDS))} g` : "—"}</b>${delta(num(x.POIDS), w0, " g", 1)}</span>
+          </span>
+        </a>`).join("")}</div>`;
+  }
+
   function renderDetail(ref, panel = "dimension") {
     const m = state.motors.find((x) => x.REF === ref);
     if (!m) { $("detail").innerHTML = `<p class="empty">Ce moteur n'est plus dans le catalogue. <a href="#">Retour</a></p>`; return; }
@@ -670,6 +722,13 @@
     $("detail").dataset.ref = ref;
     $("detail").dataset.panel = panel;
     hooks.onDetail?.(m);
+    // After the price comparator, before the comments (both added by community.js)
+    const sim = similarBlock(m);
+    if (sim) {
+      const html = `<section class="d-extra card" id="d-similar">${sim}</section>`;
+      const before = $("d-comments");
+      before ? before.insertAdjacentHTML("beforebegin", html) : document.querySelector("#detail .d-body").insertAdjacentHTML("beforeend", html);
+    }
   }
 
   // --- Routing -------------------------------------------------------------
