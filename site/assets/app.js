@@ -141,13 +141,43 @@
     </article>`;
   }
 
+  // --- Home search fields: what each one means ------------------------------
+  // KV: one value (±10 %) or a range "1700-2000"; Poids, Ø, H: maximum; Intensité, Puissance: minimum;
+  // Classe: prefix ("22" = every 22xx); Voltage: cells (6S) or volts; Shaft: thread (M5) or axle Ø (5 mm);
+  // Entraxe: any listed spacing (16 matches 16x16 and 16/19); Hélice: inches inside the recommended range
+  const nums = (s) => (String(s || "").replace(/,/g, ".").match(/\d+(?:\.\d+)?/g) || []).map(Number);
+  function kvRange(s) {
+    const n = nums(s);
+    if (!n.length) return null;
+    return n.length > 1 ? [Math.min(n[0], n[1]), Math.max(n[0], n[1])] : [n[0] * 0.9, n[0] * 1.1];
+  }
+  function cellsOf(s) {
+    const t = String(s || "").toUpperCase(), n = num(t);
+    if (n === null) return null;
+    return /V/.test(t) && !/S/.test(t) ? Math.round(n / 3.7) : n;
+  }
+  function shaftOf(s) {
+    const t = String(s || "").toLowerCase().replace(",", "."), n = num(t.replace(/^m/, ""));
+    return n === null ? null : { thread: /^m/.test(t) ? n : null, axle: /^m/.test(t) ? null : n };
+  }
+  // Recommended propeller range of a motor, in inches ("5-6 Inch", '5"-5.5"', "40mm")
+  function propRange(s) {
+    const t = String(s || "").toLowerCase().replace(/,/g, ".");
+    if (!t) return null;
+    let n = nums(t).filter((x) => x > 0 && x < 400);
+    if (!n.length) return null;
+    if (/mm/.test(t) && !/inch|"|''|pouce/.test(t)) n = n.filter((x) => x >= 20).map((x) => x / 25.4);
+    else n = n.filter((x) => x <= 30);
+    return n.length ? [Math.min(...n), Math.max(...n)] : null;
+  }
+
   function readFilters() {
     const v = (id) => ($(id).type === "checkbox" ? $(id).checked : $(id).value.trim());
     state.f = {
-      kv: num(v("f-kv")), poids: num(v("f-poids")), classe: v("f-classe"), voltage: num(v("f-voltage")),
-      amp: num(v("f-amp")), pmax: num(v("f-pmax")), shaft: norm(v("f-shaft")), usage: v("f-usage").toLowerCase(),
-      dmot: num(v("f-dmot")), hmot: num(v("f-hmot")), config: norm(v("f-config")), entraxe: norm(v("f-entraxe")),
-      helice: v("f-helice").replace(/[^\d.]/g, ""),
+      kv: kvRange(v("f-kv")), poids: num(v("f-poids")), classe: v("f-classe").replace(/\s/g, ""), voltage: cellsOf(v("f-voltage")),
+      amp: num(v("f-amp")), pmax: num(v("f-pmax")), shaft: shaftOf(v("f-shaft")), usage: v("f-usage").toLowerCase(),
+      dmot: num(v("f-dmot")), hmot: num(v("f-hmot")), config: norm(v("f-config")), entraxe: nums(v("f-entraxe"))[0] ?? null,
+      helice: num(v("f-helice").replace(/[^\d.,]/g, "").replace(",", ".")),
       modele: v("a-modele").toLowerCase(),
     };
   }
@@ -156,19 +186,23 @@
   function matches(m) {
     const f = state.f, q = state.q.toLowerCase();
     if (q && ![m.REF, m.MARQUE, m.NOM, m.VERSION, m.CLASSE, m.KV].join(" ").toLowerCase().includes(q)) return false;
-    if (f.kv !== null && !(num(m.KV) && Math.abs(num(m.KV) - f.kv) <= f.kv * 0.1)) return false;
+    if (f.kv && !(num(m.KV) && num(m.KV) >= f.kv[0] && num(m.KV) <= f.kv[1])) return false;
     if (f.poids !== null && !(num(m.POIDS) !== null && num(m.POIDS) <= f.poids)) return false;
-    if (f.classe && !(m.CLASSE || "").startsWith(f.classe)) return false;
+    if (f.classe && !(m.CLASSE || "").replace(/\s/g, "").startsWith(f.classe)) return false;
     if (f.voltage !== null) { const c = cells(m); if (!c.length || f.voltage < Math.min(...c) || f.voltage > Math.max(...c)) return false; }
     if (f.amp !== null && !(num(m.AMP) >= f.amp)) return false;
     if (f.pmax !== null && !(num(m.PUISSANCE) >= f.pmax)) return false;
-    if (f.shaft && !(norm(m["VIS HEL"]).includes(f.shaft) || norm(m["D SHAFT"]) === f.shaft.replace(/^m/, ""))) return false;
+    if (f.shaft) {
+      const thread = num(String(m["VIS HEL"] || "").match(/m\s*(\d+(?:\.\d+)?)/i)?.[1]), axle = num(m["D SHAFT"]);
+      const want = f.shaft.thread ?? f.shaft.axle;
+      if (!(thread === want || axle === want)) return false;
+    }
     if (f.usage && !inc(m.UTILISATION, f.usage)) return false;
     if (f.dmot !== null && !(num(m["D MOTEUR"]) !== null && num(m["D MOTEUR"]) <= f.dmot)) return false;
     if (f.hmot !== null && !(num(m["H MOTEUR"]) !== null && num(m["H MOTEUR"]) <= f.hmot)) return false;
     if (f.config && !norm(m.CONFIG).includes(f.config)) return false;
-    if (f.entraxe && !norm(m["ENTRAXE FIX"]).includes(f.entraxe)) return false;
-    if (f.helice && !(m.HELICE || "").includes(f.helice)) return false;
+    if (f.entraxe !== null && !nums(m["ENTRAXE FIX"]).some((x) => Math.abs(x - f.entraxe) < 0.3)) return false;
+    if (f.helice !== null) { const r = propRange(m.HELICE); if (!r || f.helice < r[0] - 0.26 || f.helice > r[1] + 0.26) return false; }
     if (f.modele && !inc(m.NOM, f.modele)) return false;
     if (!advMatch(m)) return false;
     return true;
@@ -178,6 +212,15 @@
   // chips = multiple choice among the values found in the catalogue, rng = min/max slider,
   // seg = yes/no/all, combo = searchable multi-select (brands)
   const clean = (v) => String(v ?? "").trim();
+  const MOUNTS = ["Tige", "Écrou", "Vis", "Popo"];
+  function propMount(m) {
+    const t = `${m["TYPE SHAFT"] || ""} ${m["VIS HEL"] || ""}`.toLowerCase();
+    if (/popo/.test(t)) return "Popo";
+    if (/t-?mount|\bvis\b|screw/.test(t)) return "Vis";
+    if (/[ée]crou|nut|\bm\d/.test(t)) return "Écrou";
+    if (/tige|lisse|creux|plein|titane/.test(t)) return "Tige";
+    return "";
+  }
   const firstNum = (s) => num(String(s || "").replace(/^[^\d]+/, ""));
   const awg = (s) => num(String(s).replace(/\D+/g, "")) ?? 99;
   const ADV = {
@@ -185,8 +228,11 @@
     cable: { type: "chips", get: (m) => m["TYPE CABLE"], order: (a, b) => awg(a) - awg(b), label: (v) => v.replace(/awg/i, " AWG") },
     aimant: { type: "chips", get: (m) => m.AIMANT, max: 6 },
     cloche: { type: "chips", get: (m) => m.CLOCHE, max: 6 },
-    tshaft: { type: "chips", get: (m) => m["TYPE SHAFT"], max: 6 },
-    visfix: { type: "chips", get: (m) => m["VIS FIX"], max: 7 },
+    // How the propeller is held: threaded shaft (Tige), nut (Écrou), screws (Vis) or Popo mount
+    tshaft: { type: "chips", get: propMount, fixed: MOUNTS, order: (a, b) => MOUNTS.indexOf(a) - MOUNTS.indexOf(b) },
+    // Number of screws holding the motor on the arm (the sheet also holds screw sizes: those are not counts)
+    visfix: { type: "chips", get: (m) => { const c = String(m["VIS FIX"] || "").match(/^(\d)\s*vis/i); return c ? `${c[1]} vis` : ""; },
+      order: (a, b) => num(a) - num(b) },
     avec: { type: "chips", flags: {
       "Photo": (m) => !!(state.thumbs[m.REF] || safeUrl(m.IMG)),
       "Vidéos": (m) => (state.videos[famKey(m)] || []).length > 0,
@@ -218,7 +264,7 @@
     return true;
   }
   const chipBtn = (v, n, label = v) =>
-    `<button type="button" class="chip" aria-pressed="false" data-v="${esc(v)}">${esc(label)}${n ? `<i>${n}</i>` : ""}</button>`;
+    `<button type="button" class="chip${n === 0 ? " zero" : ""}" aria-pressed="false" data-v="${esc(v)}"${n === 0 ? ' title="Aucun moteur renseigné ainsi pour l\'instant"' : ""}>${esc(label)}<i>${n}</i></button>`;
   const quantile = (xs, q) => xs[Math.min(xs.length - 1, Math.max(0, Math.round(q * (xs.length - 1))))];
   const rngText = (d, [a, b]) => (a <= d.min && b >= d.max ? "Tous"
     : a <= d.min ? `≤ ${fmt(b)} ${d.unit}` : b >= d.max ? `≥ ${fmt(a)} ${d.unit}` : `${fmt(a)} – ${fmt(b)} ${d.unit}`);
@@ -235,7 +281,8 @@
         state.adv[k] = new Set();
         if (d.flags) el.innerHTML = Object.keys(d.flags).map((f) => chipBtn(f, state.motors.filter(d.flags[f]).length)).join("");
         else {
-          let vals = [...counts(d.get)].sort((a, b) => b[1] - a[1]).slice(0, d.max || 12);
+          const c = counts(d.get);
+          let vals = d.fixed ? d.fixed.map((v) => [v, c.get(v) || 0]) : [...c].sort((a, b) => b[1] - a[1]).slice(0, d.max || 12);
           if (d.order) vals.sort((a, b) => d.order(a[0], b[0]));
           el.innerHTML = vals.map(([v, n]) => chipBtn(v, n, d.label ? d.label(v) : v)).join("");
         }
@@ -789,6 +836,28 @@
     }
   }
 
+  // Values offered by each home field (click or type to see them); still free to type anything else
+  function buildSuggestions() {
+    const top = (vals, k = 14) => [...vals.reduce((c, v) => c.set(v, (c.get(v) || 0) + 1), new Map())]
+      .sort((a, b) => b[1] - a[1]).slice(0, k).map((x) => x[0]);
+    const classes = top(state.motors.map((m) => m.CLASSE).filter((c) => /^\d{4}/.test(c || "")), 24).sort();
+    const lists = {
+      kv: ["1100-1400", "1700-2000", "2400-2800", "3000-4000", "1300", "1750", "1950", "2450", "2750", "3600", "7000"],
+      poids: ["5", "10", "20", "30", "35", "40", "60", "100", "200", "500"],
+      classe: classes,
+      voltage: ["1S", "2S", "3S", "4S", "5S", "6S", "8S", "12S"],
+      amp: ["10", "20", "30", "40", "50", "60", "80", "100"],
+      pmax: ["100", "300", "500", "800", "1000", "1500", "2000", "5000"],
+      shaft: ["M5", "M3", "M2", "5 mm", "4 mm", "3 mm", "2 mm", "1.5 mm", "1 mm"],
+      usage: ["Racing", "Freestyle", "Long Range", "Cinematic", "Cinewhoop", "Toothpick", "Whoop"],
+      config: ["12N14P", "9N12P", "12N16P", "24N22P", "2N4P"],
+      entraxe: ["6.6", "9x9", "12x12", "16x16", "19x19", "25x25", "30x30"],
+      helice: ['1.6"', '2"', '2.5"', '3"', '3.5"', '4"', '5"', '6"', '7"', '8"', '10"', '13"'],
+    };
+    document.body.insertAdjacentHTML("beforeend", Object.entries(lists).map(([k, vals]) =>
+      `<datalist id="dl-${k}">${vals.map((v) => `<option value="${esc(v)}"></option>`).join("")}</datalist>`).join(""));
+  }
+
   // --- Boot ----------------------------------------------------------------
   async function start() {
     // community.js is loaded after this file: wait until every script has run
@@ -804,6 +873,7 @@
       return;
     }
 
+    buildSuggestions();
     const refresh = () => { readFilters(); state.shown = PAGE; advSummary(); renderList(); };
     buildAdv(refresh);
     ["spec-form", "adv"].forEach((id) => { $(id).addEventListener("input", refresh); $(id).addEventListener("change", refresh); });

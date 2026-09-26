@@ -30,23 +30,23 @@
 
       <div class="hero">
         <div class="side side-left">
-          <div class="field"><label class="tag" for="f-kv">KV</label><input id="f-kv" inputmode="numeric" placeholder="1900"></div>
-          <div class="field"><label class="tag" for="f-poids">Poids</label><input id="f-poids" inputmode="decimal" placeholder="max. g"></div>
-          <div class="field"><label class="tag" for="f-classe">Classe</label><input id="f-classe" placeholder="2207"></div>
-          <div class="field"><label class="tag" for="f-voltage">Voltage</label><input id="f-voltage" placeholder="6S"></div>
-          <div class="field"><label class="tag" for="f-amp">Intensité max</label><input id="f-amp" inputmode="decimal" placeholder="min. A"></div>
-          <div class="field"><label class="tag" for="f-pmax">Puissance max</label><input id="f-pmax" inputmode="numeric" placeholder="min. W"></div>
+          <div class="field"><label class="tag" for="f-kv">KV</label><input id="f-kv" inputmode="numeric" placeholder="1900 (±10 %)" list="dl-kv" title="Un KV (±10 %) ou une plage : 1700-2000"></div>
+          <div class="field"><label class="tag" for="f-poids">Poids</label><input id="f-poids" inputmode="decimal" placeholder="max. 35 g" list="dl-poids" title="Poids maximum en grammes"></div>
+          <div class="field"><label class="tag" for="f-classe">Classe</label><input id="f-classe" placeholder="2207" list="dl-classe" title="Taille du stator : 2207, ou 22 pour tous les 22xx"></div>
+          <div class="field"><label class="tag" for="f-voltage">Voltage</label><input id="f-voltage" placeholder="6S" list="dl-voltage" title="Nombre de cellules LiPo (6S) ou tension (22.2V)"></div>
+          <div class="field"><label class="tag" for="f-amp">Intensité max</label><input id="f-amp" inputmode="decimal" placeholder="min. 40 A" list="dl-amp" title="Intensité max minimum en ampères"></div>
+          <div class="field"><label class="tag" for="f-pmax">Puissance max</label><input id="f-pmax" inputmode="numeric" placeholder="min. 800 W" list="dl-pmax" title="Puissance max minimum en watts"></div>
         </div>
 
         <div class="hero-img"><img src="assets/img/hero-moteur.png" alt="" width="296" height="296"></div>
 
         <div class="side side-right">
-          <div class="field"><input id="f-shaft" placeholder="M5"><label class="tag" for="f-shaft">Shaft</label></div>
-          <div class="field"><input id="f-usage" placeholder="Freestyle"><label class="tag" for="f-usage">Utilisation</label></div>
-          <div class="field duo"><input id="f-dmot" inputmode="decimal" placeholder="Ø" aria-label="Diamètre moteur max"><input id="f-hmot" inputmode="decimal" placeholder="H" aria-label="Hauteur moteur max"><label class="tag" for="f-dmot">Dimensions</label></div>
-          <div class="field"><input id="f-config" placeholder="12N14P"><label class="tag" for="f-config">Configuration</label></div>
-          <div class="field"><input id="f-entraxe" placeholder="16x16"><label class="tag" for="f-entraxe">Entraxe fixation</label></div>
-          <div class="field"><input id="f-helice" placeholder='5"'><label class="tag" for="f-helice">Hélice recommandé</label></div>
+          <div class="field"><input id="f-shaft" placeholder="M5 ou 5 mm" list="dl-shaft" title="Filetage (M5) ou diamètre de l'axe (5 mm)"><label class="tag" for="f-shaft">Shaft</label></div>
+          <div class="field"><input id="f-usage" placeholder="Freestyle" list="dl-usage" title="Type de vol"><label class="tag" for="f-usage">Utilisation</label></div>
+          <div class="field duo"><input id="f-dmot" inputmode="decimal" placeholder="Ø max" aria-label="Diamètre moteur max (mm)" title="Diamètre maximum du moteur en mm"><input id="f-hmot" inputmode="decimal" placeholder="H max" aria-label="Hauteur moteur max (mm)" title="Hauteur maximum du moteur en mm"><label class="tag" for="f-dmot">Dimensions</label></div>
+          <div class="field"><input id="f-config" placeholder="12N14P" list="dl-config" title="Bobines (N) et aimants (P)"><label class="tag" for="f-config">Configuration</label></div>
+          <div class="field"><input id="f-entraxe" placeholder="16x16" list="dl-entraxe" title="Entraxe des vis de fixation en mm"><label class="tag" for="f-entraxe">Entraxe fixation</label></div>
+          <div class="field"><input id="f-helice" placeholder='5"' list="dl-helice" title="Taille d'hélice en pouces"><label class="tag" for="f-helice">Hélice recommandé</label></div>
         </div>
       </div>
 
