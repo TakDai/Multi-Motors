@@ -1111,3 +1111,32 @@ html, body { overflow-x: hidden; }
 /* Video without thumbnail: a proper poster instead of an empty black box */
 .video-media { background: radial-gradient(circle at 30% 20%, #3a3a3a, #111 70%); }
 .pt { justify-content: start; align-self: flex-start; }
+
+/* ---------- Filtres avancées : logo de la marque au survol ---------- */
+.combo-list [role="option"] .opt-l { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.combo-list [role="option"][data-logo] .opt-l::after { content: ""; display: inline-block; width: 5px; height: 5px; margin-left: 6px; border-radius: 50%; background: currentColor; opacity: .25; vertical-align: middle; }
+.opt-logo { display: none; flex: none; max-width: 84px; max-height: 18px; object-fit: contain; }
+.combo-peek {
+  position: absolute; z-index: 32; left: calc(100% + 12px); width: 190px; padding: 16px 14px 12px; transform: translateY(-50%);
+  display: flex; flex-direction: column; align-items: center; gap: 6px; pointer-events: none;
+  background: #fff; border: 1.5px solid #111; border-radius: 14px; box-shadow: 0 14px 34px rgba(0, 0, 0, .16);
+}
+.combo-peek[hidden] { display: none; }
+.combo-peek::before {
+  content: ""; position: absolute; left: -8px; top: 50%; width: 13px; height: 13px; transform: translateY(-50%) rotate(45deg);
+  background: #fff; border-left: 1.5px solid #111; border-bottom: 1.5px solid #111;
+}
+.combo-peek.pop { animation: peek-in .22s cubic-bezier(.2, .8, .2, 1) both; }
+@keyframes peek-in { from { opacity: 0; transform: translate(-6px, -50%) scale(.96); } }
+.peek-img { display: grid; place-items: center; width: 100%; height: 64px; }
+.peek-img img { max-width: 150px; max-height: 56px; object-fit: contain; }
+.combo-peek b { font: 700 12px var(--font); letter-spacing: .1em; text-transform: uppercase; }
+.combo-peek small { font: 400 11px var(--font); color: rgba(0, 0, 0, .5); }
+/* Narrow screens (no room beside the list): the logo replaces the count in the hovered row */
+@media (max-width: 1000px) {
+  .combo-peek { display: none !important; }
+  .combo-list [role="option"]:is(:hover, :focus-visible) .opt-logo { display: block; }
+  .combo-list [role="option"]:is(:hover, :focus-visible):has(.opt-logo) i { display: none; }
+  .combo-list [role="option"][aria-selected="true"] .opt-logo { filter: invert(1); }
+}
+@media (prefers-reduced-motion: reduce) { .combo-peek.pop { animation: none; } }

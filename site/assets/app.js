@@ -22,6 +22,8 @@
     const p = state.logos[String(m.MARQUE || "").trim().toUpperCase()];
     return p ? (/^data:/.test(p) ? p : `assets/${p}`) : "";
   };
+  // Logo of a brand written in capitals (Figma logo first, then the redrawn ones), "" when there is none
+  const brandLogo = (upper) => (LOGOS[upper] ? asset(LOGOS[upper]) : logoSrc({ MARQUE: upper }));
   // Extension points used by community.js (accounts, likes, prices, news…)
   const hooks = (window.MM_HOOKS = window.MM_HOOKS || {});
   const state = { motors: [], thumbs: {}, videos: {}, photos: {}, tab: "populaire", sort: "", q: "", shown: PAGE, f: {}, adv: {}, logos: {}, revealed: false };
@@ -308,11 +310,40 @@
     el.innerHTML = `<div class="combo-box"><span class="combo-sel"></span>
       <input type="search" placeholder="Toutes les marques" role="combobox" aria-expanded="false" aria-controls="combo-list-${k}" aria-autocomplete="list" aria-label="Chercher une marque"></div>
       <div class="combo-list" id="combo-list-${k}" role="listbox" aria-multiselectable="true" hidden>
-        ${brands.map(([v, n, l]) => `<button type="button" role="option" aria-selected="false" data-v="${esc(v)}">${esc(l)}<i>${n}</i></button>`).join("")}
-        <p class="combo-none" hidden>Aucune marque</p></div>`;
+        ${brands.map(([v, n, l]) => `<button type="button" role="option" aria-selected="false" data-v="${esc(v)}"${brandLogo(v) ? " data-logo" : ""}><span class="opt-l">${esc(l)}</span><i>${n}</i></button>`).join("")}
+        <p class="combo-none" hidden>Aucune marque</p></div>
+      <div class="combo-peek" aria-hidden="true" hidden><span class="peek-img"><img alt=""></span><b></b><small></small></div>`;
     const input = el.querySelector("input"), list = el.querySelector(".combo-list"), sel = el.querySelector(".combo-sel");
     const opts = [...list.querySelectorAll("[role=option]")];
-    const show = (open) => { list.hidden = !open; input.setAttribute("aria-expanded", String(open)); el.classList.toggle("open", open); };
+    // Brand logo on hover / keyboard focus: a card beside the list (wide screens) or in the row itself
+    const peek = el.querySelector(".combo-peek");
+    let shown = null;
+    const cur = () => shown;
+    const showLogo = (o) => {
+      if (o === shown && !peek.hidden) return;
+      shown = o;
+      if (!o || !o.hasAttribute("data-logo")) { peek.hidden = true; return; }
+      const src = brandLogo(o.dataset.v);
+      if (!o.querySelector(".opt-logo")) o.insertAdjacentHTML("beforeend", `<img class="opt-logo" src="${esc(src)}" alt="">`);
+      peek.querySelector("img").src = src;
+      peek.querySelector("b").textContent = o.querySelector(".opt-l").textContent;
+      peek.querySelector("small").textContent = `${o.querySelector("i").textContent} moteurs`;
+      peek.style.top = `${list.offsetTop + o.offsetTop - list.scrollTop + o.offsetHeight / 2}px`;
+      peek.hidden = false;
+      peek.classList.remove("pop"); void peek.offsetWidth; peek.classList.add("pop");
+    };
+    list.addEventListener("mouseover", (ev) => { const o = ev.target.closest("[role=option]"); if (o) showLogo(o); });
+    list.addEventListener("focusin", (ev) => showLogo(ev.target.closest("[role=option]")));
+    list.addEventListener("mouseleave", () => { if (!list.contains(document.activeElement)) peek.hidden = true; });
+    // Keep the card next to its row while the list scrolls; hide it once the row is out of view
+    list.addEventListener("scroll", () => {
+      const o = cur();
+      if (!o || peek.hidden) return;
+      const y = o.offsetTop - list.scrollTop;
+      if (y < -o.offsetHeight / 2 || y > list.clientHeight - o.offsetHeight / 2) peek.hidden = true;
+      else peek.style.top = `${list.offsetTop + y + o.offsetHeight / 2}px`;
+    });
+    const show = (open) => { list.hidden = !open; input.setAttribute("aria-expanded", String(open)); el.classList.toggle("open", open); if (!open) peek.hidden = true; };
     const narrow = () => {
       const q = input.value.trim().toLowerCase();
       let n = 0;
