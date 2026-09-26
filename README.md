@@ -143,12 +143,17 @@ GetFPV, RaceDayQuads, Pyrodrone, BetaFPV, iFlight-RC
 
 ### Catalogue dans le dépôt
 
-Le workflow `.github/workflows/nouveaux-moteurs.yml` s'exécute chaque jour à 06:00 UTC :
+Le workflow `.github/workflows/nouveaux-moteurs.yml` s'exécute chaque jour à 06:00 UTC (08:00 à Paris en été) :
 
-- lance un cycle de recherche : `python -m multi_motors_ai.main --once --output github`
-- ajoute les nouveaux moteurs à `catalogue/moteurs.csv`
-- écrit le rapport du jour dans `catalogue/nouveautes/AAAA-MM-JJ.md`
-- commit le tout s'il y a des nouveautés
+1. importe le tableau Google (export xlsx) avec `tools/import_sheet.py` : nouveaux moteurs et valeurs ajoutées dans le tableau ; les lignes aux colonnes décalées sont réalignées (poids, puissance) ;
+2. cherche les nouveaux moteurs sur internet (`python -m multi_motors_ai.main --once --output github`) ;
+3. complète 500 fiches par jour depuis les pages produit des boutiques (`tools/enrich.py`) ;
+4. intègre les corrections validées par la communauté (`tools/community_sync.py`) ;
+5. relève les prix et les photos dans 15 boutiques (`tools/prices.py`, liste dans `tools/shops.py` : RaceDayQuads, Pyrodrone, NewBeeDrone, Rotor Riot, SpeedyFPV, FPVFaster, Quadmula, Unmanned Tech, Drone-FPV-Racer, Studiosport et les boutiques officielles Emax, RushFPV, BetaFPV, HGLRC, Diatone) : 400 modèles par jour, les prix les plus anciens d'abord ;
+6. ajoute des vidéos de review, des photos des sites fabricants (`tools/photos_sites.py`), les miniatures, les logos des nouvelles marques et le fil d'actualité ;
+7. commit le tout ; le workflow `deploy-ovh.yml` met ensuite le site en ligne.
+
+**Important :** GitHub ne lance les tâches planifiées que depuis la branche par défaut du dépôt (`Moteurs`). Tant que ces fichiers ne sont que sur une autre branche, rien ne tourne automatiquement.
 
 Il peut aussi être lancé à la main depuis l'onglet **Actions**.
 

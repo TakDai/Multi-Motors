@@ -133,7 +133,7 @@
         ${pr("Classe", val(m.CLASSE))}${pr("Poids", val(weight(m)))}${pr("Configuration", val(m.CONFIG))}${pr("KV", kvVals(m))}
         ${pr("Shaft", val(shaft(m)))}${pr("Entraxe de fixation", val(m["ENTRAXE FIX"]))}${pr("Dimension", pair(fmt(m["D MOTEUR"]), fmt(m["H MOTEUR"])))}${pr("L shaft", val(fmt(m["L SHAFT"])))}
         ${pr("Résistance", val(m.RESISTANCE))}${pr("Utilisation", val(m.UTILISATION))}${pr("Hélice", val(m.HELICE))}${pr("Câble", val(cable(m)))}
-        ${pr("Amp max", val(fmt(m.AMP)))}${pr("Voltage", val(m.LIPO))}${pr("Vis hélice", val(m["VIS HEL"]))}
+        ${pr("Amp max", val(fmt(m.AMP)))}${pr("Puissance max", val(unit(m.PUISSANCE, "W")))}${pr("Voltage", val(m.LIPO))}${pr("Vis hélice", val(m["VIS HEL"]))}
         ${link ? `<a class="official" href="${esc(link)}" target="_blank" rel="noopener">Lien officiel</a>` : `<span class="official off">Lien officiel</span>`}
       </div>
     </article>`;

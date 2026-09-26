@@ -57,6 +57,7 @@ jobs:
           python tools/prices.py --limit 400 --workers 6 || true
           python tools/videos.py --limit 300 || true
           python tools/photos.py || true
+          python tools/photos_sites.py || true
 
       - name: Miniatures et fil d'actualité
         run: |
