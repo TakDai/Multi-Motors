@@ -12,9 +12,14 @@
   const asset = (name) => (window.MM_ASSETS && window.MM_ASSETS[name]) || IMG + name;
   // Brand logos available in the Figma file; other brands use a text mark
   const LOGOS = { "T-MOTOR": "logo-t-motor.png" };
+  // Logos fetched from the brands' sites and redrawn in black (tools/logos.py)
+  const logoSrc = (m) => {
+    const p = state.logos[String(m.MARQUE || "").trim().toUpperCase()];
+    return p ? (/^data:/.test(p) ? p : `assets/${p}`) : "";
+  };
   // Extension points used by community.js (accounts, likes, prices, news…)
   const hooks = (window.MM_HOOKS = window.MM_HOOKS || {});
-  const state = { motors: [], thumbs: {}, videos: {}, photos: {}, tab: "populaire", sort: "", q: "", shown: PAGE, f: {}, adv: {}, revealed: false };
+  const state = { motors: [], thumbs: {}, videos: {}, photos: {}, tab: "populaire", sort: "", q: "", shown: PAGE, f: {}, adv: {}, logos: {}, revealed: false };
 
   // --- CSV -----------------------------------------------------------------
   function parseCSV(text) {
@@ -88,7 +93,8 @@
   }
 
   function brandMark(m, big) {
-    const logo = LOGOS[String(m.MARQUE).toUpperCase()];
+    const logo = LOGOS[String(m.MARQUE).toUpperCase()], src = logoSrc(m);
+    if (!logo && src) return `<span class="logo"><img class="brand-logo" src="${esc(src)}" alt="${esc(m.MARQUE)}" title="${esc(m.MARQUE)}"></span>`;
     return logo
       ? `<span class="logo"><img src="${asset(logo)}" alt="${esc(m.MARQUE)}"></span>`
       : `<span class="brand-word${big ? " big" : ""}">${esc(m.MARQUE)}</span>`;
@@ -106,7 +112,7 @@
   // --- Home: motor cards ---------------------------------------------------
   const lbl = (t) => `<span class="lbl">${esc(t)}</span>`;
   // One "label + value" cell of a result card
-  const pr = (label, valuesHtml) => `<span class="pair">${lbl(label)}${valuesHtml}</span>`;
+  const pr = (label, valuesHtml) => (valuesHtml.includes('class="val na"') ? "" : `<span class="pair">${lbl(label)}${valuesHtml}</span>`);
   const one = (v) => (has(v) ? `<span class="val" title="${esc(v)}">${esc(v)}</span>` : `<span class="val na">—</span>`);
   const val = (v) => `<span class="vals">${one(v)}</span>`;
   const pair = (a, b) => `<span class="vals">${has(a) || has(b) ? `${one(a)}<span class="x">X</span>${one(b)}` : one("")}</span>`;
@@ -693,8 +699,9 @@
     // community.js is loaded after this file: wait until every script has run
     if (document.readyState === "loading") await new Promise((r) => document.addEventListener("DOMContentLoaded", r));
     try {
-      [state.motors, state.thumbs, state.videos, state.photos] = await Promise.all([
+      [state.motors, state.thumbs, state.videos, state.photos, state.logos] = await Promise.all([
         loadCSV().then(parseCSV), loadJSON("thumbs", window.MM_THUMBS), loadJSON("videos", window.MM_VIDEOS), loadJSON("photos", window.MM_PHOTOS),
+        loadJSON("logos", window.MM_LOGOS),
       ]);
     } catch (err) {
       $("empty").textContent = "Le catalogue n'a pas pu être chargé. Réessayez dans quelques minutes.";

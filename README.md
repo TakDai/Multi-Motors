@@ -214,3 +214,7 @@ Au déploiement, `tools/make_config.py` écrit `api/config.php` à partir de ces
 - **Panneau d'administration** (`#admin`) : suggestions, commentaires (masquer / supprimer), membres (rôles modérateur / admin, suspension), actualités du site.
 - **Prix indicatif et comparateur** : `tools/prices.py` relève les prix dans les boutiques, convertis en euros au taux BCE du jour (prix par moteur pour les lots).
 - **Fil d'actualité** (`#actus`) : nouveaux moteurs (rapports quotidiens) et actualités publiées depuis le panneau d'administration.
+
+## Logos des marques
+
+`tools/logos.py` télécharge le logo de chaque marque listée dans `catalogue/logos_sources.json` et le redessine en noir sur fond transparent (`site/assets/logos/`, index dans `site/data/logos.json`). Pour une nouvelle marque, ajoutez son URL de logo au fichier puis lancez `python3 tools/logos.py` (options par marque : `crop` pour recadrer, `mode` `dark` ou `light` pour ne garder que les traits foncés ou clairs). Les marques sans logo gardent leur nom en toutes lettres.

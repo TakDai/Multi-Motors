@@ -1036,3 +1036,18 @@ html, body { overflow-x: hidden; }
   .adv-foot { margin: 10px -10px -10px; padding: 10px 12px; }
 }
 @media (prefers-reduced-motion: reduce) { .ag, .ag-img img { transition: none !important; } }
+
+/* ---------- Cartes résultats : caractéristiques à la suite, qui remplissent chaque ligne ---------- */
+.specs { display: flex !important; flex-wrap: wrap; align-items: center; align-content: center; gap: 6px 8px; }
+.specs .pair { flex: 1 1 auto; max-width: 100%; }
+.specs .pair .vals { flex: 1 1 auto; }
+.specs .pair .vals .val { flex: 1 1 auto; justify-content: center; }
+.specs .pair .vals .x { flex: none; }
+.specs .official { flex: 1 0 137px; margin-left: auto; }
+
+/* ---------- Logos de marque (noirs, proportions d'origine) ---------- */
+.logo img.brand-logo { width: auto; height: auto; max-width: 132px; max-height: 34px; object-fit: contain; }
+.d-top .logo img.brand-logo { width: auto; height: auto; max-width: 180px; max-height: 44px; }
+.dim-info .head .logo img.brand-logo { width: auto; height: auto; max-width: 120px; max-height: 28px; }
+.specs .pair .lbl { flex: none; max-width: none; padding-inline: 8px; }
+@media (min-width: 821px) { .row .specs { grid-column: auto; } }
