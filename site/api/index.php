@@ -23,6 +23,8 @@ try {
     // Tables added after the first install (profiles) are created on the fly too
     db()->query('SELECT 1 FROM users LIMIT 1');
     db()->query('SELECT 1 FROM profiles LIMIT 1');
+    db()->query('SELECT 1 FROM garage LIMIT 1');
+    db()->query('SELECT rating FROM comments LIMIT 1');
 } catch (PDOException $e) {
     install_schema();
 }
@@ -178,7 +180,7 @@ case 'motor':
     $likes = (int) q('SELECT COUNT(*) FROM likes WHERE ref = ?', [$ref])->fetchColumn();
     $liked = $me ? (bool) q('SELECT 1 FROM likes WHERE ref = ? AND user_id = ?', [$ref, $me['id']])->fetchColumn() : false;
     $mod = $me && in_array($me['role'], ['moderator', 'admin'], true);
-    $rows = q('SELECT id, user_id, body, status, created_at FROM comments WHERE ref = ?' . ($mod ? " AND status <> 'deleted'" : " AND status = 'visible'") . ' ORDER BY id DESC LIMIT 200', [$ref])->fetchAll();
+    $rows = q('SELECT id, user_id, body, status, created_at, rating, pros, cons FROM comments WHERE ref = ?' . ($mod ? " AND status <> 'deleted'" : " AND status = 'visible'") . ' ORDER BY id DESC LIMIT 200', [$ref])->fetchAll();
     $names = user_names(array_column($rows, 'user_id'));
     $comments = array_map(fn ($c) => [
         'id' => (int) $c['id'], 'body' => $c['body'], 'status' => $c['status'], 'at' => $c['created_at'],
@@ -186,9 +188,16 @@ case 'motor':
         'uid' => isset($names[$c['user_id']]) ? (int) $c['user_id'] : 0, 'color' => $names[$c['user_id']]['color'] ?? '',
         'avatar' => isset($names[$c['user_id']]) ? avatar_url($names[$c['user_id']]) : '',
         'mine' => $me && (int) $c['user_id'] === (int) $me['id'],
+        'rating' => $c['rating'] !== null ? (int) $c['rating'] : null, 'pros' => $c['pros'] ?? '', 'cons' => $c['cons'] ?? '',
     ], $rows);
+    $rated = array_filter(array_column($comments, 'rating'));
+    $garage = ['owned' => 0, 'tested' => 0, 'wanted' => 0];
+    foreach (q('SELECT status, COUNT(*) AS n FROM garage WHERE ref = ? GROUP BY status', [$ref])->fetchAll() as $g) $garage[$g['status']] = (int) $g['n'];
+    $mine = $me ? q('SELECT status, note FROM garage WHERE ref = ? AND user_id = ?', [$ref, $me['id']])->fetch() : null;
     $pending = (int) q("SELECT COUNT(*) FROM suggestions WHERE ref = ? AND status = 'pending'", [$ref])->fetchColumn();
-    out(['likes' => $likes, 'liked' => $liked, 'comments' => $comments, 'pending_suggestions' => $pending]);
+    out(['likes' => $likes, 'liked' => $liked, 'comments' => $comments, 'pending_suggestions' => $pending,
+        'rating' => $rated ? round(array_sum($rated) / count($rated), 1) : null, 'ratings' => count($rated),
+        'garage' => $garage, 'mine' => $mine ?: null]);
 
 case 'likes':
     // Like counts of every motor (used to sort by popularity)
@@ -227,13 +236,14 @@ case 'profile':
         'suggestions' => (int) q('SELECT COUNT(*) FROM suggestions WHERE user_id = ?', [$id])->fetchColumn(),
         'likes' => (int) q('SELECT COUNT(*) FROM likes WHERE user_id = ?', [$id])->fetchColumn(),
     ];
-    $comments = q("SELECT id, ref, body, created_at AS at FROM comments WHERE user_id = ? AND status = 'visible' ORDER BY id DESC LIMIT 10", [$id])->fetchAll();
+    $comments = q("SELECT id, ref, body, rating, created_at AS at FROM comments WHERE user_id = ? AND status = 'visible' ORDER BY id DESC LIMIT 10", [$id])->fetchAll();
     $likes = ($p['show_likes'] ?? 1) || $mine ? array_column(q('SELECT ref FROM likes WHERE user_id = ? ORDER BY created_at DESC LIMIT 24', [$id])->fetchAll(), 'ref') : [];
     out($base + [
         'bio' => $p['bio'] ?? '', 'location' => $p['location'] ?? '', 'website' => $p['website'] ?? '', 'youtube' => $p['youtube'] ?? '',
         'instagram' => $p['instagram'] ?? '', 'flying' => $p['flying'] ?? '', 'setup' => json_decode($p['setup'] ?? '[]', true) ?: [],
         'is_public' => (bool) ($p['is_public'] ?? 1), 'show_likes' => (bool) ($p['show_likes'] ?? 1),
         'stats' => $stats, 'comments' => $comments, 'likes' => $likes,
+        'garage' => q("SELECT ref, status, note FROM garage WHERE user_id = ? AND status IN ('owned', 'tested') ORDER BY created_at DESC LIMIT 60", [$id])->fetchAll(),
     ]);
 
 case 'avatar':
@@ -289,6 +299,56 @@ case 'profile_save':
     }
     out(['user' => me_payload(current_user()), 'message' => 'Profil enregistré.']);
 
+// ------------------------------------------------------- personal space
+case 'garage_set':
+    // "My motors": owned, tested or wanted, with a short note; empty status removes it
+    if (!$post) fail('POST attendu.', 405);
+    $u = require_user();
+    $ref = ref_arg();
+    $status = arg('status', 10);
+    if ($status === '') {
+        q('DELETE FROM garage WHERE user_id = ? AND ref = ?', [$u['id'], $ref]);
+        out(['mine' => null]);
+    }
+    if (!in_array($status, ['owned', 'tested', 'wanted'], true)) fail('Statut inconnu.');
+    $note = arg('note', 200);
+    if (q('SELECT 1 FROM garage WHERE user_id = ? AND ref = ?', [$u['id'], $ref])->fetchColumn()) {
+        q('UPDATE garage SET status = ?, note = ? WHERE user_id = ? AND ref = ?', [$status, $note ?: null, $u['id'], $ref]);
+    } else {
+        if ((int) q('SELECT COUNT(*) FROM garage WHERE user_id = ?', [$u['id']])->fetchColumn() >= 300) fail('300 moteurs au maximum.');
+        q('INSERT INTO garage (user_id, ref, status, note, created_at) VALUES (?, ?, ?, ?, ?)', [$u['id'], $ref, $status, $note ?: null, now()]);
+    }
+    out(['mine' => ['status' => $status, 'note' => $note]]);
+
+case 'view':
+    // Motor pages seen by a signed-in member (the 60 most recent are kept)
+    if (!$post) fail('POST attendu.', 405);
+    $u = current_user();
+    if (!$u) out(['ok' => false]);
+    $ref = ref_arg();
+    q('DELETE FROM history WHERE user_id = ? AND ref = ?', [$u['id'], $ref]);
+    q('INSERT INTO history (user_id, ref, at) VALUES (?, ?, ?)', [$u['id'], $ref, now()]);
+    $old = q('SELECT at FROM history WHERE user_id = ? ORDER BY at DESC LIMIT 1 OFFSET 59', [$u['id']])->fetchColumn();
+    if ($old) q('DELETE FROM history WHERE user_id = ? AND at < ?', [$u['id'], $old]);
+    out(['ok' => true]);
+
+case 'history_clear':
+    if (!$post) fail('POST attendu.', 405);
+    $u = require_user();
+    q('DELETE FROM history WHERE user_id = ?', [$u['id']]);
+    out(['ok' => true]);
+
+case 'my_space':
+    // Everything of "Mon espace" in one call
+    $u = current_user();
+    if (!$u) fail('Connectez-vous pour faire cela.', 401);
+    out([
+        'history' => q('SELECT ref, at FROM history WHERE user_id = ? ORDER BY at DESC LIMIT 60', [$u['id']])->fetchAll(),
+        'likes' => array_column(q('SELECT ref FROM likes WHERE user_id = ? ORDER BY created_at DESC LIMIT 200', [$u['id']])->fetchAll(), 'ref'),
+        'garage' => q('SELECT ref, status, note, created_at AS at FROM garage WHERE user_id = ? ORDER BY created_at DESC', [$u['id']])->fetchAll(),
+        'reviews' => q("SELECT id, ref, body, rating, pros, cons, created_at AS at FROM comments WHERE user_id = ? AND status = 'visible' ORDER BY id DESC LIMIT 100", [$u['id']])->fetchAll(),
+    ]);
+
 case 'account_update':
     if (!$post) fail('POST attendu.', 405);
     $u = current_user();
@@ -336,6 +396,8 @@ case 'account_delete':
     // Likes and profile go; comments are removed; validated corrections stay in the catalogue, without a name
     q('DELETE FROM likes WHERE user_id = ?', [$u['id']]);
     q('DELETE FROM profiles WHERE user_id = ?', [$u['id']]);
+    q('DELETE FROM garage WHERE user_id = ?', [$u['id']]);
+    q('DELETE FROM history WHERE user_id = ?', [$u['id']]);
     q("UPDATE comments SET status = 'deleted' WHERE user_id = ?", [$u['id']]);
     q('DELETE FROM users WHERE id = ?', [$u['id']]);
     start_session();
@@ -362,9 +424,14 @@ case 'comment':
     $u = require_user();
     $ref = ref_arg();
     $text = arg('body', 2000);
-    if (mb_strlen($text) < 3) fail('Votre commentaire est vide.');
+    $pros = arg('pros', 600);
+    $cons = arg('cons', 600);
+    $rating = (int) arg('rating');
+    if ($rating < 0 || $rating > 5) fail('Note invalide.');
+    if (mb_strlen($text) < 3 && $pros === '' && $cons === '') fail('Votre avis est vide.');
     throttle('comment', (string) $u['id'], 5, 10);
-    q('INSERT INTO comments (ref, user_id, body, status, created_at) VALUES (?, ?, ?, ?, ?)', [$ref, $u['id'], $text, 'visible', now()]);
+    q('INSERT INTO comments (ref, user_id, body, status, created_at, rating, pros, cons) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
+        [$ref, $u['id'], $text, 'visible', now(), $rating ?: null, $pros ?: null, $cons ?: null]);
     out(['ok' => true]);
 
 case 'comment_delete':

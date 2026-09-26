@@ -38,7 +38,7 @@
   const get = (action, params) => api(action, params ? { __get: params } : undefined);
 
   // Demo API for the standalone preview: nothing leaves the browser page
-  const D = { users: [], me: null, likes: {}, comments: [], sugg: [], news: [], profiles: {}, id: 1 };
+  const D = { users: [], me: null, likes: {}, comments: [], sugg: [], news: [], profiles: {}, garage: {}, history: {}, id: 1 };
   function demoApi(action, d) {
     const q = d.__get || d;
     const me = D.me;
@@ -69,10 +69,24 @@
           likes: s.size, liked: !!me && s.has(me.id), pending_suggestions: D.sugg.filter((x) => x.ref === q.ref && x.status === "pending").length,
           comments: D.comments.filter((c) => c.ref === q.ref && (c.status === "visible" || (isMod && c.status === "hidden")))
             .map((c) => { const u = D.users.find((x) => x.id === c.user_id); return { ...c, author: u?.name || "Membre", role: u?.role, uid: u ? u.id : 0, color: D.profiles[c.user_id]?.color || "", avatar: D.profiles[c.user_id]?.avatar || "", mine: me && c.user_id === me.id }; }).reverse(),
+          ...(() => {
+            const rated = D.comments.filter((c) => c.ref === q.ref && c.status === "visible" && c.rating).map((c) => c.rating);
+            const g = { owned: 0, tested: 0, wanted: 0 };
+            Object.values(D.garage).forEach((mine) => mine[q.ref] && g[mine[q.ref].status]++);
+            return { rating: rated.length ? Math.round((rated.reduce((a, b) => a + b, 0) / rated.length) * 10) / 10 : null, ratings: rated.length, garage: g, mine: me ? (D.garage[me.id] || {})[q.ref] || null : null };
+          })(),
         };
       }
       case "like": { need(); const s = (D.likes[d.ref] = D.likes[d.ref] || new Set()); s.has(me.id) ? s.delete(me.id) : s.add(me.id); return { liked: s.has(me.id), likes: s.size }; }
-      case "comment": need(); if ((d.body || "").length < 3) throw new Error("Votre commentaire est vide."); D.comments.push({ id: D.id++, ref: d.ref, user_id: me.id, body: d.body, status: "visible", at: now }); return { ok: true };
+      case "comment": need(); if ((d.body || "").length < 3 && !d.pros && !d.cons) throw new Error("Votre avis est vide."); D.comments.push({ id: D.id++, ref: d.ref, user_id: me.id, body: d.body || "", rating: +d.rating || null, pros: d.pros || "", cons: d.cons || "", status: "visible", at: now }); return { ok: true };
+      case "garage_set": { need(); const g = (D.garage[me.id] = D.garage[me.id] || {}); if (!d.status) { delete g[d.ref]; return { mine: null }; } g[d.ref] = { status: d.status, note: d.note || "", at: now }; return { mine: g[d.ref] }; }
+      case "view": { if (!me) return { ok: false }; const h = (D.history[me.id] = (D.history[me.id] || []).filter((x) => x.ref !== d.ref)); h.unshift({ ref: d.ref, at: now }); h.length = Math.min(h.length, 60); return { ok: true }; }
+      case "history_clear": need(); D.history[me.id] = []; return { ok: true };
+      case "my_space": need(); return {
+        history: D.history[me.id] || [], likes: Object.entries(D.likes).filter(([, st]) => st.has(me.id)).map(([r]) => r),
+        garage: Object.entries(D.garage[me.id] || {}).map(([ref, g]) => ({ ref, ...g })),
+        reviews: D.comments.filter((c) => c.user_id === me.id && c.status === "visible").reverse(),
+      };
       case "comment_delete": case "moderate_comment": { need(); const c = D.comments.find((x) => x.id === +d.id); if (c) c.status = d.status || "deleted"; return { ok: true }; }
       case "suggest": need(); if (!d.value) throw new Error("Indiquez la nouvelle valeur."); D.sugg.push({ id: D.id++, ...d, new_value: d.value, old_value: d.old, user_id: me.id, author: me.name, status: "pending", created_at: now }); return { message: "Merci ! Votre suggestion sera vérifiée par la modération." };
       case "admin_stats": mod(); return { pending: D.sugg.filter((s) => s.status === "pending").length, users: D.users.length, comments: D.comments.filter((c) => c.status === "visible").length, likes: Object.values(D.likes).reduce((a, s) => a + s.size, 0) };
@@ -93,6 +107,7 @@
           stats: { comments: D.comments.filter((c) => c.user_id === u.id && c.status === "visible").length, approved: D.sugg.filter((x) => x.user_id === u.id && x.status === "approved").length,
             suggestions: D.sugg.filter((x) => x.user_id === u.id).length, likes: Object.values(D.likes).filter((st) => st.has(u.id)).length },
           comments: D.comments.filter((c) => c.user_id === u.id && c.status === "visible").slice(-10).reverse(),
+          garage: Object.entries(D.garage[u.id] || {}).filter(([, g]) => g.status !== "wanted").map(([ref, g]) => ({ ref, ...g })),
           likes: p.show_likes !== false || mine ? Object.entries(D.likes).filter(([, st]) => st.has(u.id)).map(([r]) => r).slice(0, 24) : [],
         };
       }
@@ -169,6 +184,7 @@
     el.innerHTML = C.user
       ? `<button type="button" class="nav-pill acct-btn" aria-haspopup="true" aria-expanded="false">${avatar(C.user, "xs")}${esc(C.user.name)}${C.user.role !== "user" ? `<em>${ROLE_LABEL[C.user.role]}</em>` : ""}</button>
          <div class="acct-menu" hidden>
+           <a href="#moi">Mon espace</a>
            <a href="#u/${C.user.id}">Mon profil</a>
            <a href="#profil">Modifier mon profil</a>
            ${isMod() ? `<a href="#admin">Administration</a>` : ""}
@@ -272,9 +288,11 @@
       <button type="button" class="suggest-btn" data-suggest="${esc(m.REF)}">Suggérer une modification</button>
       ${m._community ? `<span class="community-badge" title="${esc(m._community.map((f) => FIELD_LABELS[f] || f).join(", "))}">Corrigé par la communauté</span>` : ""}
     </div>`);
+    top.nextElementSibling.insertAdjacentHTML("afterend", garageBox(m.REF, null, null));
+    trackView(m.REF);
     document.querySelector("#detail .d-body").insertAdjacentHTML("beforeend", `
       <section class="d-extra card" id="d-prix">${pricesBlock(m)}</section>
-      <section class="d-extra card" id="d-comments">${head("chat", "Commentaires")}<div id="c-list"><p class="note">Chargement…</p></div></section>`);
+      <section class="d-extra card" id="d-comments">${head("chat", "Avis des pilotes")}<div id="c-list"><p class="note">Chargement…</p></div></section>`);
     loadSocial(m.REF);
   };
 
@@ -308,25 +326,89 @@
       const s = await get("motor", { ref });
       const btn = document.querySelector(`[data-like]`);
       if (btn) { btn.querySelector("b").textContent = s.likes; btn.setAttribute("aria-pressed", String(s.liked)); }
+      const gb = document.querySelector(".garage-box");
+      if (gb) gb.outerHTML = garageBox(ref, s.garage, s.mine);
       list.innerHTML = commentsBlock(ref, s);
     } catch (e) { list.innerHTML = `<p class="note">${esc(e.message)}</p>`; }
   }
 
+  const stars = (n, cls = "") => `<span class="stars ${cls}" aria-label="${n} sur 5">${[1, 2, 3, 4, 5].map((i) => `<i class="${i <= Math.round(n) ? "on" : ""}">★</i>`).join("")}</span>`;
+  const points = (txt, kind) => (txt || "").split(/\n+/).map((l) => l.replace(/^\s*[-•+*]\s*/, "").trim()).filter(Boolean)
+    .map((l) => `<li class="${kind}">${esc(l)}</li>`).join("");
   function commentsBlock(ref, s) {
+    const summary = s.ratings ? `<div class="rv-summary">${stars(s.rating, "big")}<b>${String(s.rating).replace(".", ",")} / 5</b><span>${s.ratings} avis noté${s.ratings > 1 ? "s" : ""}</span></div>` : "";
     const form = C.user
-      ? `<form class="c-form" data-comment="${esc(ref)}"><label class="sr" for="c-body">Votre commentaire</label>
-          <textarea id="c-body" name="body" rows="3" maxlength="2000" required placeholder="Votre avis, votre expérience en vol, un conseil de montage…"></textarea>
-          <button class="btn-red" type="submit">Publier</button></form>`
+      ? `<form class="c-form rv-form" data-comment="${esc(ref)}">
+          <div class="rv-rate" role="radiogroup" aria-label="Votre note">
+            <span class="rv-label">Votre note</span>
+            ${[5, 4, 3, 2, 1].map((i) => `<input type="radio" name="rating" id="rv-${i}" value="${i}"><label for="rv-${i}" title="${i} sur 5">★</label>`).join("")}
+          </div>
+          <div class="rv-cols">
+            <label class="rv-pros"><span>Qualités</span><textarea name="pros" rows="3" maxlength="600" placeholder="Une qualité par ligne : couple, douceur, finition…"></textarea></label>
+            <label class="rv-cons"><span>Défauts</span><textarea name="cons" rows="3" maxlength="600" placeholder="Un défaut par ligne : chauffe, câbles courts, prix…"></textarea></label>
+          </div>
+          <label class="rv-body"><span>Votre avis</span><textarea id="c-body" name="body" rows="3" maxlength="2000" placeholder="Votre expérience en vol, le drone, l'hélice et la batterie utilisés, un conseil de montage…"></textarea></label>
+          <button class="btn-red" type="submit">Publier mon avis</button></form>`
       : `<p class="c-login"><button type="button" class="btn-dark" data-login>Connectez-vous</button> pour donner votre avis.</p>`;
     const items = s.comments.length ? s.comments.map((c) => `
       <article class="comment ${c.status === "hidden" ? "hidden-c" : ""}">
-        <header>${c.uid ? `<a class="c-author" href="#u/${c.uid}">${avatar({ name: c.author, color: c.color, avatar: c.avatar }, "sm")}<b>${esc(c.author)}</b></a>` : `<b>${esc(c.author)}</b>`}${c.role && c.role !== "user" ? `<em>${ROLE_LABEL[c.role]}</em>` : ""}<time>${when(c.at)}</time>
+        <header>${c.uid ? `<a class="c-author" href="#u/${c.uid}">${avatar({ name: c.author, color: c.color, avatar: c.avatar }, "sm")}<b>${esc(c.author)}</b></a>` : `<b>${esc(c.author)}</b>`}${c.role && c.role !== "user" ? `<em>${ROLE_LABEL[c.role]}</em>` : ""}${c.rating ? stars(c.rating) : ""}<time>${when(c.at)}</time>
           ${c.status === "hidden" ? `<span class="tagc">Masqué</span>` : ""}</header>
-        <p>${esc(c.body).replace(/\n/g, "<br>")}</p>
+        ${c.pros || c.cons ? `<ul class="rv-points">${points(c.pros, "pro")}${points(c.cons, "con")}</ul>` : ""}
+        ${c.body ? `<p>${esc(c.body).replace(/\n/g, "<br>")}</p>` : ""}
         <footer>${c.mine ? `<button type="button" data-cdel="${c.id}">Supprimer</button>` : ""}
           ${isMod() && !c.mine ? (c.status === "hidden" ? `<button type="button" data-cmod="${c.id}" data-status="visible">Rétablir</button>` : `<button type="button" data-cmod="${c.id}" data-status="hidden">Masquer</button>`) + `<button type="button" data-cmod="${c.id}" data-status="deleted">Supprimer</button>` : ""}</footer>
-      </article>`).join("") : `<p class="note">Pas encore de commentaire. Soyez le premier à donner votre avis.</p>`;
-    return form + `<div class="comments">${items}</div>`;
+      </article>`).join("") : `<p class="note">Pas encore d'avis. Soyez le premier à partager votre expérience.</p>`;
+    return summary + form + `<div class="comments">${items}</div>`;
+  }
+
+  // ------------------------------------------------ "My motors" and history
+  const GARAGE = { owned: ["Je le possède", "Possédé"], tested: ["Je l'ai testé", "Testé"], wanted: ["Il me fait envie", "Envie"] };
+  function garageBox(ref, counts, mine) {
+    const c = counts || {};
+    const n = (c.owned || 0) + (c.tested || 0);
+    return `<div class="garage-box" data-garage="${esc(ref)}">
+      <span class="gb-title">Mes moteurs</span>
+      ${Object.entries(GARAGE).map(([k, [label]]) => `<button type="button" data-gset="${k}" aria-pressed="${mine && mine.status === k}">${label}${c[k] ? `<i>${c[k]}</i>` : ""}</button>`).join("")}
+      ${mine ? `<input class="gb-note" data-gnote maxlength="200" value="${esc(mine.note || "")}" placeholder="Note perso : drone, hélice, avis rapide…">` : ""}
+      ${n ? `<span class="gb-count">${n} pilote${n > 1 ? "s" : ""} l'${n > 1 ? "ont" : "a"} en main</span>` : ""}
+    </div>`;
+  }
+  const LOCAL_HISTORY = "mm_history";
+  function localHistory() { try { return JSON.parse(localStorage.getItem(LOCAL_HISTORY) || "[]"); } catch (e) { return []; } }
+  function trackView(ref) {
+    const now = new Date().toISOString().slice(0, 19).replace("T", " ");
+    try { localStorage.setItem(LOCAL_HISTORY, JSON.stringify([{ ref, at: now }, ...localHistory().filter((x) => x.ref !== ref)].slice(0, 60))); } catch (e) { /* private mode */ }
+    if (C.user && C.online) api("view", { ref }).catch(() => {});
+  }
+
+  // Mon espace: history, likes, my motors, my reviews
+  const SP = { tab: "historique" };
+  async function renderSpace(tab) {
+    const v = $("view-profile");
+    v.hidden = false;
+    if (tab) SP.tab = tab;
+    let d = { history: localHistory(), likes: [], garage: [], reviews: [] };
+    if (C.user && C.online) { try { d = await get("my_space"); if (!d.history.length) d.history = localHistory(); } catch (e) { /* keep local */ } }
+    const card = (ref, extra = "") => { const h = motorCardHtml(ref); return h ? h.replace("</a>", `${extra}</a>`) : ""; };
+    const tabs = [["historique", "Historique", d.history.length], ["jaime", "J'aime", d.likes.length], ["moteurs", "Mes moteurs", d.garage.length], ["avis", "Mes avis", d.reviews.length]];
+    const empty = (t) => `<p class="note">${t}</p>`;
+    const byStatus = (k) => d.garage.filter((g) => g.status === k);
+    const panes = {
+      historique: d.history.length ? `<div class="sp-head"><p class="pf-hint">Les ${d.history.length} derniers moteurs consultés${C.user ? "" : " sur cet appareil"}.</p><button type="button" class="ghost-btn" data-hclear>Effacer l'historique</button></div>
+        <div class="pm-grid small">${d.history.map((h) => card(h.ref, `<em class="sp-when">${when(h.at)}</em>`)).join("")}</div>` : empty("Vous n'avez encore consulté aucun moteur."),
+      jaime: C.user ? (d.likes.length ? `<div class="pm-grid small">${d.likes.map((r) => card(r)).join("")}</div>` : empty("Touchez ♥ sur une fiche moteur pour le retrouver ici.")) : "",
+      moteurs: C.user ? (d.garage.length ? Object.keys(GARAGE).map((k) => byStatus(k).length ? `<h3 class="pf-h">${GARAGE[k][1]} <small>${byStatus(k).length}</small></h3>
+          <div class="pm-grid small">${byStatus(k).map((g) => card(g.ref, g.note ? `<em class="sp-note">« ${esc(g.note)} »</em>` : "")).join("")}</div>` : "").join("")
+        : empty("Sur une fiche moteur, indiquez « Je le possède », « Je l'ai testé » ou « Il me fait envie » : vos moteurs s'afficheront ici et sur votre profil.")) : "",
+      avis: C.user ? (d.reviews.length ? `<div class="pf-comments">${d.reviews.map((c) => `<a class="pf-c" href="#m/${encodeURIComponent(c.ref)}"><span class="pf-c-m">${esc(motorName(c.ref))}</span>${c.rating ? stars(c.rating) : ""}${c.body ? `<p>${esc(c.body.slice(0, 220))}</p>` : ""}<time>${when(c.at)}</time></a>`).join("")}</div>` : empty("Vous n'avez pas encore publié d'avis.")) : "",
+    };
+    v.innerHTML = `<div class="pf-wrap sp-wrap">
+      <div class="pf-edit-top"><h1>Mon espace</h1>${C.user ? `<a class="ghost-btn" href="#u/${C.user.id}">Mon profil public →</a>` : `<button type="button" class="btn-dark" data-login>Se connecter</button>`}</div>
+      ${C.user ? "" : `<p class="pf-hint sp-anon">Connectez-vous pour retrouver vos « j'aime », vos moteurs et vos avis sur tous vos appareils.</p>`}
+      <div class="pf-tabs" role="tablist">${tabs.filter(([k]) => C.user || k === "historique").map(([k, l, n]) => `<button type="button" role="tab" data-sp-tab="${k}" aria-selected="${SP.tab === k}">${l}${n ? ` <i>${n}</i>` : ""}</button>`).join("")}</div>
+      <section class="card sp-pane">${panes[C.user ? SP.tab : "historique"]}</section>
+    </div>`;
   }
 
   function suggestForm(ref) {
@@ -467,6 +549,7 @@
     if (days > 365) b.push(["Membre depuis plus d'un an", "grey"]);
     return b;
   }
+  const motorCardHtml = (ref) => motorCard(ref);
   const motorCard = (ref) => {
     const m = motorBy(ref);
     if (!m) return "";
@@ -514,6 +597,8 @@
         <div class="pf-main">
           <section class="card"><h3 class="pf-h">Mon setup <small>${(p.setup || []).length} moteur${(p.setup || []).length > 1 ? "s" : ""}</small></h3>
             ${(p.setup || []).length ? `<div class="pm-grid">${p.setup.map(motorCard).join("")}</div>` : `<p class="note">${p.mine ? "Ajoutez les moteurs que vous utilisez depuis « Modifier mon profil »." : "Aucun moteur partagé pour l'instant."}</p>`}</section>
+          ${(p.garage || []).length ? `<section class="card"><h3 class="pf-h">Mes moteurs <small>${p.garage.length}</small></h3>
+            ${["owned", "tested"].map((k) => { const g = p.garage.filter((x) => x.status === k); return g.length ? `<p class="pf-sub">${k === "owned" ? "Possédés" : "Testés"}</p><div class="pm-grid small">${g.map((x) => motorCard(x.ref).replace("</a>", x.note ? `<em class="sp-note">« ${esc(x.note)} »</em></a>` : "</a>")).join("")}</div>` : ""; }).join("")}</section>` : ""}
           ${p.likes && p.likes.length ? `<section class="card"><h3 class="pf-h">Moteurs aimés <small>${p.likes.length}</small></h3><div class="pm-grid small">${p.likes.map(motorCard).join("")}</div></section>` : ""}
           <section class="card"><h3 class="pf-h">Derniers avis</h3>
             ${(p.comments || []).length ? `<div class="pf-comments">${p.comments.map((c) => `<a class="pf-c" href="#m/${encodeURIComponent(c.ref)}"><span class="pf-c-m">${esc(motorName(c.ref))}</span><p>${esc(c.body.length > 220 ? c.body.slice(0, 220) + "…" : c.body)}</p><time>${when(c.at)}</time></a>`).join("")}</div>`
@@ -648,6 +733,7 @@
   hooks.route = (h) => {
     ["view-actus", "view-admin", "view-profile"].forEach((id) => ($(id).hidden = true));
     if (/^#u\/\d+$/.test(h)) { renderProfile(+h.slice(3)); window.scrollTo(0, 0); return true; }
+    if (/^#moi(\/\w+)?$/.test(h)) { renderSpace(h.split("/")[1]); window.scrollTo(0, 0); return true; }
     if (/^#profil(\/\w+)?$/.test(h)) { renderProfileEdit(h.split("/")[1]); window.scrollTo(0, 0); return true; }
     if (h === "#actus") { renderActus(); window.scrollTo(0, 0); return true; }
     if (h === "#admin") { renderAdmin(); window.scrollTo(0, 0); return true; }
@@ -665,7 +751,7 @@
   };
   function refreshCurrent() {
     if (location.hash === "#admin") return renderAdmin();
-    if (/^#(u\/\d+|profil)/.test(location.hash)) return hooks.route(location.hash);
+    if (/^#(u\/\d+|profil|moi)/.test(location.hash)) return hooks.route(location.hash);
     if (location.hash.startsWith("#m/")) MM().rerender();
   }
 
@@ -702,6 +788,23 @@
       try { await api("moderate_comment", { id: cm.dataset.cmod, status: cm.dataset.status }); toast("Commentaire mis à jour.", "good"); }
       catch (e) { toast(e.message, "bad"); }
       return location.hash === "#admin" ? renderAdmin("comments") : loadSocial($("detail").dataset.ref);
+    }
+    const gs = t.closest("[data-gset]");
+    if (gs) {
+      if (!C.user) return authForm("login");
+      const box = gs.closest("[data-garage]"), on = gs.getAttribute("aria-pressed") === "true";
+      try {
+        await api("garage_set", { ref: box.dataset.garage, status: on ? "" : gs.dataset.gset, note: box.querySelector("[data-gnote]")?.value || "" });
+        toast(on ? "Retiré de vos moteurs." : `Ajouté à vos moteurs : ${GARAGE[gs.dataset.gset][1].toLowerCase()}.`, "good");
+        loadSocial(box.dataset.garage);
+      } catch (e) { toast(e.message, "bad"); }
+      return;
+    }
+    const spt = t.closest("[data-sp-tab]"); if (spt) return renderSpace(spt.dataset.spTab);
+    if (t.closest("[data-hclear]")) {
+      try { localStorage.removeItem(LOCAL_HISTORY); } catch (e) { /* ignore */ }
+      if (C.user && C.online) await api("history_clear", {}).catch(() => {});
+      toast("Historique effacé.", "good"); return renderSpace("historique");
     }
     const pt = t.closest("[data-pf-tab]");
     if (pt) {
@@ -754,6 +857,11 @@
     if (ev.target.name === "bio" && ev.target.closest("[data-pf]")) document.querySelector('.pf-count[data-for="bio"]').textContent = `${ev.target.value.length}/280`;
   });
   document.addEventListener("change", async (ev) => {
+    if (ev.target.matches("[data-gnote]")) {
+      const box = ev.target.closest("[data-garage]"), cur = box.querySelector("[data-gset][aria-pressed=true]");
+      if (cur) { try { await api("garage_set", { ref: box.dataset.garage, status: cur.dataset.gset, note: ev.target.value }); toast("Note enregistrée.", "good"); } catch (e) { toast(e.message, "bad"); } }
+      return;
+    }
     if (ev.target.id === "pf-file" && ev.target.files[0]) {
       try { P.avatar = await readAvatar(ev.target.files[0]); refreshAvatarPreview(); } catch (e) { toast(e.message, "bad"); }
       ev.target.value = "";
@@ -780,8 +888,8 @@
         const r = await api("suggest", { ...d, ref: f.dataset.suggestForm, old: m ? m[d.field] || "" : "" });
         closeModal(); toast(r.message, "good");
       } else if (f.dataset.comment) {
-        await api("comment", { ref: f.dataset.comment, body: d.body });
-        toast("Commentaire publié.", "good");
+        await api("comment", { ref: f.dataset.comment, body: d.body || "", pros: d.pros || "", cons: d.cons || "", rating: d.rating || "" });
+        toast("Avis publié, merci !", "good");
         loadSocial(f.dataset.comment);
       } else if (f.dataset.reset) {
         const r = await api("reset", { token: f.dataset.reset, password: d.password });
