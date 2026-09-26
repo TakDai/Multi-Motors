@@ -26,7 +26,7 @@
   const brandLogo = (upper) => (LOGOS[upper] ? asset(LOGOS[upper]) : logoSrc({ MARQUE: upper }));
   // Extension points used by community.js (accounts, likes, prices, news…)
   const hooks = (window.MM_HOOKS = window.MM_HOOKS || {});
-  const state = { motors: [], thumbs: {}, videos: {}, photos: {}, tab: "populaire", sort: "", q: "", shown: PAGE, f: {}, adv: {}, logos: {}, revealed: false };
+  const state = { motors: [], thumbs: {}, videos: {}, photos: {}, tab: "populaire", sort: "", q: "", shown: PAGE, f: {}, adv: {}, logos: {}, bench: {}, revealed: false };
 
   // --- CSV -----------------------------------------------------------------
   function parseCSV(text) {
@@ -650,6 +650,79 @@
     return p && w ? p / w : null; // W/g
   }
 
+  // --- Bench tests: tables from the product pages (tools/bench.py) and a thrust curve ------
+  const cellNum = (c) => { const x = parseFloat(String(c).replace(",", ".").replace(/[^\d.\-]/g, "")); return Number.isFinite(x) ? x : null; };
+  function benchChart(t) {
+    // A column is usable as an axis when its values really change along the rows
+    const varies = (i) => new Set(t.rows.filter((r) => r.length > 1).map((r) => cellNum(r[i])).filter((v) => v !== null)).size >= 3;
+    const col = (re) => t.headers.findIndex((h, i) => re.test(h) && !/temp|no-?load|idle|kv\b/i.test(h) && varies(i));
+    const y = col(/thrust|pouss|traction/i);
+    let x = col(/throttle|gaz|%/i), xl = "Gaz (%)";
+    if (x < 0) { x = col(/watt|power|puissance|\(w\)/i); xl = "Puissance (W)"; }
+    if (x < 0) { x = col(/amp|current|courant|\(a\)/i); xl = "Courant (A)"; }
+    if (y < 0 || x < 0 || x === y) return "";
+    const pc = t.headers.findIndex((h) => /prop|h[ée]lice/i.test(h));
+    // Several voltages in one table: one curve per propeller and voltage
+    // (real voltage steps only: a few values, each measured several times — not the sag during a run)
+    const vc = t.headers.findIndex((h, i) => {
+      if (!/volt|\(v\)/i.test(h) || /no-?load/i.test(h)) return false;
+      const c = {};
+      t.rows.filter((r) => r.length > 1).forEach((r) => (c[r[i]] = (c[r[i]] || 0) + 1));
+      const v = Object.values(c);
+      return v.length > 1 && v.length <= 4 && v.every((n) => n >= 3);
+    });
+    const series = new Map();
+    let section = "";
+    for (const r of t.rows) {
+      if (r.length === 1) { section = r[0]; continue; }
+      const xv = cellNum(r[x]), yv = cellNum(r[y]);
+      if (xv === null || yv === null) continue;
+      const name = [section, pc >= 0 ? r[pc] : "", vc >= 0 && vc !== x && cellNum(r[vc]) !== null ? `${cellNum(r[vc])} V` : ""].filter(Boolean).join(" · ") || "Essai";
+      if (!series.has(name)) series.set(name, []);
+      series.get(name).push([xv, yv]);
+    }
+    const list = [...series].filter(([, pts]) => pts.length >= 3).slice(0, 6);
+    if (!list.length) return "";
+    const all = list.flatMap(([, p]) => p);
+    const X0 = Math.min(...all.map((p) => p[0])), X1 = Math.max(...all.map((p) => p[0]));
+    const Y1 = Math.max(...all.map((p) => p[1])) * 1.05;
+    const W = 640, H = 260, L = 52, B = 34, T = 12, R = 12;
+    const sx = (v) => L + ((v - X0) / (X1 - X0 || 1)) * (W - L - R), sy = (v) => H - B - (v / (Y1 || 1)) * (H - B - T);
+    const COL = ["#111111", "#ff5757", "#3a86ff", "#06a77d", "#ff9f1c", "#8338ec"];
+    const ticks = (a, b, n) => Array.from({ length: n + 1 }, (_, i) => a + ((b - a) * i) / n);
+    const grid = ticks(0, Y1, 4).map((v) => `<line x1="${L}" x2="${W - R}" y1="${sy(v)}" y2="${sy(v)}" class="bc-grid"/><text x="${L - 6}" y="${sy(v) + 4}" class="bc-t" text-anchor="end">${Math.round(v)}</text>`).join("")
+      + ticks(X0, X1, 5).map((v) => `<text x="${sx(v)}" y="${H - B + 16}" class="bc-t" text-anchor="middle">${Math.round(v * 10) / 10}</text>`).join("");
+    const lines = list.map(([name, pts], i) => {
+      pts.sort((a, b) => a[0] - b[0]);
+      return `<polyline points="${pts.map((p) => `${sx(p[0]).toFixed(1)},${sy(p[1]).toFixed(1)}`).join(" ")}" fill="none" stroke="${COL[i]}" stroke-width="2.2"/>`
+        + pts.map((p) => `<circle cx="${sx(p[0]).toFixed(1)}" cy="${sy(p[1]).toFixed(1)}" r="3" fill="${COL[i]}"><title>${esc(name)} : ${p[1]} g à ${p[0]}</title></circle>`).join("");
+    }).join("");
+    return `<figure class="bench-chart"><svg viewBox="0 0 ${W} ${H}" role="img" aria-label="Poussée en grammes selon ${esc(xl)}">${grid}${lines}
+        <text x="${(L + W - R) / 2}" y="${H - 4}" class="bc-l" text-anchor="middle">${esc(xl)}</text>
+        <text x="12" y="${(H - B) / 2}" class="bc-l" text-anchor="middle" transform="rotate(-90 12 ${(H - B) / 2})">Poussée (g)</text></svg>
+      ${list.length > 1 ? `<figcaption>${list.map(([n], i) => `<span><i style="background:${COL[i]}"></i>${esc(n)}</span>`).join("")}</figcaption>` : ""}</figure>`;
+  }
+  function benchBlock(m) {
+    const tabs = state.bench[famKey(m)] || [];
+    if (!tabs.length) return "";
+    const one = (t) => {
+      const n = t.rows.filter((r) => r.length > 1).length;
+      const table = `<div class="bench-scroll"><table><thead><tr>${t.headers.map((h) => `<th>${esc(h)}</th>`).join("")}</tr></thead>
+          <tbody>${t.rows.map((r) => r.length === 1 ? `<tr class="bench-sec"><td colspan="${t.headers.length}">${esc(r[0])}</td></tr>`
+            : `<tr>${r.map((c) => `<td>${esc(c)}</td>`).join("")}</tr>`).join("")}</tbody></table></div>`;
+      return `<div class="bench-t">
+        ${t.title ? `<p class="bench-title">${esc(t.title)}</p>` : ""}
+        ${benchChart(t)}
+        ${n > 8 ? `<details class="bench-more"><summary>Voir le tableau (${n} mesures)</summary>${table}</details>` : table}
+        ${safeUrl(t.source) ? `<p class="bench-src">Source : <a href="${esc(t.source)}" target="_blank" rel="noopener">${esc(new URL(t.source).hostname.replace(/^www\./, ""))}</a></p>` : ""}
+      </div>`;
+    };
+    return `<section class="tech-card wide bench-card"><h3>Banc d'essai <small>${tabs.length} essai${tabs.length > 1 ? "s" : ""} publié${tabs.length > 1 ? "s" : ""} par le fabricant ou la boutique</small></h3>
+      ${tabs.slice(0, 3).map(one).join("")}
+      ${tabs.length > 3 ? `<details class="bench-more bench-others"><summary>Voir les ${tabs.length - 3} autres essais</summary>${tabs.slice(3).map(one).join("")}</details>` : ""}
+    </section>`;
+  }
+
   function panelTech(m) {
     const row = (label, v, k, calc) => `<div class="t-row ${has(v) ? "" : "na"}"><dt>${esc(label)}${info(k)}</dt><dd>${esc(has(v) ? v : "Non renseigné")}${calc && has(v) ? `<small class="calc">calculé</small>` : ""}</dd></div>`;
     const vol = statorVolume(m), ratio = powerRatio(m);
@@ -691,6 +764,7 @@
         ${card("Recommandations", I.reco, [row("Hélice", m.HELICE, "helice"), row("Utilisation", m.UTILISATION, "usage")])}
         ${fam.length ? `<section class="tech-card"><h3><span class="t-ico" aria-hidden="true">${I.mot}</span>Autres KV de ce modèle</h3>
           <div class="versions">${fam.map((x) => `<a href="#m/${encodeURIComponent(x.REF)}">${pv("KV", fmt(x.KV))}</a>`).join("")}</div></section>` : ""}
+        ${benchBlock(m)}
       </div>`;
   }
 
@@ -879,9 +953,9 @@
     // community.js is loaded after this file: wait until every script has run
     if (document.readyState === "loading") await new Promise((r) => document.addEventListener("DOMContentLoaded", r));
     try {
-      [state.motors, state.thumbs, state.videos, state.photos, state.logos] = await Promise.all([
+      [state.motors, state.thumbs, state.videos, state.photos, state.logos, state.bench] = await Promise.all([
         loadCSV().then(parseCSV), loadJSON("thumbs", window.MM_THUMBS), loadJSON("videos", window.MM_VIDEOS), loadJSON("photos", window.MM_PHOTOS),
-        loadJSON("logos", window.MM_LOGOS),
+        loadJSON("logos", window.MM_LOGOS), loadJSON("bench", window.MM_BENCH),
       ]);
     } catch (err) {
       $("empty").textContent = "Le catalogue n'a pas pu être chargé. Réessayez dans quelques minutes.";

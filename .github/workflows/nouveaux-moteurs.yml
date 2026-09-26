@@ -62,6 +62,7 @@ jobs:
           python tools/photos.py || true
           python tools/photos_sites.py || true
           python tools/photos_dedupe.py || true
+          python tools/bench.py || true
 
       - name: Miniatures et fil d'actualité
         run: |

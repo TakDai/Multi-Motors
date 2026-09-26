@@ -1262,3 +1262,30 @@ html, body { overflow-x: hidden; }
 }
 .pf-form label.pf-file { display: inline-flex; flex-direction: row; width: auto; color: #fff; letter-spacing: .15em; }
 .t-row .calc { margin-left: 8px; padding: 1px 6px; border-radius: 6px; background: #f1f1f1; color: rgba(0, 0, 0, .5); font: 700 9px var(--font); letter-spacing: .08em; text-transform: uppercase; vertical-align: 1px; }
+
+/* ---------- Fiche technique : banc d'essai ---------- */
+.bench-card h3 small { font: 400 12px var(--font); letter-spacing: 0; text-transform: none; color: rgba(0, 0, 0, .5); }
+.bench-t + .bench-t { margin-top: 22px; padding-top: 18px; border-top: 1px dashed var(--dash); }
+.bench-title { margin: 0 0 10px; font: 700 13px var(--font); letter-spacing: .04em; }
+.bench-chart { margin: 0 0 12px; }
+.bench-chart svg { width: 100%; height: auto; max-height: 300px; }
+.bench-chart .bc-grid { stroke: rgba(0, 0, 0, .08); }
+.bench-chart .bc-t { font: 400 10px var(--font); fill: rgba(0, 0, 0, .5); }
+.bench-chart .bc-l { font: 700 10px var(--font); fill: rgba(0, 0, 0, .6); letter-spacing: .06em; text-transform: uppercase; }
+.bench-chart figcaption { display: flex; flex-wrap: wrap; gap: 6px 14px; font: 400 12px var(--font); color: rgba(0, 0, 0, .7); }
+.bench-chart figcaption i { display: inline-block; width: 12px; height: 3px; margin-right: 6px; border-radius: 2px; vertical-align: middle; }
+.bench-scroll { overflow-x: auto; border: 1px solid rgba(0, 0, 0, .08); border-radius: 10px; }
+.bench-scroll table { width: 100%; border-collapse: collapse; font: 400 12px var(--font); font-variant-numeric: tabular-nums; }
+.bench-scroll th { position: sticky; top: 0; padding: 8px 10px; background: #111; color: #fff; font-weight: 700; text-align: left; white-space: nowrap; }
+.bench-scroll td { padding: 6px 10px; border-top: 1px solid rgba(0, 0, 0, .06); white-space: nowrap; }
+.bench-scroll tbody tr:nth-child(even) td { background: #fafafa; }
+.bench-scroll .bench-sec td { background: #f1f1f1 !important; font-weight: 700; }
+.bench-src { margin: 8px 0 0; font: 400 11px var(--font); color: rgba(0, 0, 0, .5); }
+.bench-src a { color: inherit; }
+.bench-more summary { display: inline-flex; align-items: center; gap: 6px; margin: 4px 0 8px; padding: 7px 14px; border: 1.5px solid #111; border-radius: 14px; cursor: pointer; list-style: none; font: 700 11px var(--font); letter-spacing: .08em; text-transform: uppercase; }
+.bench-more summary::-webkit-details-marker { display: none; }
+.bench-more summary::after { content: "▾"; transition: transform .2s; }
+.bench-more[open] > summary::after { transform: rotate(180deg); }
+.bench-more summary:hover { background: #111; color: #fff; }
+.bench-others { margin-top: 18px; padding-top: 14px; border-top: 1px dashed var(--dash); }
+.bench-scroll { max-height: 420px; overflow: auto; }
