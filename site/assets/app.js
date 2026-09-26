@@ -704,7 +704,8 @@
 
   // Photo gallery: hosted thumbnail, shop photos (tools/photos.py), original image
   function gallery(m) {
-    const urls = [state.thumbs[m.REF], ...(state.photos[famKey(m)] || []), safeUrl(m.IMG)].filter(Boolean);
+    // The thumbnail is made from the IMG photo: showing both would show the same picture twice
+    const urls = [state.thumbs[m.REF], ...(state.photos[famKey(m)] || []), state.thumbs[m.REF] ? "" : safeUrl(m.IMG)].filter(Boolean);
     return [...new Set(urls)].map(media).filter((u) => !window.MM_MEDIA || /^data:/.test(u));
   }
   function panelPhotos(m) {

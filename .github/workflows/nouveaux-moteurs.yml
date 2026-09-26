@@ -58,6 +58,7 @@ jobs:
           python tools/videos.py --limit 300 || true
           python tools/photos.py || true
           python tools/photos_sites.py || true
+          python tools/photos_dedupe.py || true
 
       - name: Miniatures et fil d'actualité
         run: |

@@ -150,7 +150,7 @@ Le workflow `.github/workflows/nouveaux-moteurs.yml` s'exécute chaque jour à 0
 3. complète 500 fiches par jour depuis les pages produit des boutiques (`tools/enrich.py`) ;
 4. intègre les corrections validées par la communauté (`tools/community_sync.py`) ;
 5. relève les prix et les photos dans 15 boutiques (`tools/prices.py`, liste dans `tools/shops.py` : RaceDayQuads, Pyrodrone, NewBeeDrone, Rotor Riot, SpeedyFPV, FPVFaster, Quadmula, Unmanned Tech, Drone-FPV-Racer, Studiosport et les boutiques officielles Emax, RushFPV, BetaFPV, HGLRC, Diatone) : 400 modèles par jour, les prix les plus anciens d'abord ;
-6. ajoute des vidéos de review, des photos des sites fabricants (`tools/photos_sites.py`), les miniatures, les logos des nouvelles marques et le fil d'actualité ;
+6. ajoute des vidéos de review, des photos des sites fabricants (`tools/photos_sites.py`), retire les photos en double (`tools/photos_dedupe.py`, par empreinte visuelle), les miniatures, les logos des nouvelles marques et le fil d'actualité ;
 7. commit le tout ; le workflow `deploy-ovh.yml` met ensuite le site en ligne.
 
 **Important :** GitHub ne lance les tâches planifiées que depuis la branche par défaut du dépôt (`Moteurs`). Tant que ces fichiers ne sont que sur une autre branche, rien ne tourne automatiquement.
