@@ -154,6 +154,29 @@ def parse(body, title):
     return specs
 
 
+def plausible(m, col, v):
+    """Reject values that cannot belong to this motor (a mounting pattern read as its size…)."""
+    x, ds, hs = n_(v), n_(m.get("D STATOR")), n_(m.get("H STATOR"))
+    if col == "D MOTEUR" and x is not None and ds and not (ds + 1 <= x <= ds * 1.9):
+        return False
+    if col == "H MOTEUR" and x is not None and hs and not (hs + 2 <= x <= hs * 6 + 10):
+        return False
+    if col == "D SHAFT" and x is not None and ds and not (0.5 <= x <= max(3, ds / 2.5)):
+        return False
+    if col == "CLOCHE" and not re.search(r"\d{4}|alu|carbon|carbone|titan|steel|acier|cnc|unibell", str(v), re.I):
+        return False
+    if col == "POIDS" and x is not None and ds and not (0.2 * ds <= x <= ds ** 2):
+        return False
+    return True
+
+
+def n_(v):
+    try:
+        return float(str(v).replace(",", ".").split()[0])
+    except (ValueError, IndexError):
+        return None
+
+
 # --- Matching ----------------------------------------------------------------
 def best_match(brand, name, kvs, shops=None):
     need = [t for t in tokens(name) if t not in tokens(brand)] or tokens(name)
@@ -187,6 +210,7 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--limit", type=int, default=0, help="max families to search this run")
     ap.add_argument("--brand", default="")
+    ap.add_argument("--audit", action="store_true", help="remove values added by this tool that fail the plausibility checks")
     ap.add_argument("--shops", default="", help="only these shops (comma separated); families already searched are searched again there")
     args = ap.parse_args()
 
@@ -198,6 +222,8 @@ def main():
         if c not in cols:
             cols.append(c)
     done = set(json.loads(DONE.read_text())) if DONE.exists() else set()
+    if args.audit:
+        return audit(cols, rows)
 
     families = {}
     for r in rows:
@@ -225,12 +251,18 @@ def main():
             if not p:
                 continue
             specs = parse(p.get("body_html"), p.get("title", ""))
+            # Size read from a mounting pattern: the height from the same line is wrong too
+            if "D MOTEUR" in specs and members and not plausible(members[0], "D MOTEUR", specs["D MOTEUR"]):
+                specs.pop("D MOTEUR", None)
+                specs.pop("H MOTEUR", None)
             img = (p.get("images") or [{}])[0].get("src", "")
             for m, kv in zip(members, kvs):
                 # KV-specific values only go to the matching KV (or a single-KV family)
                 kv_ok = kv in kv_hit or (len(members) == 1 and not kv_hit)
                 for col, v in specs.items():
                     if col in KV_SPECIFIC and not kv_ok:
+                        continue
+                    if not plausible(m, col, v):
                         continue
                     if v and not m.get(col):
                         m[col] = v
@@ -249,6 +281,26 @@ def main():
             save(cols, rows, new_log, done)
             new_log = []
     save(cols, rows, new_log, done)
+
+
+def audit(cols, rows):
+    """Clear values this tool added (logged in enrichissement.csv) that cannot belong to their motor."""
+    by_ref = {r["REF"]: r for r in rows}
+    with LOG.open(encoding="utf-8") as f:
+        log = list(csv.DictReader(f))
+    removed = []
+    for l in log:
+        r = by_ref.get(l["REF"])
+        if r and r.get(l["CHAMP"]) == l["VALEUR"] and not plausible(r, l["CHAMP"], l["VALEUR"]):
+            r[l["CHAMP"]] = ""
+            removed.append(l)
+    tmp = CAT.with_suffix(".tmp")
+    with tmp.open("w", newline="", encoding="utf-8") as f:
+        w = csv.DictWriter(f, fieldnames=cols, extrasaction="ignore")
+        w.writeheader()
+        w.writerows(rows)
+    tmp.replace(CAT)
+    print(f"{len(removed)} valeurs invraisemblables retirées : " + ", ".join(f"{l['REF']} {l['CHAMP']}={l['VALEUR']}" for l in removed))
 
 
 def save(cols, rows, new_log, done):

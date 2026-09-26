@@ -12,6 +12,7 @@ value. Anything not recognised is left as it is.
 - RESISTANCE   -> "46.8 mΩ"
 - LIPO         -> "4S-6S"
 - VIS HEL      -> "M5" (thread sizes in capitals)
+- D / H STATOR -> taken from the class (2306.5 -> 23 and 6.5)
 
 Usage: python tools/normalize.py
 """
@@ -103,12 +104,33 @@ RULES = {"L CABLE": cable_length, "TYPE CABLE": awg, "HELICE": prop, "ENTRAXE FI
          "RESISTANCE": resistance, "LIPO": lipo, "VIS HEL": thread}
 
 
+def stator(r):
+    """Stator size from the class (2306.5 -> 23 x 6.5): fixes ",5" and "07" left by the sheet."""
+    m = re.fullmatch(r"(\d{2})(\d{2}(?:[.,]\d+)?)", (r.get("CLASSE") or "").strip())
+    if not m:
+        return 0
+    d, h = f(m.group(1)), f(m.group(2))
+    n = 0
+    for col, val in (("D STATOR", d), ("H STATOR", h)):
+        cur = (r.get(col) or "").strip()
+        try:
+            ok = cur and float(cur.replace(",", ".")) == float(val)
+        except ValueError:
+            ok = False
+        if not ok or cur != val:
+            r[col] = val
+            n += 1
+    return n
+
+
 def main():
     with CAT.open(encoding="utf-8") as fh:
         reader = csv.DictReader(fh)
         cols, rows = list(reader.fieldnames), list(reader)
     changed = {c: 0 for c in RULES}
+    changed["STATOR"] = 0
     for r in rows:
+        changed["STATOR"] += stator(r)
         for c, rule in RULES.items():
             v = r.get(c, "")
             if v:
