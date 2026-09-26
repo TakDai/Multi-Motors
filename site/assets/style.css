@@ -1051,3 +1051,9 @@ html, body { overflow-x: hidden; }
 .dim-info .head .logo img.brand-logo { width: auto; height: auto; max-width: 120px; max-height: 28px; }
 .specs .pair .lbl { flex: none; max-width: none; padding-inline: 8px; }
 @media (min-width: 821px) { .row .specs { grid-column: auto; } }
+/* Last line of a card: an invisible filler takes the leftover space instead of stretching the few chips there */
+.specs::after { content: ""; flex: 999 1 0; min-width: 0; order: 99; }
+.specs .official { flex: 0 0 auto; min-width: 137px; margin-left: 0; order: 98; }
+.specs .lbl, .specs .val { padding-inline: 7px; letter-spacing: .1em; }
+.specs .pair .vals .val { max-width: none; }
+.specs .pair .lbl { flex: 1 0 auto; }
