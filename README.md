@@ -145,7 +145,7 @@ GetFPV, RaceDayQuads, Pyrodrone, BetaFPV, iFlight-RC
 
 Le workflow `.github/workflows/nouveaux-moteurs.yml` s'exécute chaque jour à 06:00 UTC (08:00 à Paris en été) :
 
-1. importe le tableau Google (export xlsx) avec `tools/import_sheet.py` : nouveaux moteurs et valeurs ajoutées dans le tableau ; les lignes aux colonnes décalées sont réalignées (poids, puissance) ;
+1. importe le tableau Google (export xlsx) avec `tools/import_sheet.py` : nouveaux moteurs et valeurs ajoutées dans le tableau ; les lignes aux colonnes décalées sont réalignées (poids, puissance)  ; puis `tools/dedupe.py` fusionne les doublons : une seule écriture par marque (les marques connues sous deux noms sont listées dans `catalogue/marques_alias.json`) et un seul moteur par marque + modèle + KV ;
 2. cherche les nouveaux moteurs sur internet (`python -m multi_motors_ai.main --once --output github`) ;
 3. complète 500 fiches par jour depuis les pages produit des boutiques (`tools/enrich.py`) ;
 4. intègre les corrections validées par la communauté (`tools/community_sync.py`) ;

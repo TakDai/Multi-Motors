@@ -19,6 +19,8 @@ import csv, re, sys
 from pathlib import Path
 import openpyxl
 
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+
 ROOT = Path(__file__).resolve().parent.parent
 CAT = ROOT / "catalogue" / "moteurs.csv"
 CHECK = ROOT / "catalogue" / "a_verifier.csv"
@@ -195,8 +197,11 @@ def main(xlsx):
         w = csv.DictWriter(f, fieldnames=["ONGLET"] + COLS[1:], extrasaction="ignore")
         w.writeheader()
         w.writerows(bad)
-    print(f"{len(out)} moteurs dans le catalogue ({len(existing)} vérifiés), {len(fixed)} lignes décalées réalignées, "
+    print(f"{len(out)} lignes importées ({len(existing)} vérifiés), {len(fixed)} lignes décalées réalignées, "
           f"{completed} fiches complétées par elles, {len(bad)} lignes à vérifier")
+    # One name per brand, no motor twice (tools/dedupe.py)
+    import dedupe
+    dedupe.main()
 
 
 if __name__ == "__main__":
