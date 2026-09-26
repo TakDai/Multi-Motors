@@ -66,6 +66,9 @@ jobs:
           python tools/logos.py || true
           python tools/actus.py || true
 
+      - name: Uniformiser le format des caractéristiques
+        run: python tools/normalize.py
+
       - name: Publier sur GitHub
         run: |
           git config user.name "github-actions[bot]"

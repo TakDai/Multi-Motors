@@ -225,7 +225,7 @@
   const awg = (s) => num(String(s).replace(/\D+/g, "")) ?? 99;
   const ADV = {
     marque: { type: "combo", get: (m) => clean(m.MARQUE).toUpperCase() },
-    cable: { type: "chips", get: (m) => m["TYPE CABLE"], order: (a, b) => awg(a) - awg(b), label: (v) => v.replace(/awg/i, " AWG") },
+    cable: { type: "chips", get: (m) => m["TYPE CABLE"], order: (a, b) => awg(a) - awg(b), label: (v) => v.replace(/\s*awg/i, " AWG") },
     aimant: { type: "chips", get: (m) => m.AIMANT, max: 6 },
     cloche: { type: "chips", get: (m) => m.CLOCHE, max: 6 },
     // How the propeller is held: threaded shaft (Tige), nut (Écrou), screws (Vis) or Popo mount
@@ -471,6 +471,8 @@
   // --- Motor page ----------------------------------------------------------
   // Short explanations shown by the "i" icons of the technical sheet
   const GLOSSARY = {
+    volume: "Volume du stator (π × rayon² × hauteur), calculé à partir de ses dimensions. C'est la mesure qui compare le mieux la « taille » réelle de deux moteurs : à volume égal, couple comparable.",
+    ratio: "Puissance max divisée par le poids du moteur, calculée à partir de la fiche. Plus il est élevé, plus le moteur est puissant pour sa masse.",
     kv: "Tours par minute et par volt, à vide. KV élevé : le moteur tourne vite (petites hélices, basse tension). KV bas : plus de couple (grandes hélices, haute tension).",
     classe: "Taille du stator : les deux premiers chiffres donnent son diamètre, les deux derniers sa hauteur, en mm. 2207 = stator de 22 × 7 mm.",
     poids: "Masse d'un moteur, câbles compris sauf mention contraire. Sur un drone, 4 moteurs : chaque gramme compte quatre fois.",
@@ -638,8 +640,19 @@
     return bars.length ? `<section class="tech-card wide"><h3>Repères <small>parmi ${peers.length} moteurs ${esc(m.CLASSE)} du catalogue</small></h3><div class="bench-grid">${bars.join("")}</div></section>` : "";
   }
 
+  // Values worked out from the sheet (shown with a "calculé" mark)
+  function statorVolume(m) {
+    const d = num(m["D STATOR"]), h = num(m["H STATOR"]);
+    return d && h ? (Math.PI * (d / 2) ** 2 * h) / 1000 : null; // cm³
+  }
+  function powerRatio(m) {
+    const p = num(m.PUISSANCE), w = num(m.POIDS);
+    return p && w ? p / w : null; // W/g
+  }
+
   function panelTech(m) {
-    const row = (label, v, k) => `<div class="t-row ${has(v) ? "" : "na"}"><dt>${esc(label)}${info(k)}</dt><dd>${esc(has(v) ? v : "Non renseigné")}</dd></div>`;
+    const row = (label, v, k, calc) => `<div class="t-row ${has(v) ? "" : "na"}"><dt>${esc(label)}${info(k)}</dt><dd>${esc(has(v) ? v : "Non renseigné")}${calc && has(v) ? `<small class="calc">calculé</small>` : ""}</dd></div>`;
+    const vol = statorVolume(m), ratio = powerRatio(m);
     const card = (title, icon, rows) => `<section class="tech-card"><h3><span class="t-ico" aria-hidden="true">${icon}</span>${title}</h3><dl>${rows.join("")}</dl></section>`;
     const vm = vmax(m);
     const keyFields = ["POIDS", "D MOTEUR", "H MOTEUR", "D SHAFT", "L SHAFT", "ENTRAXE FIX", "VIS FIX", "LIPO", "CONFIG", "AMP", "PUISSANCE", "TYPE CABLE", "HELICE", "AIMANT", "RESISTANCE", "UTILISATION"];
@@ -664,13 +677,15 @@
         ${card("Identité", I.id, [row("Référence", m.REF), row("Marque", m.MARQUE), row("Modèle", m.NOM), row("Version", m.VERSION), row("Classe", m.CLASSE, "classe")])}
         ${card("Moteur & stator", I.mot, [row("KV", fmt(m.KV), "kv"), row("Poids", unit(m.POIDS, " g"), "poids"),
           row("Stator", has(m["D STATOR"]) ? `${fmt(m["D STATOR"])} × ${fmt(m["H STATOR"])} mm` : "", "stator"),
+          row("Volume du stator", vol ? `${vol.toLocaleString("fr-FR", { maximumFractionDigits: 2 })} cm³` : "", "volume", true),
           row("Dimensions (Ø × H)", has(m["D MOTEUR"]) ? `${fmt(m["D MOTEUR"])} × ${fmt(m["H MOTEUR"]) || "?"} mm` : "", "dims"),
           row("Configuration", m.CONFIG, "config"), row("Aimants", m.AIMANT, "aimant"), row("Cloche", m.CLOCHE, "cloche")])}
         ${card("Axe & fixation", I.axe, [row("Ø shaft", unit(m["D SHAFT"], " mm"), "shaft"), row("Longueur shaft", unit(m["L SHAFT"], " mm"), "lshaft"),
           row("Type de shaft", m["TYPE SHAFT"], "typeshaft"), row("Fixation hélice", m["VIS HEL"], "vishel"),
           row("Entraxe fixation", m["ENTRAXE FIX"], "entraxe"), row("Vis de fixation", m["VIS FIX"], "visfix")])}
         ${card("Électrique", I.elec, [row("LiPo", m.LIPO, "voltage"), row("Tension nominale", m.VOLTAGE, "voltage"),
-          row("Puissance max", unit(m.PUISSANCE, " W"), "puissance"), row("Courant max", unit(m.AMP, " A"), "amp"),
+          row("Puissance max", unit(m.PUISSANCE, " W"), "puissance"), row("Puissance / poids", ratio ? `${ratio.toLocaleString("fr-FR", { maximumFractionDigits: 1 })} W/g` : "", "ratio", true),
+          row("Courant max", unit(m.AMP, " A"), "amp"),
           row("Résistance", m.RESISTANCE, "resistance"), row("Vitesse max théorique", vm ? `${vm.toLocaleString("fr-FR")} tr/min` : "", "vmax"),
           row("Câble", [m["TYPE CABLE"], m["L CABLE"]].filter(has).join(" · "), "cable")])}
         ${card("Recommandations", I.reco, [row("Hélice", m.HELICE, "helice"), row("Utilisation", m.UTILISATION, "usage")])}

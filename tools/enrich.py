@@ -19,7 +19,12 @@ LOG = ROOT / "catalogue" / "enrichissement.csv"
 DONE = ROOT / "catalogue" / "enrichissement_fait.json"
 EXTRA_COLS = ["RESISTANCE", "UTILISATION"]
 SHOPS = ["www.racedayquads.com", "pyrodrone.com", "newbeedrone.com", "shop.emax-usa.com",
-         "rushfpv.net", "www.unmannedtechshop.co.uk", "betafpv.com"]
+         "rushfpv.net", "www.unmannedtechshop.co.uk", "betafpv.com", "rotorriot.com", "www.speedyfpv.com",
+         "www.fpvfaster.com", "www.quadmula.com", "www.hglrc.com", "www.diatone.us"]
+# Brand stores are only asked about their own motors
+BRAND_SHOPS = {"shop.emax-usa.com": "emax", "betafpv.com": "beta", "rushfpv.net": "rush", "www.hglrc.com": "hglrc", "www.diatone.us": "diatone"}
+# Rows of the sheet without a model name ("1100KV · 48 g") cannot be searched
+UNNAMED = re.compile(r"KV · [\d.]+ g$")
 UA = {"User-Agent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 Chrome/124 Safari/537.36"}
 NOT_MOTOR = re.compile(r"\b(quadcopter|whoop|drone kit|bnf|pnp|rtf|frame|esc|stack|propellers?|props?|"
                        r"flight controller|receiver|goggles?|camera|battery|bell|screws?|shaft kit|replacement)\b", re.I)
@@ -150,13 +155,12 @@ def parse(body, title):
 
 
 # --- Matching ----------------------------------------------------------------
-def best_match(brand, name, kvs):
+def best_match(brand, name, kvs, shops=None):
     need = [t for t in tokens(name) if t not in tokens(brand)] or tokens(name)
     btoks = tokens(brand.replace("-", ""))
     found = []
-    brand_shops = {"shop.emax-usa.com": "emax", "betafpv.com": "beta", "rushfpv.net": "rush"}
-    for shop in SHOPS:
-        if shop in brand_shops and brand_shops[shop] not in brand.lower():
+    for shop in shops or SHOPS:
+        if shop in BRAND_SHOPS and BRAND_SHOPS[shop] not in brand.lower():
             continue
         for title, url in search(shop, f"{brand} {name}"):
             tl = title.lower()
@@ -183,6 +187,7 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--limit", type=int, default=0, help="max families to search this run")
     ap.add_argument("--brand", default="")
+    ap.add_argument("--shops", default="", help="only these shops (comma separated); families already searched are searched again there")
     args = ap.parse_args()
 
     with CAT.open(encoding="utf-8") as f:
@@ -196,9 +201,10 @@ def main():
 
     families = {}
     for r in rows:
-        if r.get("NOM"):
+        if r.get("NOM") and not UNNAMED.search(r["NOM"]):
             families.setdefault((r["MARQUE"], r["NOM"]), []).append(r)
-    todo = [k for k in families if f"{k[0]}|{k[1]}" not in done and (not args.brand or k[0].lower() == args.brand.lower())]
+    shops = [h.strip() for h in args.shops.split(",") if h.strip()] or None
+    todo = [k for k in families if (shops or f"{k[0]}|{k[1]}" not in done) and (not args.brand or k[0].lower() == args.brand.lower())]
     if args.limit:
         todo = todo[: args.limit]
     print(f"{len(todo)} familles à chercher ({len(families)} au total)", flush=True)
@@ -209,7 +215,7 @@ def main():
         members = families[(brand, name)]
         kvs = [str(int(float(m["KV"]))) if n(m.get("KV", "")) else "" for m in members]
         try:
-            matches = best_match(brand, name, kvs)
+            matches = best_match(brand, name, kvs, shops)
         except Exception as e:
             print(f"  erreur {brand} {name}: {e}", file=sys.stderr)
             matches = []

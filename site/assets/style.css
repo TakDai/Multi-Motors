@@ -1261,3 +1261,4 @@ html, body { overflow-x: hidden; }
   .av-xl { width: 92px; height: 92px; font-size: 30px; }
 }
 .pf-form label.pf-file { display: inline-flex; flex-direction: row; width: auto; color: #fff; letter-spacing: .15em; }
+.t-row .calc { margin-left: 8px; padding: 1px 6px; border-radius: 6px; background: #f1f1f1; color: rgba(0, 0, 0, .5); font: 700 9px var(--font); letter-spacing: .08em; text-transform: uppercase; vertical-align: 1px; }

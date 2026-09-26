@@ -201,7 +201,9 @@ def main(xlsx):
           f"{completed} fiches complétées par elles, {len(bad)} lignes à vérifier")
     # One name per brand, no motor twice (tools/dedupe.py)
     import dedupe
+    import normalize
     dedupe.main()
+    normalize.main()  # one spelling per value: "150 mm", "20 AWG", '5"'…
 
 
 if __name__ == "__main__":
