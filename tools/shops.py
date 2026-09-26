@@ -7,7 +7,7 @@ Prices are in the shop's currency (SHOP.cur). Three kinds of shop:
 - PrestaShop (Drone-FPV-Racer): search controller in JSON
 - Studiosport: search result page (HTML)
 """
-import html, re, time
+import html, re, threading, time
 import requests
 
 UA = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124 Safari/537.36"}
@@ -53,22 +53,33 @@ class Shopify:
 
 
 class PrestaShop:
-    """Drone-FPV-Racer: the search controller answers JSON when asked for it."""
+    """Drone-FPV-Racer: its search needs exact words, so the whole motor category is read once
+    (the category controller answers JSON) and matched locally by tools/prices.py."""
 
-    def __init__(self, host, name, cur="EUR", path="/recherche"):
-        self.host, self.name, self.cur, self.path, self.brand = host, name, cur, path, ""
+    def __init__(self, host, name, category, cur="EUR"):
+        self.host, self.name, self.category, self.cur, self.brand = host, name, category, cur, ""
+        self._items, self._lock = None, threading.Lock()
+
+    def catalogue(self):
+        with self._lock:
+            if self._items is None:
+                self._items, page = [], 1
+                while page <= 30:
+                    data = get(f"https://{self.host}/{self.category}", params={"page": page, "resultsPerPage": 100},
+                               headers={"Accept": "application/json", "X-Requested-With": "XMLHttpRequest"}) or {}
+                    for p in data.get("products", []):
+                        img = ((p.get("cover") or {}).get("large") or {}).get("url")
+                        self._items.append({"title": html.unescape(p.get("name", "")), "url": p.get("url", "").split("#")[0],
+                                            "variants": [{"title": "", "price": float(p.get("price_amount") or 0),
+                                                          "stock": int(p.get("quantity") or 0) > 0 or p.get("availability") == "available", "id": None}],
+                                            "images": [img] if img else [], "lazy": True})
+                    if page >= int((data.get("pagination") or {}).get("pages_count") or 0):
+                        break
+                    page += 1
+            return self._items
 
     def search(self, query):
-        data = get(f"https://{self.host}{self.path}", params={"controller": "search", "s": query},
-                   headers={"Accept": "application/json", "X-Requested-With": "XMLHttpRequest"})
-        out = []
-        for p in (data or {}).get("products", [])[:10]:
-            img = ((p.get("cover") or {}).get("large") or {}).get("url")
-            out.append({"title": html.unescape(p.get("name", "")), "url": p.get("url", "").split("#")[0],
-                        "variants": [{"title": "", "price": float(p.get("price_amount") or 0),
-                                      "stock": int(p.get("quantity") or 0) > 0 or p.get("availability") == "available", "id": None}],
-                        "images": [img] if img else [], "lazy": True})
-        return out
+        return self.catalogue()
 
     def details(self, item):
         # Every photo of the product page (same image ids, "large_default" size)
@@ -78,12 +89,17 @@ class PrestaShop:
 
 
 class Studiosport:
+    """Its search is fuzzy: the "Moteurs" category (FPV motors) is read once and matched locally."""
     host, name, cur, brand = "www.studiosport.fr", "Studiosport", "EUR", ""
+    category = "/mini-multirotors-motorisations-c-963_1252_1255.html"
 
-    def search(self, query):
-        page = get(f"https://{self.host}/dhtml/resultat_recherche.php", json=False, params={"keywords": query}) or ""
+    def __init__(self):
+        self._items, self._lock = None, threading.Lock()
+
+    @staticmethod
+    def boxes(page):
         out = []
-        for b in page.split('class="product_box ')[1:25]:
+        for b in page.split('class="product_box ')[1:]:
             a = re.search(r'class="bp_designation">\s*<a href="([^"]+)">\s*([^<]+?)\s*</a>', b)
             price = re.search(r"<!-- PRICE -->.*?([\d\s.]+,\d{2})\s*&euro;", b, re.S)
             if not a or not price:
@@ -94,6 +110,19 @@ class Studiosport:
                                       "stock": "enstock" in b, "id": None}],
                         "images": [img.group(1).replace("-moyenne.", "-grande.")] if img else [], "lazy": True})
         return out
+
+    def search(self, query):
+        with self._lock:
+            if self._items is None:
+                self._items, seen = [], set()
+                for n in range(1, 30):
+                    page = get(f"https://{self.host}{self.category}", json=False, params={"numPage": n} if n > 1 else None) or ""
+                    new = [i for i in self.boxes(page) if i["url"] not in seen]
+                    if not new:
+                        break
+                    seen.update(i["url"] for i in new)
+                    self._items += new
+            return self._items
 
     def details(self, item):
         page = get(item["url"], json=False) or ""
@@ -110,7 +139,7 @@ SHOPS = [
     Shopify("www.fpvfaster.com", "FPVFaster"),
     Shopify("www.quadmula.com", "Quadmula"),
     Shopify("www.unmannedtechshop.co.uk", "Unmanned Tech", "GBP"),
-    PrestaShop("www.drone-fpv-racer.com", "Drone-FPV-Racer"),
+    PrestaShop("www.drone-fpv-racer.com", "Drone-FPV-Racer", "417-moteurs"),
     Studiosport(),
     # Brand stores: only asked about their own motors
     Shopify("shop.emax-usa.com", "Emax (officiel)", brand="emax"),
