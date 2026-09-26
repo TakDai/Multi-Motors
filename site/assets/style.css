@@ -1093,3 +1093,21 @@ html, body { overflow-x: hidden; }
 /* Differences are neutral: more KV or less weight is neither good nor bad in itself */
 .sim-specs em.up, .sim-specs em.down { background: #f1f1f1; color: #111; }
 @media (max-width: 600px) { .sim-list { margin-inline: 0; padding: 2px 0 8px; } .sim { flex-basis: 72%; } }
+
+/* ---------- Prix : TTC en gros, HT en petit ---------- */
+.pt { display: inline-grid; grid-template-columns: auto auto; align-items: baseline; column-gap: 5px; line-height: 1.05; }
+.pt b { font: inherit; }
+.pt small { font: 700 10px var(--font) !important; letter-spacing: .1em; color: rgba(0, 0, 0, .55) !important; text-transform: uppercase; }
+.pt .pt-ht { grid-column: 1 / -1; font: 400 11px var(--font); letter-spacing: .03em; color: rgba(0, 0, 0, .5); }
+.pt.big b { font-size: 34px; }
+.pt.big small { font-size: 12px !important; }
+.pt.big .pt-ht { font-size: 13px; margin-top: 4px; }
+.price-big > small { margin-top: 8px; }
+.o-price .pt b { font-size: 18px; }
+.o-price .o-orig { margin-top: 2px; font-size: 10px !important; color: rgba(0, 0, 0, .4) !important; }
+.price-badge small { font: 400 10px var(--font); letter-spacing: .04em; text-transform: none; color: rgba(255, 255, 255, .6); }
+.price-chip small { font-size: 8px; letter-spacing: .1em; opacity: .75; }
+@media (max-width: 600px) { .pt.big b { font-size: 28px; } }
+/* Video without thumbnail: a proper poster instead of an empty black box */
+.video-media { background: radial-gradient(circle at 30% 20%, #3a3a3a, #111 70%); }
+.pt { justify-content: start; align-self: flex-start; }

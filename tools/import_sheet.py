@@ -6,8 +6,10 @@ Usage: python tools/import_sheet.py <export.xlsx>
 Cleaning:
 - "www,site,com" / "10,7": commas typed instead of dots are fixed
 - VOLTAGE (a formula giving 0) is recomputed from LIPO (3.7 V per cell)
-- rows whose columns are shifted (no name, no class, KV-like value in
-  H MOTEUR, number in AIMANT) are not imported but listed in
+- rows whose columns are shifted (no name, no class, weight in H MOTEUR,
+  max power in AIMANT) are realigned: they either complete the catalogue
+  motor with the same brand, KV and weight, or are added as a motor named
+  after its KV and weight; only rows that stay unusable go to
   catalogue/a_verifier.csv
 - duplicate REFs are merged (first complete value wins)
 - rows already in catalogue/moteurs.csv (hand-checked) keep their values;
@@ -22,7 +24,8 @@ CAT = ROOT / "catalogue" / "moteurs.csv"
 CHECK = ROOT / "catalogue" / "a_verifier.csv"
 COLS = ["ID", "REF", "MARQUE", "NOM", "VERSION", "CLASSE", "KV", "POIDS", "H STATOR", "D STATOR", "H MOTEUR",
         "D MOTEUR", "D SHAFT", "L SHAFT", "TYPE SHAFT", "VIS HEL", "VIS FIX", "ENTRAXE FIX", "LIPO", "VOLTAGE",
-        "L CABLE", "TYPE CABLE", "HELICE", "PUISSANCE", "AMP", "AIMANT", "CLOCHE", "CONFIG", "LIEN", "IMG"]
+        "L CABLE", "TYPE CABLE", "HELICE", "PUISSANCE", "AMP", "AIMANT", "CLOCHE", "CONFIG", "LIEN", "IMG",
+        "RESISTANCE", "UTILISATION"]
 NUMERIC = {"KV", "POIDS", "H MOTEUR", "D MOTEUR", "D SHAFT", "L SHAFT", "PUISSANCE", "AMP"}
 ALIASES = {"POID": "POIDS"}
 
@@ -70,6 +73,26 @@ def shifted(r):
             or (not r["NOM"] and not r["CLASSE"]))
 
 
+def as_weight(v):
+    """H MOTEUR of a shifted row: grams, or a date the sheet made of "16.3" (2023-03-16 -> 16.3)."""
+    d = re.match(r"\d{4}-(\d{2})-(\d{2})", v)
+    if d:
+        return float(f"{int(d.group(2))}.{int(d.group(1))}")
+    return num(v)
+
+
+def realign(r):
+    """Shifted row -> KV, POIDS, PUISSANCE in their columns (None if nothing usable is left)."""
+    kv, w = num(r["KV"]), as_weight(r["H MOTEUR"])
+    p = num(r["AIMANT"]) if num(r["AIMANT"]) is not None else num(r["PUISSANCE"])
+    if not kv or not w:
+        return None
+    r = dict(r, **{"H MOTEUR": "", "AIMANT": "", "POIDS": f"{w:g}", "PUISSANCE": f"{p:g}" if p else ""})
+    r["NOM"] = f"{kv:g}KV · {w:g} g"
+    r["REF"] = f"{r['REF']}-{w:g}G"
+    return r
+
+
 def main(xlsx):
     wb = openpyxl.load_workbook(xlsx, data_only=True)
     rows, bad = [], []
@@ -104,12 +127,49 @@ def main(xlsx):
                 if not cur.get(c) and r.get(c):
                     cur[c] = r[c]
 
+    # Shifted rows: complete the motor they describe when it is already known
+    # (same brand and KV, weight within 5 %), otherwise add them
+    known = {}
+    for r in list(merged.values()) + (list(csv.DictReader(CAT.open(encoding="utf-8"))) if CAT.exists() else []):
+        known.setdefault((r["MARQUE"].lower(), num(r["KV"])), []).append(r)
+    fixed, completed, still_bad = [], 0, []
+    for r in bad:
+        a = realign(r)
+        if not a:
+            still_bad.append(r)
+            continue
+        a["MARQUE"] = best.get(a["MARQUE"].lower(), a["MARQUE"])
+        w = num(a["POIDS"])
+        twin = next((k for k in known.get((a["MARQUE"].lower(), num(a["KV"])), [])
+                     if num(k.get("POIDS")) and abs(num(k["POIDS"]) - w) <= 0.05 * w), None)
+        if twin:
+            if a["PUISSANCE"] and not twin.get("PUISSANCE"):
+                twin["PUISSANCE"] = a["PUISSANCE"]
+                twin.setdefault("_fill", {})["PUISSANCE"] = a["PUISSANCE"]
+                completed += 1
+            continue
+        fixed.append(a)
+    bad = still_bad
+    for r in fixed:
+        cur = merged.setdefault(r["REF"], r)
+        if cur is not r:
+            for c in COLS[1:]:
+                if not cur.get(c) and r.get(c):
+                    cur[c] = r[c]
+
     # Hand-checked catalogue wins; the sheet fills gaps only
     existing = {}
     if CAT.exists():
         with CAT.open(encoding="utf-8") as f:
             existing = {r["REF"]: r for r in csv.DictReader(f)}
+    fills = {}
+    for group in known.values():
+        for k in group:
+            if k.get("_fill"):
+                fills[k["REF"]] = k.pop("_fill")
     for ref, r in existing.items():
+        for c, v in fills.get(ref, {}).items():
+            r[c] = r.get(c) or v
         s = merged.pop(ref, None)
         if s:
             for c in COLS[1:]:
@@ -135,7 +195,8 @@ def main(xlsx):
         w = csv.DictWriter(f, fieldnames=["ONGLET"] + COLS[1:], extrasaction="ignore")
         w.writeheader()
         w.writerows(bad)
-    print(f"{len(out)} moteurs dans le catalogue ({len(existing)} vérifiés), {len(bad)} lignes à vérifier")
+    print(f"{len(out)} moteurs dans le catalogue ({len(existing)} vérifiés), {len(fixed)} lignes décalées réalignées, "
+          f"{completed} fiches complétées par elles, {len(bad)} lignes à vérifier")
 
 
 if __name__ == "__main__":

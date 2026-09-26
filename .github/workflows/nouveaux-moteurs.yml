@@ -29,6 +29,14 @@ jobs:
       - name: Installer les dépendances
         run: pip install -r multi_motors_ai/requirements.txt
 
+      - name: Importer le tableau Google (nouveaux moteurs, prix, corrections du jour)
+        env:
+          SHEET_ID: 1uuWtvCLQR6indriPs9R-HOwTxC6j2XXDpQrLytxXl1c
+        run: |
+          curl -sSfL -o tableau.xlsx "https://docs.google.com/spreadsheets/d/${SHEET_ID}/export?format=xlsx"
+          python tools/import_sheet.py tableau.xlsx
+          rm -f tableau.xlsx
+
       - name: Rechercher les nouveaux moteurs
         env:
           REQUEST_DELAY_MIN: "1"
@@ -44,22 +52,23 @@ jobs:
           MM_EXPORT_KEY: ${{ secrets.MM_EXPORT_KEY }}
         run: python tools/community_sync.py || true
 
-      - name: Prix, vidéos et photos (300 familles par jour)
+      - name: Prix, photos et vidéos (400 familles par jour, toutes les boutiques)
         run: |
-          python tools/prices.py --limit 300 || true
+          python tools/prices.py --limit 400 --workers 6 || true
           python tools/videos.py --limit 300 || true
           python tools/photos.py || true
 
       - name: Miniatures et fil d'actualité
         run: |
           python tools/thumbs.py || true
+          python tools/logos.py || true
           python tools/actus.py || true
 
       - name: Publier sur GitHub
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add catalogue/ site/assets/motors site/data
+          git add catalogue/ site/assets/motors site/assets/logos site/data
           if git diff --cached --quiet; then
             echo "Aucun nouveau moteur aujourd'hui."
             exit 0

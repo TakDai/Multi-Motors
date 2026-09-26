@@ -10,6 +10,11 @@
   const IMG = "assets/img/";
   // Standalone preview builds inline their images in window.MM_ASSETS
   const asset = (name) => (window.MM_ASSETS && window.MM_ASSETS[name]) || IMG + name;
+  // The standalone preview cannot load outside images: it ships copies of them in window.MM_MEDIA
+  const media = (url) => {
+    const M = window.MM_MEDIA, yt = /i\.ytimg\.com\/vi\/([\w-]+)\//.exec(url);
+    return (M && M[yt ? `yt:${yt[1]}` : url]) || url;
+  };
   // Brand logos available in the Figma file; other brands use a text mark
   const LOGOS = { "T-MOTOR": "logo-t-motor.png" };
   // Logos fetched from the brands' sites and redrawn in black (tools/logos.py)
@@ -606,7 +611,7 @@
     const card = (v, big) => `
       <a class="video ${big ? "featured" : ""}" href="https://www.youtube.com/watch?v=${esc(v.id)}" target="_blank" rel="noopener" data-yt="${esc(v.id)}">
         <span class="video-media">
-          <img src="https://i.ytimg.com/vi/${esc(v.id)}/${big ? "hqdefault" : "mqdefault"}.jpg" alt="" loading="lazy" onerror="this.remove()">
+          <img src="${esc(media(`https://i.ytimg.com/vi/${v.id}/${big ? "hqdefault" : "mqdefault"}.jpg`))}" alt="" loading="lazy" onerror="this.remove()">
           <span class="play" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg></span>
           ${v.d ? `<span class="dur">${esc(v.d)}</span>` : ""}
         </span>
@@ -622,7 +627,7 @@
   // Photo gallery: hosted thumbnail, shop photos (tools/photos.py), original image
   function gallery(m) {
     const urls = [state.thumbs[m.REF], ...(state.photos[famKey(m)] || []), safeUrl(m.IMG)].filter(Boolean);
-    return [...new Set(urls)];
+    return [...new Set(urls)].map(media).filter((u) => !window.MM_MEDIA || /^data:/.test(u));
   }
   function panelPhotos(m) {
     const list = gallery(m);

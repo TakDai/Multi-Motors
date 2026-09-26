@@ -111,6 +111,14 @@
     return isNaN(d) ? "" : d.toLocaleDateString("fr-FR", { day: "numeric", month: "long", year: "numeric" });
   };
   const euro = (v) => `${Number(v).toLocaleString("fr-FR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} €`;
+  // Prices with and without VAT: shops in euros (and the UK shop) show VAT-inclusive prices;
+  // shops outside Europe are VAT-free, French import VAT (20 %) is added to compare like for like
+  const VAT = 0.2;
+  const ttc = (o) => (o.cur === "USD" ? o.eur * (1 + VAT) : o.eur);
+  const ht = (v) => v / (1 + VAT);
+  const median = (xs) => { const s = xs.slice().sort((a, b) => a - b), k = s.length >> 1; return s.length % 2 ? s[k] : (s[k - 1] + s[k]) / 2; };
+  const ttcOf = (p) => (p?.offers?.length ? median(p.offers.map(ttc)) : null);
+  const priceTag = (v, cls = "") => `<span class="pt ${cls}"><b>${euro(v)}</b><small>TTC</small><span class="pt-ht">${euro(ht(v))} HT</span></span>`;
   const motorBy = (ref) => MM().state.motors.find((m) => m.REF === ref);
   const isMod = () => C.user && C.user.role !== "user";
   const motorName = (ref) => { const m = motorBy(ref); return m ? `${m.MARQUE} ${m.NOM || ""} ${m.KV ? m.KV + "KV" : ""}` : ref; };
@@ -174,12 +182,12 @@
   }
 
   // ----------------------------------------------------- catalogue additions
-  const priceOf = (m) => C.prices[m.REF]?.eur;
+  const priceOf = (m) => ttcOf(C.prices[m.REF]);
   hooks.likes = (m) => C.likes[m.REF] || 0;
   hooks.rowExtra = (m) => {
     const p = priceOf(m), l = C.likes[m.REF];
     if (!p && !l) return "";
-    return `<span class="row-meta">${p ? `<span class="price-chip" title="Prix indicatif, médiane des offres relevées">≈ ${euro(p)}</span>` : ""}${l ? `<span class="like-chip">♥ ${l}</span>` : ""}</span>`;
+    return `<span class="row-meta">${p ? `<span class="price-chip" title="Prix indicatif TTC, médiane des offres relevées (${euro(ht(p))} HT)">≈ ${euro(p)} <small>TTC</small></span>` : ""}${l ? `<span class="like-chip">♥ ${l}</span>` : ""}</span>`;
   };
 
   hooks.onBoot = async () => {
@@ -219,7 +227,7 @@
     const p = C.prices[m.REF];
     top.insertAdjacentHTML("afterend", `<div class="d-actions">
       <button type="button" class="like-btn" data-like="${esc(m.REF)}" aria-pressed="false"><span class="heart" aria-hidden="true">♥</span><b>0</b><span class="sr"> j'aime</span></button>
-      ${p?.eur ? `<a class="price-badge" href="#m/${encodeURIComponent(m.REF)}" data-scroll="d-prix">Prix indicatif <b>≈ ${euro(p.eur)}</b></a>` : ""}
+      ${ttcOf(p) ? `<a class="price-badge" href="#m/${encodeURIComponent(m.REF)}" data-scroll="d-prix">Prix indicatif <b>≈ ${euro(ttcOf(p))} TTC</b><small>${euro(ht(ttcOf(p)))} HT</small></a>` : ""}
       <button type="button" class="suggest-btn" data-suggest="${esc(m.REF)}">Suggérer une modification</button>
       ${m._community ? `<span class="community-badge" title="${esc(m._community.map((f) => FIELD_LABELS[f] || f).join(", "))}">Corrigé par la communauté</span>` : ""}
     </div>`);
@@ -234,14 +242,15 @@
     if (!p || !p.offers?.length) {
       return `${head("price", "Comparateur de prix")}<p class="note">Aucune offre relevée pour ce moteur pour l'instant.</p>`;
     }
-    const best = Math.min(...p.offers.map((o) => o.eur));
-    return `${head("price", "Comparateur de prix", `${p.offers.length} boutique${p.offers.length > 1 ? "s" : ""}`)}
-      <div class="price-head"><div class="price-big">≈ ${euro(p.eur)}<small>prix indicatif par moteur</small></div>
-        <p>Médiane de ${p.offers.length} offre${p.offers.length > 1 ? "s" : ""} relevée${p.offers.length > 1 ? "s" : ""} le ${new Date(p.date).toLocaleDateString("fr-FR")}. Prix convertis en euros au taux BCE du jour, hors frais de port et de douane.</p></div>
-      <div class="offers">${p.offers.map((o) => `
-        <a class="offer ${o.eur === best ? "best" : ""} ${o.stock ? "" : "oos"}" href="${esc(o.url)}" target="_blank" rel="noopener">
-          <span class="o-shop">${esc(o.shop)}${o.eur === best ? `<em>Meilleur prix</em>` : ""}</span>
-          <span class="o-price">${euro(o.eur)}<small>${o.pack > 1 ? `lot de ${o.pack} : ` : ""}${o.price.toLocaleString("fr-FR")} ${o.cur === "USD" ? "$" : o.cur === "GBP" ? "£" : o.cur}</small></span>
+    const offers = p.offers.map((o) => ({ ...o, ttc: ttc(o) })).sort((a, b) => (!a.stock - !b.stock) || a.ttc - b.ttc);
+    const best = Math.min(...offers.map((o) => o.ttc)), mid = ttcOf(p);
+    return `${head("price", "Comparateur de prix", `${offers.length} boutique${offers.length > 1 ? "s" : ""}`)}
+      <div class="price-head"><div class="price-big">${priceTag(mid, "big")}<small>prix indicatif par moteur</small></div>
+        <p>Médiane de ${offers.length} offre${offers.length > 1 ? "s" : ""} relevée${offers.length > 1 ? "s" : ""} le ${new Date(p.date).toLocaleDateString("fr-FR")}, convertie${offers.length > 1 ? "s" : ""} en euros au taux BCE du jour. Boutiques hors Europe : TVA de 20 % ajoutée ; frais de port et de douane non compris.</p></div>
+      <div class="offers">${offers.map((o) => `
+        <a class="offer ${o.ttc === best ? "best" : ""} ${o.stock ? "" : "oos"}" href="${esc(o.url)}" target="_blank" rel="noopener">
+          <span class="o-shop">${esc(o.shop)}${o.ttc === best ? `<em>Meilleur prix</em>` : ""}</span>
+          <span class="o-price">${priceTag(o.ttc)}<small class="o-orig">${o.pack > 1 ? `lot de ${o.pack} : ` : ""}${o.price.toLocaleString("fr-FR", { minimumFractionDigits: 2 })} ${o.cur === "USD" ? "$ HT" : o.cur === "GBP" ? "£" : "€"}</small></span>
           <span class="o-stock">${o.stock ? "En stock" : "Rupture"}</span>
           <span class="o-go">Voir l'offre →</span>
         </a>`).join("")}</div>`;
