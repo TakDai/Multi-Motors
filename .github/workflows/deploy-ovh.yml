@@ -1,0 +1,75 @@
+name: Mise en ligne du site sur OVH
+
+on:
+  # Après chaque recherche quotidienne (ses commits ne déclenchent pas "push")
+  workflow_run:
+    workflows: ["Recherche quotidienne des nouveaux moteurs"]
+    types: [completed]
+  push:
+    branches: [Moteurs]
+    paths: ["site/**", "catalogue/**", ".github/workflows/deploy-ovh.yml"]
+  workflow_dispatch: {}
+
+concurrency:
+  group: deploy-ovh
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    if: github.event_name != 'workflow_run' || github.event.workflow_run.conclusion == 'success'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # Prend le dernier commit (y compris celui de la recherche du jour)
+          ref: ${{ github.event.repository.default_branch }}
+
+      - name: Préparer les fichiers du site
+        run: |
+          mkdir -p build/data
+          cp -r site/. build/
+          if [ -f catalogue/moteurs.csv ]; then
+            cp catalogue/moteurs.csv build/data/moteurs.csv
+          else
+            echo "Aucun catalogue pour l'instant : le site affichera un catalogue vide."
+            printf 'ID,REF,MARQUE,NOM,CLASSE,KV\n' > build/data/moteurs.csv
+          fi
+          ls -R build
+
+      - name: Configuration du serveur communautaire (api/config.php)
+        env:
+          MM_DB_HOST: ${{ secrets.MM_DB_HOST }}
+          MM_DB_NAME: ${{ secrets.MM_DB_NAME }}
+          MM_DB_USER: ${{ secrets.MM_DB_USER }}
+          MM_DB_PASS: ${{ secrets.MM_DB_PASS }}
+          MM_ADMIN_EMAIL: ${{ secrets.MM_ADMIN_EMAIL }}
+          MM_GOOGLE_CLIENT_ID: ${{ secrets.MM_GOOGLE_CLIENT_ID }}
+          MM_MAIL_FROM: ${{ secrets.MM_MAIL_FROM }}
+          MM_SITE_URL: ${{ secrets.MM_SITE_URL }}
+          MM_EXPORT_KEY: ${{ secrets.MM_EXPORT_KEY }}
+        run: |
+          if [ -z "$MM_DB_HOST" ]; then
+            echo "Base de données non configurée : le catalogue fonctionne, les comptes et commentaires resteront désactivés."
+            exit 0
+          fi
+          python3 tools/make_config.py build/api/config.php
+          php -l build/api/config.php
+
+      - name: Envoyer sur l'hébergement OVH (FTP)
+        env:
+          OVH_FTP_HOST: ${{ secrets.OVH_FTP_HOST }}
+          OVH_FTP_USER: ${{ secrets.OVH_FTP_USER }}
+          LFTP_PASSWORD: ${{ secrets.OVH_FTP_PASSWORD }}
+          OVH_REMOTE_DIR: ${{ vars.OVH_REMOTE_DIR || 'www' }}
+        run: |
+          if [ -z "$OVH_FTP_HOST" ] || [ -z "$OVH_FTP_USER" ] || [ -z "$LFTP_PASSWORD" ]; then
+            echo "::error::Secrets OVH manquants : ajoutez OVH_FTP_HOST, OVH_FTP_USER et OVH_FTP_PASSWORD dans Settings > Secrets and variables > Actions."
+            exit 1
+          fi
+          sudo apt-get install -y -qq lftp >/dev/null
+          # Envoie uniquement les fichiers du site, sans rien supprimer d'autre sur l'hébergement
+          lftp --env-password -u "$OVH_FTP_USER" "ftp://$OVH_FTP_HOST" -e "
+            set ftp:ssl-allow yes;
+            set net:max-retries 3;
+            mirror --reverse --verbose --parallel=4 build/ $OVH_REMOTE_DIR/;
+            bye"
