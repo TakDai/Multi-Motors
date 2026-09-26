@@ -94,6 +94,8 @@ def main():
     index = json.loads(INDEX.read_text()) if INDEX.exists() else {}
     OUT.mkdir(parents=True, exist_ok=True)
     for brand, s in sources.items():
+        if "alias" in s:  # same brand written differently in the sheet: same logo
+            continue
         name = f"{slug(brand)}.png"
         if not force and brand in index and (OUT / name).exists():
             continue
@@ -108,6 +110,9 @@ def main():
         logo.save(OUT / name, optimize=True)
         index[brand] = f"logos/{name}"
         print(f"{brand}: {logo.width}x{logo.height}")
+    for brand, s in sources.items():
+        if "alias" in s and s["alias"] in index:
+            index[brand] = index[s["alias"]]
     INDEX.write_text(json.dumps(dict(sorted(index.items())), ensure_ascii=False, indent=1) + "\n")
 
 

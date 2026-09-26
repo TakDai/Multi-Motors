@@ -17,14 +17,29 @@
  "ARMATTAN": {
   "url": "https://cdn.shopify.com/s/files/1/1126/9610/collections/Armattan-NewBeeDrone-51706179.png?v=1729791967"
  },
+ "ASTRO FLIGHT": {
+  "url": "https://www.astroflight.com/media/ASTRO_LOGO_2020_TRN_SMALL.png"
+ },
+ "AVEOX": {
+  "url": "https://aveox.com/wp-content/uploads/2025/04/Aveox-Logo-PNG-Darker-and-Bolder-1-1024x164.png"
+ },
  "AXIS": {
   "url": "https://ueeshop.ly200-cdn.com/u_file/UPBG/UPBG828/2604/29/photo/c6a1628fba131121bbf78e16bfb83fe1.png"
  },
  "BETAFPV": {
   "url": "https://betafpv.com/cdn/shop/files/betafpv-micro-drone-logo1_210x.jpg"
  },
+ "BLACK WIDOW (ZTW)": {
+  "url": "https://www.ztwshop.com/templets/default/img/logo.png"
+ },
  "BROTHERHOBBY": {
   "url": "https://cdn.shopify.com/s/files/1/1126/9610/collections/BrotherHobby-NewBeeDrone-51707121.jpg?v=1729791994"
+ },
+ "CASTLE": {
+  "url": "https://castlecreations.com/cdn/shop/files/Castle_Creations_logo_white.png"
+ },
+ "DARWINFPV": {
+  "url": "https://darwinfpv.com/cdn/shop/files/20230822135904.png"
  },
  "DIATONE": {
   "url": "https://www.diatone.us/cdn/shop/files/Diatone_logo_f646fb8b-6030-440b-ba2f-4369bf7e0ea0_300x@2x.png"
@@ -35,6 +50,9 @@
  "DYS": {
   "url": "https://dys.hk/images/logo.png"
  },
+ "E-FLITE": {
+  "url": "https://images.contentstack.io/v3/assets/blt0df9d1e177ca9371/blt7041da4430ed9924/678ffc759d626e109611d273/eflite-logo.svg"
+ },
  "EACHINE": {
   "url": "https://icbimg.chiccdn.com/eachine/logo/202207/15202_1657708025_470.png"
  },
@@ -43,6 +61,9 @@
  },
  "ETHIX": {
   "url": "https://mlbgrkunryfw.i.optimole.com/w:400/h:100/q:mauto/f:best/https://ethix.co/wp-content/uploads/2018/02/ETHIX_logo_nav.png"
+ },
+ "EXTREME FLIGHT": {
+  "url": "https://extremeflightrc.com/cdn/shop/files/EFS-logo-BLACK.png"
  },
  "FETTEC": {
   "url": "https://fettec.net/media/image/1e/52/69/logo-1024.jpg"
@@ -53,8 +74,17 @@
  "FLIPSKY": {
   "url": "https://flipsky.net/cdn/shop/files/logo_d7dbfd8c-bde0-43da-a7c4-90360a202aab.png"
  },
+ "FLYDUINO": {
+  "url": "https://static.wixstatic.com/media/65b61d_96f13701b67c42a8b3a7498764e903b8~mv2.png/v1/fill/w_600,h_64,al_c,q_85,usm_0.66_1.00_0.01,enc_avif,quality_auto/logo.png"
+ },
  "FLYWOO": {
   "url": "https://cdn.shopify.com/s/files/1/1126/9610/collections/Flywoo-NewBeeDrone-51712217.png?v=1729792001"
+ },
+ "FOXEER": {
+  "url": "https://www.foxeer.com/assets/foxeer/images/logo.png"
+ },
+ "FOXY": {
+  "url": "https://www.foxy.cz/wp-content/uploads/2023/11/foxy_logo.svg"
  },
  "FPVCYCLE": {
   "url": "https://fpvcycle.com/cdn/shop/files/croppedLogo.png"
@@ -62,14 +92,26 @@
  "GEMFAN": {
   "url": "https://img03.71360.com/w3/5p3560/20251023/3bd8255a2faebfb9aa84e31300555ab5.png"
  },
+ "GENS ACE": {
+  "url": "https://gensace.de/cdn/shop/files/GT-LOGO.png"
+ },
  "GEPRC": {
   "url": "https://cdn.shopify.com/s/files/1/1126/9610/collections/GEPRC-NewBeeDrone-51713091.png?v=1729791954"
+ },
+ "HACKER": {
+  "url": "https://www.hacker-motor.com/images/logo_hacker.png"
  },
  "HAPPYMODEL": {
   "url": "https://www.happymodel.cn/wp-content/uploads/2018/09/s_happymodel-logo.png"
  },
  "HGLRC": {
   "url": "https://www.hglrc.com/cdn/shop/files/hglrc_91447400-854c-497e-89c4-082bc45117ba_140x.png"
+ },
+ "HIMAX": {
+  "url": "https://www.himax.com.tw/wp-content/uploads/2015/07/himax-v2-light.png"
+ },
+ "HITEC": {
+  "url": "https://cdn11.bigcommerce.com/s-gatcxyxclp/images/stencil/209x68/hrc-logo_1746509869__92391.original.png"
  },
  "HOBBYWING": {
   "url": "https://www.hobbywing.com/uploads/image/20250806/0c0df0c051c1977ba29cc051027aba08.png",
@@ -78,20 +120,74 @@
  "IFLIGHT": {
   "url": "https://cdn.shopify.com/s/files/1/1126/9610/collections/iFlight-NewBeeDrone-51715539.jpg?v=1729791969"
  },
+ "JETI": {
+  "url": "https://www.jetimodel.com/public/views/favicon/favicon.png"
+ },
+ "KAVAN": {
+  "url": "https://kavanrc.com/pictures/logo-kavan.svg"
+ },
  "KDE": {
   "url": "https://www.kdedirect.com/cdn/shop/t/7/assets/logo-KDE.png"
+ },
+ "KDEDIRECT": {
+  "alias": "KDE"
+ },
+ "KONTRONIK": {
+  "url": "https://kontronik.com/wp-content/themes/kontronik/assets/kontronik-logo.svg"
+ },
+ "LEOMOTION": {
+  "url": "https://www.leomotion.com/shop/Bilder/shoplogo_xs.svg"
+ },
+ "LEOPARD": {
+  "url": "https://www.leopardhobby.com/public/upload/image/20260119/1768812216384706.png"
+ },
+ "LUMENIER": {
+  "alias": "LUMINIER"
+ },
+ "LUMINIER": {
+  "url": "https://cdn.shopify.com/s/files/1/0698/9525/8342/files/logo-white.webp?width=187"
  },
  "MAD": {
   "url": "https://ueeshop.ly200-cdn.com/u_file/UPAZ/UPAZ594/2308/10/photo/madlogo.png"
  },
+ "MAD COMPONENTS": {
+  "alias": "MAD"
+ },
+ "MIKROKOPTER": {
+  "url": "https://www.mikrokopter.de/addons/shared_addons/themes/mk3/img/logo.png"
+ },
+ "MVVS": {
+  "url": "https://www.mvvs.cz/MVVS/media/system/img/MVVSlogo.svg"
+ },
+ "NEUMOTORS": {
+  "url": "https://neumotors.com/wp-content/uploads/2023/08/Neumotors-Logo-Large-900x160-1.png"
+ },
  "NEWBEEDRONE": {
   "url": "https://newbeedrone.com/cdn/shop/files/NewBeeDrone-logo-5_160x.jpg"
+ },
+ "PEGGY PEPPER": {
+  "url": "https://images.squarespace-cdn.com/content/v1/670ec2ba4d2b1a78e72d99be/18049f9e-7cbd-41ac-8f9f-a357ee445c68/Peggy+Pepper+Home+White-10-10.png",
+  "crop": [
+   0,
+   0,
+   1,
+   0.5
+  ]
+ },
+ "PICHLER": {
+  "url": "https://pichler.de/bilder/intern/shoplogo/pichler_png_shop_logo_1.png"
+ },
+ "PLETTENBERG": {
+  "url": "https://plettenbergmotors.com/wp-content/uploads/2022/02/Plettenberg-Negative-Logo-RedGrey-RGB-1920x190px-1024x101.png"
  },
  "PYRODRONE": {
   "url": "https://pyrodrone.com/cdn/shop/files/Pyrodrone_White_on_Dark_BG_as_Empire_Logo_1338x196.png"
  },
  "RACERSTAR": {
   "url": "https://icbimg.chiccdn.com/racerstar/globalsetting/original/201808/15332785534.png"
+ },
+ "RACESTAR": {
+  "alias": "RACERSTAR"
  },
  "RCINPOWER": {
   "url": "https://cdn.shopify.com/s/files/1/1126/9610/collections/RCinPower-NewBeeDrone-51719466.png?v=1729792019"
@@ -108,12 +204,27 @@
  "RUSH": {
   "url": "https://rushfpv.net/cdn/shop/files/20220919103637_f3f52d76-0d1f-4d08-8853-021645f2b139_200x.png"
  },
+ "SAVOX": {
+  "url": "https://www.savox.com/img/Savox-logo.svg"
+ },
  "SCORPION": {
   "url": "https://www.scorpionsystem.com/assets/img/logo.jpg",
   "mode": "dark"
  },
+ "SKYRC": {
+  "url": "https://www.skyrc.com/image/catalog/logo/SKYRC-LOGO.jpg"
+ },
  "SONICMODELL": {
   "url": "https://sonicmodell.com/u_file/weblogo/fbb0fc46c2.png"
+ },
+ "SPEKTRUM": {
+  "url": "https://www.spektrumrc.com/on/demandware.static/Sites-spektrum-us-Site/-/default/dwfa9f8051/svg-icons/spektrum-logo.svg"
+ },
+ "SUNNYSKY": {
+  "url": "https://sunnyskyusa.com/cdn/shop/files/sslogo_0f6b6e62-7695-4ea4-9ee3-97e11c99f3b9_550x.png"
+ },
+ "SURPASS": {
+  "url": "https://www.surpass-hobby.com/wp-content/uploads/2023/08/LOGO-170x44.png"
  },
  "TATTU": {
   "url": "https://cdn11.bigcommerce.com/s-99ohneivnb/images/stencil/185x47/tagens_1767496421__13722.original.png"
@@ -121,11 +232,30 @@
  "TBS": {
   "url": "https://www.team-blacksheep.com/img/tbs_logo_mobile.svg"
  },
+ "TEAM BLACK SHEEP": {
+  "alias": "TBS"
+ },
+ "TENSHOCK": {
+  "url": "https://images-oss.2cshop.com/upload/customer_8775/upload/20240308/85a30d364687e3e9a6581f975b693421.png",
+  "mode": "light"
+ },
+ "TFL HOBBY": {
+  "url": "https://www.tflhobby.com/cdn/shop/files/1_56530496-5025-4dc2-bdb8-bc54d31c69cf.jpg"
+ },
+ "THUNDER TIGER": {
+  "url": "https://www.thundertiger.com/images/logo.svg"
+ },
  "TINYWHOOP": {
   "url": "https://www.tinywhoop.com/cdn/shop/files/Official_Tiny_Whoop_Logo_-_Copy.jpg"
+ },
+ "TURNIGY": {
+  "url": "https://turnigy.com/wp-content/themes/turnigy2021/images/log_turnigy.svg"
  },
  "UMMAGAWD": {
   "url": "https://ummagawd.com/cdn/shop/files/Ummagawd_Logo_alternate-outlined_dfc73219-a9cd-4971-970f-13db001f635f_681x250.png?v=1663808678",
   "mode": "dark"
+ },
+ "X-TEAM": {
+  "url": "https://www.x-team.cn/wp-content/themes/LDL_product/style/images/logo1.png"
  }
 }
