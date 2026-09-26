@@ -43,6 +43,9 @@ jobs:
           REQUEST_DELAY_MAX: "3"
         run: python -m multi_motors_ai.main --once --output github
 
+      - name: Moteurs vendus en boutique qui manquent au catalogue
+        run: python tools/shop_motors.py || true
+
       - name: Compléter les fiches (500 familles par jour)
         run: python tools/enrich.py --limit 500 || true
 

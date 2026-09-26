@@ -147,6 +147,7 @@ Le workflow `.github/workflows/nouveaux-moteurs.yml` s'exécute chaque jour à 0
 
 1. importe le tableau Google (export xlsx) avec `tools/import_sheet.py` : nouveaux moteurs et valeurs ajoutées dans le tableau ; les lignes aux colonnes décalées sont réalignées (poids, puissance)  ; puis `tools/dedupe.py` fusionne les doublons : une seule écriture par marque (les marques connues sous deux noms sont listées dans `catalogue/marques_alias.json`) et un seul moteur par marque + modèle + KV ;
 2. cherche les nouveaux moteurs sur internet (`python -m multi_motors_ai.main --once --output github`) ;
+   puis ajoute les moteurs vendus par les boutiques qui manquent au catalogue (`tools/shop_motors.py` : rayon moteurs complet de 15 boutiques, marque, modèle, classe et KV reconnus dans chaque produit, caractéristiques lues sur la fiche produit, sources dans `catalogue/ajouts_boutiques.csv`) ;
 3. complète 500 fiches par jour depuis les pages produit des boutiques (`tools/enrich.py`) ;
 4. intègre les corrections validées par la communauté (`tools/community_sync.py`) ;
 5. relève les prix et les photos dans 15 boutiques (`tools/prices.py`, liste dans `tools/shops.py` : RaceDayQuads, Pyrodrone, NewBeeDrone, Rotor Riot, SpeedyFPV, FPVFaster, Quadmula, Unmanned Tech, Drone-FPV-Racer, Studiosport et les boutiques officielles Emax, RushFPV, BetaFPV, HGLRC, Diatone) : 400 modèles par jour, les prix les plus anciens d'abord ;

@@ -14,6 +14,10 @@
  "AMAX": {
   "url": "https://amaxshop.com/image/cache/catalog/logo/com_110_55-59x55.png"
  },
+ "AOS": {
+  "url": "https://static.wixstatic.com/media/e57211_8185d85b60de428aa5da573546d1fff9%7Emv2.jpg/v1/fill/w_180%2Ch_180%2Clg_1%2Cusm_0.66_1.00_0.01/e57211_8185d85b60de428aa5da573546d1fff9%7Emv2.jpg",
+  "mode": "light"
+ },
  "ARMATTAN": {
   "url": "https://cdn.shopify.com/s/files/1/1126/9610/collections/Armattan-NewBeeDrone-51706179.png?v=1729791967"
  },
@@ -29,17 +33,26 @@
  "BETAFPV": {
   "url": "https://betafpv.com/cdn/shop/files/betafpv-micro-drone-logo1_210x.jpg"
  },
+ "BITCRAZE": {
+  "url": "https://www.bitcraze.io/images/nav/navbar-logo.webp"
+ },
  "BLACK WIDOW (ZTW)": {
   "url": "https://www.ztwshop.com/templets/default/img/logo.png"
  },
  "BROTHERHOBBY": {
   "url": "https://cdn.shopify.com/s/files/1/1126/9610/collections/BrotherHobby-NewBeeDrone-51707121.jpg?v=1729791994"
  },
+ "CADDX": {
+  "url": "https://cdn.shopify.com/s/files/1/1126/9610/collections/CaddX-NewBeeDrone-51707450.png?v=1729791939"
+ },
  "CASTLE": {
   "url": "https://castlecreations.com/cdn/shop/files/Castle_Creations_logo_white.png"
  },
  "DARWINFPV": {
   "url": "https://darwinfpv.com/cdn/shop/files/20230822135904.png"
+ },
+ "DEEPSPACEFPV": {
+  "url": "https://www.deepspacefpv.com/cdn/shop/16631/snippet/1757310816119_0.png_w180.jpg"
  },
  "DIATONE": {
   "url": "https://www.diatone.us/cdn/shop/files/Diatone_logo_f646fb8b-6030-440b-ba2f-4369bf7e0ea0_300x@2x.png"
@@ -88,6 +101,9 @@
  },
  "FPVCYCLE": {
   "url": "https://fpvcycle.com/cdn/shop/files/croppedLogo.png"
+ },
+ "FTX": {
+  "url": "https://ftx-rc.com/image/data/logo/ftx-logo.png"
  },
  "GEMFAN": {
   "url": "https://img03.71360.com/w3/5p3560/20251023/3bd8255a2faebfb9aa84e31300555ab5.png"
@@ -189,11 +205,17 @@
  "RACESTAR": {
   "alias": "RACERSTAR"
  },
+ "RATEFPV": {
+  "url": "https://ratefpv.com/cdn/shop/files/dfc73a7bf6d3515edd75815a08ed815c.png?crop=center&height=32&v=1776681314&width=32"
+ },
  "RCINPOWER": {
   "url": "https://cdn.shopify.com/s/files/1/1126/9610/collections/RCinPower-NewBeeDrone-51719466.png?v=1729792019"
  },
  "RCTIMER": {
   "url": "https://rctimer.com/u_file/2009/photo/7ab25b846c.png"
+ },
+ "READYTOSKY": {
+  "url": "https://www.readytosky.com/pic/logo/logo.jpg"
  },
  "ROTORGEEKS": {
   "url": "https://rotorgeeks.com/image/data/logo.png"
@@ -214,11 +236,17 @@
  "SKYRC": {
   "url": "https://www.skyrc.com/image/catalog/logo/SKYRC-LOGO.jpg"
  },
+ "SKYSTARS": {
+  "url": "https://www.skystars-rc.com/wp-content/uploads/2022/09/logo1.png"
+ },
  "SONICMODELL": {
   "url": "https://sonicmodell.com/u_file/weblogo/fbb0fc46c2.png"
  },
  "SPEKTRUM": {
   "url": "https://www.spektrumrc.com/on/demandware.static/Sites-spektrum-us-Site/-/default/dwfa9f8051/svg-icons/spektrum-logo.svg"
+ },
+ "SUB250": {
+  "url": "https://sub250.com/cdn/shop/files/Sub250_logo-1.png"
  },
  "SUNNYSKY": {
   "url": "https://sunnyskyusa.com/cdn/shop/files/sslogo_0f6b6e62-7695-4ea4-9ee3-97e11c99f3b9_550x.png"
