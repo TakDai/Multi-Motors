@@ -38,14 +38,14 @@
   const get = (action, params) => api(action, params ? { __get: params } : undefined);
 
   // Demo API for the standalone preview: nothing leaves the browser page
-  const D = { users: [], me: null, likes: {}, comments: [], sugg: [], news: [], id: 1 };
+  const D = { users: [], me: null, likes: {}, comments: [], sugg: [], news: [], profiles: {}, id: 1 };
   function demoApi(action, d) {
     const q = d.__get || d;
     const me = D.me;
     const now = new Date().toISOString().slice(0, 19).replace("T", " ");
     const need = () => { if (!me) throw new Error("Connectez-vous pour faire cela."); };
     const mod = () => { need(); if (me.role === "user") throw new Error("Réservé à la modération."); };
-    const pub = (u) => u && { id: u.id, name: u.name, email: u.email, role: u.role, verified: true };
+    const pub = (u) => u && { id: u.id, name: u.name, email: u.email, role: u.role, verified: true, color: D.profiles[u.id]?.color || "", avatar: D.profiles[u.id]?.avatar || "" };
     switch (action) {
       case "me": return { user: pub(me), google_client_id: "" };
       case "register": case "login": {
@@ -53,7 +53,7 @@
         if (!/.+@.+\..+/.test(email)) throw new Error("Adresse email invalide.");
         if ((d.password || "").length < 8) throw new Error("Le mot de passe doit faire au moins 8 caractères.");
         let u = D.users.find((x) => x.email === email);
-        if (!u) { u = { id: D.id++, email, name: d.name || email.split("@")[0], role: D.users.length ? "user" : "admin" }; D.users.push(u); }
+        if (!u) { u = { id: D.id++, email, name: d.name || email.split("@")[0], role: D.users.length ? "user" : "admin", since: now }; D.users.push(u); }
         D.me = u;
         return { user: pub(u), message: action === "register" ? "Compte de démonstration créé (premier compte = administrateur)." : undefined };
       }
@@ -68,7 +68,7 @@
         return {
           likes: s.size, liked: !!me && s.has(me.id), pending_suggestions: D.sugg.filter((x) => x.ref === q.ref && x.status === "pending").length,
           comments: D.comments.filter((c) => c.ref === q.ref && (c.status === "visible" || (isMod && c.status === "hidden")))
-            .map((c) => ({ ...c, author: D.users.find((u) => u.id === c.user_id)?.name, role: D.users.find((u) => u.id === c.user_id)?.role, mine: me && c.user_id === me.id })).reverse(),
+            .map((c) => { const u = D.users.find((x) => x.id === c.user_id); return { ...c, author: u?.name || "Membre", role: u?.role, uid: u ? u.id : 0, color: D.profiles[c.user_id]?.color || "", avatar: D.profiles[c.user_id]?.avatar || "", mine: me && c.user_id === me.id }; }).reverse(),
         };
       }
       case "like": { need(); const s = (D.likes[d.ref] = D.likes[d.ref] || new Set()); s.has(me.id) ? s.delete(me.id) : s.add(me.id); return { liked: s.has(me.id), likes: s.size }; }
@@ -81,6 +81,45 @@
       case "admin_comments": mod(); return D.comments.filter((c) => c.status !== "deleted").map((c) => ({ ...c, created_at: c.at, author: D.users.find((u) => u.id === c.user_id)?.name })).reverse();
       case "admin_users": mod(); return D.users.map((u) => ({ ...u, verified: 1, banned: u.banned ? 1 : 0, created_at: now }));
       case "user_update": { mod(); const u = D.users.find((x) => x.id === +d.id); if (u) { if (d.role) u.role = d.role; if (d.banned !== undefined && d.banned !== "") u.banned = d.banned === "1"; } return { ok: true }; }
+      case "profile": {
+        const u = D.users.find((x) => x.id === +q.id);
+        if (!u) throw new Error("Ce membre n'existe pas ou plus.");
+        const p = D.profiles[u.id] || {}, mine = !!me && me.id === u.id;
+        const base = { id: u.id, name: u.name, role: u.role, since: u.since, mine, color: p.color || "", avatar: p.avatar || "" };
+        if (p.is_public === false && !mine && !(me && me.role !== "user")) return { ...base, private: true };
+        return {
+          ...base, bio: p.bio || "", location: p.location || "", website: p.website || "", youtube: p.youtube || "", instagram: p.instagram || "",
+          flying: p.flying || "", setup: p.setup || [], is_public: p.is_public !== false, show_likes: p.show_likes !== false,
+          stats: { comments: D.comments.filter((c) => c.user_id === u.id && c.status === "visible").length, approved: D.sugg.filter((x) => x.user_id === u.id && x.status === "approved").length,
+            suggestions: D.sugg.filter((x) => x.user_id === u.id).length, likes: Object.values(D.likes).filter((st) => st.has(u.id)).length },
+          comments: D.comments.filter((c) => c.user_id === u.id && c.status === "visible").slice(-10).reverse(),
+          likes: p.show_likes !== false || mine ? Object.entries(D.likes).filter(([, st]) => st.has(u.id)).map(([r]) => r).slice(0, 24) : [],
+        };
+      }
+      case "profile_save": {
+        need();
+        const p = (D.profiles[me.id] = D.profiles[me.id] || {});
+        const url = (v, host) => { if (!v) return ""; if (!/^https?:\/\//i.test(v)) v = "https://" + v; try { const h = new URL(v).hostname; if (host && !h.endsWith(host)) throw 0; } catch (e) { throw new Error(host ? `Le lien doit mener à ${host}.` : `Lien invalide : ${v}`); } return v; };
+        if ((d.setup || []).length > 8) throw new Error("8 moteurs au maximum dans votre setup.");
+        if ("avatar" in d && d.avatar && !/^data:image\/(png|jpeg|webp);base64,/.test(d.avatar)) throw new Error("Image refusée : PNG, JPEG ou WebP uniquement.");
+        Object.assign(p, { bio: (d.bio || "").slice(0, 280), location: (d.location || "").slice(0, 60), website: url(d.website), youtube: url(d.youtube, "youtube.com"),
+          instagram: url(d.instagram, "instagram.com"), color: d.color || "", flying: d.flying || "", setup: d.setup || [], is_public: d.is_public !== "0", show_likes: d.show_likes !== "0" });
+        if ("avatar" in d) p.avatar = d.avatar || "";
+        return { user: pub(me), message: "Profil enregistré." };
+      }
+      case "account_update": {
+        need(); const msg = [];
+        if (d.name && d.name !== me.name) { if (d.name.length < 2) throw new Error("Choisissez un pseudo d'au moins 2 caractères."); me.name = d.name; msg.push("Pseudo modifié."); }
+        if (d.email && d.email !== me.email) { if (!/.+@.+\..+/.test(d.email)) throw new Error("Adresse email invalide."); me.email = d.email.toLowerCase(); msg.push("Adresse modifiée."); }
+        if (d.password) { if (d.password.length < 8) throw new Error("Le nouveau mot de passe doit faire au moins 8 caractères."); msg.push("Mot de passe modifié."); }
+        return { user: pub(me), message: msg.join(" ") || "Rien à modifier." };
+      }
+      case "account_delete": {
+        need(); if (d.confirm !== "SUPPRIMER") throw new Error("Tapez SUPPRIMER pour confirmer.");
+        D.users = D.users.filter((u) => u.id !== me.id); delete D.profiles[me.id];
+        Object.values(D.likes).forEach((st) => st.delete(me.id)); D.comments.forEach((c) => { if (c.user_id === me.id) c.status = "deleted"; });
+        D.me = null; return { user: null, message: "Votre compte a été supprimé." };
+      }
       case "admin_news": mod(); return D.news;
       case "news_save": { mod(); if (!d.title || !d.body) throw new Error("Titre et texte obligatoires."); const n = D.news.find((x) => x.id === +d.id); if (n) Object.assign(n, { title: d.title, body: d.body, published: d.published !== "0" }); else D.news.unshift({ id: D.id++, title: d.title, body: d.body, published: d.published !== "0", created_at: now, at: now }); return { ok: true }; }
       case "news_delete": mod(); D.news = D.news.filter((x) => x.id !== +d.id); return { ok: true };
@@ -128,8 +167,10 @@
     const el = $("acct");
     if (!el) return;
     el.innerHTML = C.user
-      ? `<button type="button" class="nav-pill acct-btn" aria-haspopup="true" aria-expanded="false">${esc(C.user.name)}${C.user.role !== "user" ? `<em>${ROLE_LABEL[C.user.role]}</em>` : ""}</button>
+      ? `<button type="button" class="nav-pill acct-btn" aria-haspopup="true" aria-expanded="false">${avatar(C.user, "xs")}${esc(C.user.name)}${C.user.role !== "user" ? `<em>${ROLE_LABEL[C.user.role]}</em>` : ""}</button>
          <div class="acct-menu" hidden>
+           <a href="#u/${C.user.id}">Mon profil</a>
+           <a href="#profil">Modifier mon profil</a>
            ${isMod() ? `<a href="#admin">Administration</a>` : ""}
            <button type="button" data-logout>Se déconnecter</button>
          </div>`
@@ -279,7 +320,7 @@
       : `<p class="c-login"><button type="button" class="btn-dark" data-login>Connectez-vous</button> pour donner votre avis.</p>`;
     const items = s.comments.length ? s.comments.map((c) => `
       <article class="comment ${c.status === "hidden" ? "hidden-c" : ""}">
-        <header><b>${esc(c.author)}</b>${c.role && c.role !== "user" ? `<em>${ROLE_LABEL[c.role]}</em>` : ""}<time>${when(c.at)}</time>
+        <header>${c.uid ? `<a class="c-author" href="#u/${c.uid}">${avatar({ name: c.author, color: c.color, avatar: c.avatar }, "sm")}<b>${esc(c.author)}</b></a>` : `<b>${esc(c.author)}</b>`}${c.role && c.role !== "user" ? `<em>${ROLE_LABEL[c.role]}</em>` : ""}<time>${when(c.at)}</time>
           ${c.status === "hidden" ? `<span class="tagc">Masqué</span>` : ""}</header>
         <p>${esc(c.body).replace(/\n/g, "<br>")}</p>
         <footer>${c.mine ? `<button type="button" data-cdel="${c.id}">Supprimer</button>` : ""}
@@ -394,9 +435,220 @@
     v.dataset.tab = tab; v.dataset.status = status;
   }
 
+  // ---------------------------------------------------------------- profiles
+  const COLORS = ["#111111", "#ff5757", "#ff9f1c", "#2ec4b6", "#3a86ff", "#8338ec", "#06a77d", "#e63973"];
+  const FLYING = ["Racing", "Freestyle", "Long Range", "Cinematic", "Cinewhoop", "Toothpick", "Whoop", "Aile volante", "Avion", "Hélicoptère"];
+  // Photo, or initials on the member's colour (a colour derived from the name when none was chosen)
+  function avatar(u, size = "md") {
+    const name = (u && u.name) || "?";
+    const color = (u && u.color) || COLORS[[...name].reduce((a, c) => a + c.charCodeAt(0), 0) % COLORS.length];
+    const src = u && u.avatar && (/^api\/index\.php\?action=avatar&id=\d+&v=\d+$/.test(u.avatar) || /^data:image\/(png|jpeg|webp);base64,/.test(u.avatar)) ? u.avatar : "";
+    const ini = name.split(/[\s._-]+/).filter(Boolean).slice(0, 2).map((w) => w[0]).join("").toUpperCase();
+    return src ? `<span class="av av-${size}"><img src="${esc(src)}" alt=""></span>`
+      : `<span class="av av-${size}" style="--av:${esc(color)}" aria-hidden="true">${esc(ini)}</span>`;
+  }
+  const PICON = {
+    pin: '<svg viewBox="0 0 24 24"><path d="M12 21s-7-6.2-7-11a7 7 0 0 1 14 0c0 4.8-7 11-7 11z"/><circle cx="12" cy="10" r="2.5"/></svg>',
+    web: '<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3c3 3.5 3 14.5 0 18M12 3c-3 3.5-3 14.5 0 18"/></svg>',
+    yt: '<svg viewBox="0 0 24 24"><rect x="2.5" y="5.5" width="19" height="13" rx="4"/><path d="M10 9.5v5l4.5-2.5z" fill="currentColor"/></svg>',
+    ig: '<svg viewBox="0 0 24 24"><rect x="3.5" y="3.5" width="17" height="17" rx="5"/><circle cx="12" cy="12" r="4"/><circle cx="17.2" cy="6.8" r=".8" fill="currentColor"/></svg>',
+    cal: '<svg viewBox="0 0 24 24"><rect x="3.5" y="5" width="17" height="15" rx="2"/><path d="M3.5 10h17M8 3v4M16 3v4"/></svg>',
+    fly: '<svg viewBox="0 0 24 24"><circle cx="6" cy="6" r="2.5"/><circle cx="18" cy="6" r="2.5"/><circle cx="6" cy="18" r="2.5"/><circle cx="18" cy="18" r="2.5"/><path d="M8 8l8 8M16 8l-8 8"/></svg>',
+  };
+  // Badges earned from what the member did on the site
+  function badges(p) {
+    const b = [], s = p.stats || {};
+    if (p.role === "admin") b.push(["Administrateur", "gold"]); else if (p.role === "moderator") b.push(["Modérateur", "gold"]);
+    if (s.approved >= 10) b.push(["Expert catalogue", "gold"]); else if (s.approved >= 1) b.push(["Contributeur", "blue"]);
+    if (s.comments >= 10) b.push(["Pilote bavard", "green"]); else if (s.comments >= 1) b.push(["A donné son avis", "green"]);
+    if ((p.setup || []).length) b.push(["Setup partagé", "purple"]);
+    if (s.likes >= 20) b.push(["Collectionneur", "red"]);
+    const days = p.since ? (Date.now() - new Date(p.since.replace(" ", "T") + "Z")) / 864e5 : 0;
+    if (days > 365) b.push(["Membre depuis plus d'un an", "grey"]);
+    return b;
+  }
+  const motorCard = (ref) => {
+    const m = motorBy(ref);
+    if (!m) return "";
+    return `<a class="pm-card" href="#m/${encodeURIComponent(m.REF)}"><span class="pm-img">${MM().photo(m)}</span>
+      <span class="pm-brand">${MM().brandMark(m)}</span><b>${esc(m.NOM || m.REF)}</b><small>${[m.CLASSE, m.KV ? `${m.KV} KV` : ""].filter(Boolean).map(esc).join(" · ")}</small></a>`;
+  };
+
+  async function renderProfile(id) {
+    const v = $("view-profile");
+    v.hidden = false;
+    v.innerHTML = `<div class="pf-wrap"><p class="note">Chargement du profil…</p></div>`;
+    if (!C.online && !DEMO) { v.innerHTML = `<div class="pf-wrap"><p class="note">Les profils seront disponibles dès que le serveur du site sera configuré.</p></div>`; return; }
+    let p;
+    try { p = await get("profile", { id }); } catch (e) { v.innerHTML = `<div class="pf-wrap"><p class="note">${esc(e.message)}</p><p><a class="ghost-btn" href="#">Retour au catalogue</a></p></div>`; return; }
+    document.title = `${p.name} — Multi-Motors`;
+    const color = p.color || COLORS[[...p.name].reduce((a, c) => a + c.charCodeAt(0), 0) % COLORS.length];
+    const since = p.since ? new Date(p.since.replace(" ", "T") + "Z").toLocaleDateString("fr-FR", { month: "long", year: "numeric" }) : "";
+    const link = (url, icon, label) => url ? `<a href="${esc(url)}" target="_blank" rel="noopener nofollow ugc" class="pf-link">${PICON[icon]}<span>${esc(label)}</span></a>` : "";
+    const head = `
+      <header class="pf-head" style="--pf:${esc(color)}">
+        <div class="pf-banner"></div>
+        <div class="pf-id">
+          ${avatar(p, "xl")}
+          <div class="pf-name"><h1>${esc(p.name)}</h1>${p.role !== "user" ? `<em class="pf-role">${ROLE_LABEL[p.role]}</em>` : ""}
+            <p class="pf-meta">${since ? `<span>${PICON.cal}Membre depuis ${esc(since)}</span>` : ""}${p.location ? `<span>${PICON.pin}${esc(p.location)}</span>` : ""}${p.flying ? `<span>${PICON.fly}${esc(p.flying)}</span>` : ""}</p></div>
+          ${p.mine ? `<a class="btn-dark pf-edit" href="#profil">Modifier mon profil</a>` : ""}
+        </div>
+      </header>`;
+    if (p.private) { v.innerHTML = `<div class="pf-wrap">${head}<section class="card"><p class="note">Ce profil est privé.</p></section></div>`; return; }
+    const s = p.stats || {};
+    v.innerHTML = `<div class="pf-wrap">${head}
+      <div class="pf-grid">
+        <aside class="pf-side">
+          <section class="card pf-about">
+            ${p.bio ? `<p class="pf-bio">${esc(p.bio).replace(/\n/g, "<br>")}</p>` : `<p class="note">${p.mine ? "Ajoutez une courte présentation depuis « Modifier mon profil »." : "Pas encore de présentation."}</p>`}
+            <div class="pf-links">${link(p.website, "web", p.website.replace(/^https?:\/\/(www\.)?/, "").replace(/\/$/, ""))}${link(p.youtube, "yt", "YouTube")}${link(p.instagram, "ig", "Instagram")}</div>
+          </section>
+          <section class="card pf-stats">
+            <div><b>${s.comments || 0}</b><span>avis</span></div>
+            <div><b>${s.approved || 0}</b><span>corrections validées</span></div>
+            <div><b>${s.likes || 0}</b><span>j'aime</span></div>
+          </section>
+          ${badges(p).length ? `<section class="card"><h3 class="pf-h">Badges</h3><div class="pf-badges">${badges(p).map(([t, c]) => `<span class="pf-badge b-${c}">${esc(t)}</span>`).join("")}</div></section>` : ""}
+        </aside>
+        <div class="pf-main">
+          <section class="card"><h3 class="pf-h">Mon setup <small>${(p.setup || []).length} moteur${(p.setup || []).length > 1 ? "s" : ""}</small></h3>
+            ${(p.setup || []).length ? `<div class="pm-grid">${p.setup.map(motorCard).join("")}</div>` : `<p class="note">${p.mine ? "Ajoutez les moteurs que vous utilisez depuis « Modifier mon profil »." : "Aucun moteur partagé pour l'instant."}</p>`}</section>
+          ${p.likes && p.likes.length ? `<section class="card"><h3 class="pf-h">Moteurs aimés <small>${p.likes.length}</small></h3><div class="pm-grid small">${p.likes.map(motorCard).join("")}</div></section>` : ""}
+          <section class="card"><h3 class="pf-h">Derniers avis</h3>
+            ${(p.comments || []).length ? `<div class="pf-comments">${p.comments.map((c) => `<a class="pf-c" href="#m/${encodeURIComponent(c.ref)}"><span class="pf-c-m">${esc(motorName(c.ref))}</span><p>${esc(c.body.length > 220 ? c.body.slice(0, 220) + "…" : c.body)}</p><time>${when(c.at)}</time></a>`).join("")}</div>`
+              : `<p class="note">Pas encore d'avis publié.</p>`}</section>
+        </div>
+      </div></div>`;
+  }
+
+  // Edit page: profile, account and privacy
+  const P = { tab: "profil", setup: [], avatar: undefined, color: "" };
+  async function renderProfileEdit(tab) {
+    const v = $("view-profile");
+    v.hidden = false;
+    if (!C.user) { v.innerHTML = `<div class="pf-wrap"><section class="card"><p class="note">Connectez-vous pour modifier votre profil.</p><p><button type="button" class="btn-dark" data-login>Connexion</button></p></section></div>`; return; }
+    if (tab) P.tab = tab;
+    let p = {};
+    try { p = await get("profile", { id: C.user.id }); } catch (e) { /* profile not created yet */ }
+    P.setup = [...(p.setup || [])]; P.avatar = undefined; P.color = p.color || "";
+    const tabs = [["profil", "Profil"], ["compte", "Compte"], ["confidentialite", "Confidentialité"]];
+    const sel = (a, b) => (a === b ? " selected" : "");
+    v.innerHTML = `<div class="pf-wrap pf-editor">
+      <div class="pf-edit-top"><h1>Mon profil</h1><a class="ghost-btn" href="#u/${C.user.id}">Voir mon profil public →</a></div>
+      <div class="pf-tabs" role="tablist">${tabs.map(([k, l]) => `<button type="button" role="tab" data-pf-tab="${k}" aria-selected="${P.tab === k}">${l}</button>`).join("")}</div>
+
+      <form class="card pf-form" data-pf="profil" ${P.tab === "profil" ? "" : "hidden"}>
+        <div class="pf-av-edit">
+          <span id="pf-av-prev">${avatar({ ...C.user, color: P.color, avatar: C.user.avatar }, "xl")}</span>
+          <div>
+            <p class="pf-label">Photo de profil</p>
+            <label class="btn-dark pf-file">Choisir une image<input type="file" id="pf-file" accept="image/png,image/jpeg,image/webp" hidden></label>
+            <button type="button" class="ghost-btn" data-pf-noavatar>Retirer la photo</button>
+            <p class="pf-hint">PNG, JPEG ou WebP. Recadrée en carré et réduite automatiquement.</p>
+            <p class="pf-label">Couleur</p>
+            <div class="pf-colors">${COLORS.map((c) => `<button type="button" class="pf-color" data-pf-color="${c}" style="--c:${c}" aria-label="Couleur ${c}" aria-pressed="${P.color === c}"></button>`).join("")}</div>
+          </div>
+        </div>
+        <label>Présentation <span class="pf-count" data-for="bio">${(p.bio || "").length}/280</span><textarea name="bio" maxlength="280" rows="3" placeholder="Pilote FPV depuis 2019, freestyle et long range…">${esc(p.bio || "")}</textarea></label>
+        <div class="pf-2">
+          <label>Localisation<input name="location" maxlength="60" value="${esc(p.location || "")}" placeholder="Lyon, France"></label>
+          <label>Type de vol préféré<select name="flying"><option value="">—</option>${FLYING.map((f) => `<option${sel(p.flying, f)}>${esc(f)}</option>`).join("")}</select></label>
+        </div>
+        <div class="pf-3">
+          <label>Site web<input name="website" inputmode="url" maxlength="200" value="${esc(p.website || "")}" placeholder="monsite.fr"></label>
+          <label>YouTube<input name="youtube" inputmode="url" maxlength="200" value="${esc(p.youtube || "")}" placeholder="youtube.com/@pseudo"></label>
+          <label>Instagram<input name="instagram" inputmode="url" maxlength="200" value="${esc(p.instagram || "")}" placeholder="instagram.com/pseudo"></label>
+        </div>
+        <div class="pf-setup-edit">
+          <p class="pf-label">Mon setup <small>(8 moteurs au maximum)</small></p>
+          <div class="pf-setup-chips" id="pf-setup"></div>
+          <div class="pf-search"><input id="pf-motor-q" type="search" placeholder="Ajouter un moteur : marque, modèle, classe…" autocomplete="off"><div class="pf-results" id="pf-results" hidden></div></div>
+        </div>
+        <p class="m-error" role="alert" hidden></p>
+        <div class="pf-actions"><button class="btn-red" type="submit">Enregistrer le profil</button></div>
+      </form>
+
+      <form class="card pf-form" data-pf="compte" ${P.tab === "compte" ? "" : "hidden"} autocomplete="off">
+        <div class="pf-2">
+          <label>Pseudo<input name="name" minlength="2" maxlength="40" value="${esc(C.user.name)}" required></label>
+          <label>Adresse email<input name="email" type="email" maxlength="190" value="${esc(C.user.email || "")}" required></label>
+        </div>
+        <div class="pf-2">
+          <label>Nouveau mot de passe<input name="password" type="password" minlength="8" autocomplete="new-password" placeholder="Laisser vide pour ne pas changer"></label>
+          <label>Confirmer le nouveau mot de passe<input name="password2" type="password" minlength="8" autocomplete="new-password"></label>
+        </div>
+        <label>Mot de passe actuel <small>(obligatoire pour changer d'email ou de mot de passe)</small><input name="current" type="password" autocomplete="current-password"></label>
+        <p class="m-error" role="alert" hidden></p>
+        <div class="pf-actions"><button class="btn-red" type="submit">Enregistrer</button></div>
+      </form>
+      <form class="card pf-form pf-danger" data-pf="supprimer" ${P.tab === "compte" ? "" : "hidden"}>
+        <h3 class="pf-h">Supprimer mon compte</h3>
+        <p class="pf-hint">Vos « j'aime », votre profil et vos commentaires sont supprimés. Les corrections déjà validées restent dans le catalogue, sans votre nom. C'est définitif.</p>
+        <div class="pf-2">
+          <label>Tapez SUPPRIMER<input name="confirm" autocomplete="off" pattern="SUPPRIMER" required></label>
+          <label>Mot de passe actuel<input name="current" type="password" autocomplete="current-password"></label>
+        </div>
+        <p class="m-error" role="alert" hidden></p>
+        <div class="pf-actions"><button class="btn-danger" type="submit">Supprimer définitivement</button></div>
+      </form>
+
+      <form class="card pf-form" data-pf="confidentialite" ${P.tab === "confidentialite" ? "" : "hidden"}>
+        <label class="pf-toggle"><input type="checkbox" name="is_public" ${p.is_public === false ? "" : "checked"}><span><b>Profil public</b><small>Visible par tous les visiteurs. Décoché, seuls vous et la modération le voyez.</small></span></label>
+        <label class="pf-toggle"><input type="checkbox" name="show_likes" ${p.show_likes === false ? "" : "checked"}><span><b>Afficher mes « j'aime »</b><small>Les moteurs que vous avez aimés apparaissent sur votre profil.</small></span></label>
+        <p class="m-error" role="alert" hidden></p>
+        <div class="pf-actions"><button class="btn-red" type="submit">Enregistrer</button></div>
+      </form>
+    </div>`;
+    P.profile = p;
+    drawSetup();
+  }
+  function drawSetup() {
+    const el = $("pf-setup");
+    if (!el) return;
+    el.innerHTML = P.setup.length ? P.setup.map((r) => `<span class="pf-chip">${esc(motorName(r))}<button type="button" data-pf-rm="${esc(r)}" aria-label="Retirer">✕</button></span>`).join("")
+      : `<span class="pf-hint">Aucun moteur pour l'instant.</span>`;
+  }
+  function searchMotors(qv) {
+    const box = $("pf-results");
+    const words = qv.toLowerCase().split(/\s+/).filter(Boolean);
+    if (!words.length) { box.hidden = true; return; }
+    const seen = new Set(), hits = [];
+    for (const m of MM().state.motors) {
+      const hay = `${m.MARQUE} ${m.NOM} ${m.CLASSE} ${m.KV}KV`.toLowerCase();
+      if (words.every((w) => hay.includes(w)) && !seen.has(m.REF)) { seen.add(m.REF); hits.push(m); if (hits.length >= 8) break; }
+    }
+    box.innerHTML = hits.length ? hits.map((m) => `<button type="button" data-pf-add="${esc(m.REF)}">${MM().brandMark(m)}<span>${esc(m.NOM || m.REF)}${m.KV ? ` · ${esc(m.KV)} KV` : ""}</span></button>`).join("") : `<p class="pf-hint">Aucun moteur trouvé.</p>`;
+    box.hidden = false;
+  }
+  // Square crop, 256 px, WebP (JPEG where WebP is not supported)
+  function readAvatar(file) {
+    return new Promise((resolve, reject) => {
+      if (!/^image\/(png|jpeg|webp)$/.test(file.type)) return reject(new Error("Image refusée : PNG, JPEG ou WebP uniquement."));
+      const img = new Image(), url = URL.createObjectURL(file);
+      img.onload = () => {
+        const side = Math.min(img.width, img.height), c = document.createElement("canvas");
+        c.width = c.height = 256;
+        c.getContext("2d").drawImage(img, (img.width - side) / 2, (img.height - side) / 2, side, side, 0, 0, 256, 256);
+        URL.revokeObjectURL(url);
+        let d = c.toDataURL("image/webp", 0.85);
+        if (!d.startsWith("data:image/webp")) d = c.toDataURL("image/jpeg", 0.85);
+        resolve(d);
+      };
+      img.onerror = () => reject(new Error("Image illisible."));
+      img.src = url;
+    });
+  }
+  const refreshAvatarPreview = () => {
+    const prev = $("pf-av-prev");
+    if (prev) prev.innerHTML = avatar({ ...C.user, color: P.color, avatar: P.avatar === undefined ? C.user.avatar : P.avatar }, "xl");
+  };
+
   // ---------------------------------------------------------------- routing
   hooks.route = (h) => {
-    ["view-actus", "view-admin"].forEach((id) => ($(id).hidden = true));
+    ["view-actus", "view-admin", "view-profile"].forEach((id) => ($(id).hidden = true));
+    if (/^#u\/\d+$/.test(h)) { renderProfile(+h.slice(3)); window.scrollTo(0, 0); return true; }
+    if (/^#profil(\/\w+)?$/.test(h)) { renderProfileEdit(h.split("/")[1]); window.scrollTo(0, 0); return true; }
     if (h === "#actus") { renderActus(); window.scrollTo(0, 0); return true; }
     if (h === "#admin") { renderAdmin(); window.scrollTo(0, 0); return true; }
     if (h.startsWith("#reset/")) {
@@ -413,6 +665,7 @@
   };
   function refreshCurrent() {
     if (location.hash === "#admin") return renderAdmin();
+    if (/^#(u\/\d+|profil)/.test(location.hash)) return hooks.route(location.hash);
     if (location.hash.startsWith("#m/")) MM().rerender();
   }
 
@@ -450,6 +703,24 @@
       catch (e) { toast(e.message, "bad"); }
       return location.hash === "#admin" ? renderAdmin("comments") : loadSocial($("detail").dataset.ref);
     }
+    const pt = t.closest("[data-pf-tab]");
+    if (pt) {
+      P.tab = pt.dataset.pfTab;
+      document.querySelectorAll("[data-pf-tab]").forEach((b) => b.setAttribute("aria-selected", String(b === pt)));
+      document.querySelectorAll("[data-pf]").forEach((f) => (f.hidden = !(f.dataset.pf === P.tab || (P.tab === "compte" && f.dataset.pf === "supprimer"))));
+      return;
+    }
+    const pc = t.closest("[data-pf-color]");
+    if (pc) { P.color = pc.dataset.pfColor; document.querySelectorAll("[data-pf-color]").forEach((b) => b.setAttribute("aria-pressed", String(b === pc))); return refreshAvatarPreview(); }
+    if (t.closest("[data-pf-noavatar]")) { P.avatar = ""; return refreshAvatarPreview(); }
+    const pa = t.closest("[data-pf-add]");
+    if (pa) {
+      if (P.setup.length >= 8) return toast("8 moteurs au maximum dans votre setup.", "bad");
+      if (!P.setup.includes(pa.dataset.pfAdd)) P.setup.push(pa.dataset.pfAdd);
+      $("pf-motor-q").value = ""; $("pf-results").hidden = true; return drawSetup();
+    }
+    const pr = t.closest("[data-pf-rm]"); if (pr) { P.setup = P.setup.filter((r) => r !== pr.dataset.pfRm); return drawSetup(); }
+    if (!t.closest(".pf-search") && $("pf-results")) $("pf-results").hidden = true;
     const tb = t.closest("[data-admin-tab]"); if (tb) return renderAdmin(tb.dataset.adminTab);
     const st = t.closest("[data-admin-status]"); if (st) return renderAdmin("suggestions", st.dataset.adminStatus);
     const dc = t.closest("[data-decide]");
@@ -478,14 +749,23 @@
     if (af) { document.querySelectorAll("[data-actus]").forEach((b) => b.setAttribute("aria-selected", String(b === af))); drawFeed(af.dataset.actus); }
   });
 
+  document.addEventListener("input", (ev) => {
+    if (ev.target.id === "pf-motor-q") searchMotors(ev.target.value);
+    if (ev.target.name === "bio" && ev.target.closest("[data-pf]")) document.querySelector('.pf-count[data-for="bio"]').textContent = `${ev.target.value.length}/280`;
+  });
   document.addEventListener("change", async (ev) => {
+    if (ev.target.id === "pf-file" && ev.target.files[0]) {
+      try { P.avatar = await readAvatar(ev.target.files[0]); refreshAvatarPreview(); } catch (e) { toast(e.message, "bad"); }
+      ev.target.value = "";
+      return;
+    }
     const r = ev.target.closest("[data-role]");
     if (r) { try { await api("user_update", { id: r.closest("tr").dataset.uid, role: r.value }); toast("Rôle modifié.", "good"); } catch (e) { toast(e.message, "bad"); } }
   });
 
   document.addEventListener("submit", async (ev) => {
     const f = ev.target;
-    if (!f.matches("[data-auth], [data-suggest-form], [data-comment], [data-reset], [data-news-form]")) return;
+    if (!f.matches("[data-auth], [data-suggest-form], [data-comment], [data-reset], [data-news-form], [data-pf]")) return;
     ev.preventDefault();
     const d = formData(f);
     const btn = f.querySelector("[type=submit]");
@@ -506,6 +786,29 @@
       } else if (f.dataset.reset) {
         const r = await api("reset", { token: f.dataset.reset, password: d.password });
         C.user = r.user; afterLogin(r.message);
+      } else if (f.dataset.pf) {
+        const p = P.profile || {};
+        let r;
+        if (f.dataset.pf === "compte") {
+          if (d.password && d.password !== d.password2) throw new Error("Les deux nouveaux mots de passe ne correspondent pas.");
+          r = await api("account_update", { name: d.name, email: d.email, password: d.password, current: d.current });
+          f.password.value = f.password2.value = f.current.value = "";
+        } else if (f.dataset.pf === "supprimer") {
+          r = await api("account_delete", { confirm: d.confirm, current: d.current });
+          C.user = null; renderAccount(); toast(r.message, "good"); location.hash = "#"; return;
+        } else {
+          // Profile and privacy are saved together: each form sends the other one's current values
+          const src = f.dataset.pf === "profil" ? d : { bio: p.bio, location: p.location, flying: p.flying, website: p.website, youtube: p.youtube, instagram: p.instagram };
+          const priv = f.dataset.pf === "confidentialite" ? { is_public: f.is_public.checked ? "1" : "0", show_likes: f.show_likes.checked ? "1" : "0" }
+            : { is_public: p.is_public === false ? "0" : "1", show_likes: p.show_likes === false ? "0" : "1" };
+          const payload = { ...src, ...priv, color: P.color, setup: P.setup };
+          if (P.avatar !== undefined && f.dataset.pf === "profil") payload.avatar = P.avatar;
+          r = await api("profile_save", payload);
+          P.profile = { ...p, ...src, is_public: priv.is_public !== "0", show_likes: priv.show_likes !== "0", color: P.color, setup: P.setup };
+          P.avatar = undefined;
+        }
+        if (r.user) { C.user = r.user; renderAccount(); refreshAvatarPreview(); }
+        toast(r.message, "good");
       } else if (f.matches("[data-news-form]")) {
         await api("news_save", { id: d.id, title: d.title, body: d.body, published: f.published.checked ? "1" : "0" });
         toast("Actualité enregistrée.", "good");

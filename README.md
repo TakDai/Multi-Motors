@@ -214,6 +214,7 @@ Au déploiement, `tools/make_config.py` écrit `api/config.php` à partir de ces
 ### Fonctionnement
 
 - **Comptes** : email + mot de passe (lien de confirmation par email, mot de passe oublié) ou Google.
+- **Profils** : chaque membre a une page publique (`#u/ID`) avec photo ou initiales sur une couleur, présentation, localisation, type de vol, liens (site, YouTube, Instagram), badges gagnés (contributeur, avis, setup partagé…), statistiques, « Mon setup » (jusqu'à 8 moteurs du catalogue), moteurs aimés et derniers avis. La page **Modifier mon profil** (`#profil`) permet aussi de changer de pseudo, d'email ou de mot de passe, de rendre son profil privé, de masquer ses « j'aime » et de supprimer son compte. Les photos sont recadrées et réduites dans le navigateur, puis vérifiées par le serveur (PNG, JPEG ou WebP, 200 Ko au maximum). La table `profiles` est créée automatiquement.
 - **J'aime** et **commentaires** par moteur ; l'onglet « Best-seller » trie par nombre de j'aime.
 - **Suggestions de modification** : un membre propose une nouvelle valeur (avec sa source) ; un modérateur la valide (éventuellement corrigée) ou la refuse depuis **#admin**. Validée, elle s'affiche tout de suite sur la fiche (« Corrigé par la communauté ») et la tâche quotidienne l'intègre au catalogue (`tools/community_sync.py`).
 - **Panneau d'administration** (`#admin`) : suggestions, commentaires (masquer / supprimer), membres (rôles modérateur / admin, suspension), actualités du site.

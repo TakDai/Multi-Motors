@@ -20,7 +20,9 @@ $post = $_SERVER['REQUEST_METHOD'] === 'POST';
 if ($post && ($_SERVER['HTTP_X_MM'] ?? '') !== '1') fail('Requête refusée.', 403);
 
 try {
+    // Tables added after the first install (profiles) are created on the fly too
     db()->query('SELECT 1 FROM users LIMIT 1');
+    db()->query('SELECT 1 FROM profiles LIMIT 1');
 } catch (PDOException $e) {
     install_schema();
 }
@@ -36,15 +38,43 @@ function valid_email(string $e): bool { return (bool) filter_var($e, FILTER_VALI
 function user_names(array $ids): array {
     if (!$ids) return [];
     $ids = array_values(array_unique(array_map('intval', $ids)));
-    $rows = q('SELECT id, name, role FROM users WHERE id IN (' . implode(',', array_fill(0, count($ids), '?')) . ')', $ids)->fetchAll();
+    $rows = q('SELECT u.id, u.name, u.role, p.color, p.avatar_v, (p.avatar IS NOT NULL) AS has_avatar FROM users u LEFT JOIN profiles p ON p.user_id = u.id WHERE u.id IN ('
+        . implode(',', array_fill(0, count($ids), '?')) . ')', $ids)->fetchAll();
     return array_column($rows, null, 'id');
+}
+
+// Avatar address (served by ?action=avatar, cached by version) or '' for the initials
+function avatar_url(array $u): string {
+    return !empty($u['has_avatar']) ? 'api/index.php?action=avatar&id=' . (int) $u['id'] . '&v=' . (int) ($u['avatar_v'] ?? 0) : '';
+}
+
+const FLYING = ['Racing', 'Freestyle', 'Long Range', 'Cinematic', 'Cinewhoop', 'Toothpick', 'Whoop', 'Aile volante', 'Avion', 'Hélicoptère'];
+const COLORS = ['#111111', '#ff5757', '#ff9f1c', '#2ec4b6', '#3a86ff', '#8338ec', '#06a77d', '#e63973'];
+
+function clean_url(string $v, string $host = ''): string {
+    if ($v === '') return '';
+    if (!preg_match('~^https?://~i', $v)) $v = 'https://' . $v;
+    $p = parse_url($v);
+    if (!filter_var($v, FILTER_VALIDATE_URL) || empty($p['host']) || !in_array(strtolower($p['scheme'] ?? ''), ['http', 'https'], true)) fail('Lien invalide : ' . $v);
+    if ($host !== '' && !preg_match('~(^|\.)' . preg_quote($host, '~') . '$~i', $p['host'])) fail("Le lien doit mener à $host.");
+    return mb_substr($v, 0, 200);
+}
+
+function profile_row(int $id): array {
+    return q('SELECT * FROM profiles WHERE user_id = ?', [$id])->fetch() ?: [];
+}
+
+function me_payload(?array $u): ?array {
+    if (!$u) return null;
+    $p = profile_row((int) $u['id']);
+    return public_user($u) + ['color' => $p['color'] ?? '', 'avatar' => avatar_url(['id' => $u['id'], 'has_avatar' => !empty($p['avatar']), 'avatar_v' => $p['avatar_v'] ?? 0])];
 }
 
 switch ($action) {
 
 // ---------------------------------------------------------------- accounts
 case 'me':
-    out(['user' => public_user(current_user()), 'google_client_id' => cfg('google_client_id', '')]);
+    out(['user' => me_payload(current_user()), 'google_client_id' => cfg('google_client_id', '')]);
 
 case 'register':
     if (!$post) fail('POST attendu.', 405);
@@ -64,7 +94,7 @@ case 'register':
     send_mail($email, 'Confirmez votre compte Multi-Motors',
         "Bonjour $name,\n\nConfirmez votre adresse pour activer votre compte :\n$link\n\nÀ bientôt sur Multi-Motors.");
     login_as((int) db()->lastInsertId());
-    out(['user' => public_user(current_user()), 'message' => 'Compte créé. Un lien de confirmation vous a été envoyé par email.']);
+    out(['user' => me_payload(current_user()), 'message' => 'Compte créé. Un lien de confirmation vous a été envoyé par email.']);
 
 case 'verify':
     $tok = arg('token', 64);
@@ -84,7 +114,7 @@ case 'login':
     if (!$u || !$u['pass_hash'] || !password_verify((string) (body()['password'] ?? ''), $u['pass_hash'])) fail('Email ou mot de passe incorrect.', 401);
     if ($u['banned']) fail('Ce compte a été suspendu.', 403);
     login_as((int) $u['id']);
-    out(['user' => public_user(current_user())]);
+    out(['user' => me_payload(current_user())]);
 
 case 'logout':
     start_session();
@@ -114,7 +144,7 @@ case 'google':
         $id = (int) db()->lastInsertId();
     }
     login_as($id);
-    out(['user' => public_user(current_user())]);
+    out(['user' => me_payload(current_user())]);
 
 case 'forgot':
     if (!$post) fail('POST attendu.', 405);
@@ -138,7 +168,7 @@ case 'reset':
     if (!$u) fail('Lien expiré ou invalide.');
     q('UPDATE users SET pass_hash = ?, reset_token = NULL, reset_until = NULL, verified = 1 WHERE id = ?', [password_hash($pass, PASSWORD_DEFAULT), $u['id']]);
     login_as((int) $u['id']);
-    out(['user' => public_user(current_user()), 'message' => 'Mot de passe modifié.']);
+    out(['user' => me_payload(current_user()), 'message' => 'Mot de passe modifié.']);
 
 // ------------------------------------------------------------ public reads
 case 'motor':
@@ -153,6 +183,8 @@ case 'motor':
     $comments = array_map(fn ($c) => [
         'id' => (int) $c['id'], 'body' => $c['body'], 'status' => $c['status'], 'at' => $c['created_at'],
         'author' => $names[$c['user_id']]['name'] ?? 'Membre', 'role' => $names[$c['user_id']]['role'] ?? 'user',
+        'uid' => isset($names[$c['user_id']]) ? (int) $c['user_id'] : 0, 'color' => $names[$c['user_id']]['color'] ?? '',
+        'avatar' => isset($names[$c['user_id']]) ? avatar_url($names[$c['user_id']]) : '',
         'mine' => $me && (int) $c['user_id'] === (int) $me['id'],
     ], $rows);
     $pending = (int) q("SELECT COUNT(*) FROM suggestions WHERE ref = ? AND status = 'pending'", [$ref])->fetchColumn();
@@ -175,6 +207,141 @@ case 'news':
     $names = user_names(array_column($rows, 'author_id'));
     out(array_map(fn ($n) => ['id' => (int) $n['id'], 'title' => $n['title'], 'body' => $n['body'], 'at' => $n['created_at'],
         'author' => $names[$n['author_id']]['name'] ?? 'Multi-Motors'], $rows));
+
+// ---------------------------------------------------------------- profiles
+case 'profile':
+    // Public page of a member (the owner and the moderation always see it)
+    $id = (int) arg('id');
+    $u = q('SELECT id, name, role, created_at, banned FROM users WHERE id = ?', [$id])->fetch();
+    if (!$u || $u['banned']) fail('Ce membre n\'existe pas ou plus.', 404);
+    $me = current_user();
+    $p = profile_row($id);
+    $mine = $me && (int) $me['id'] === $id;
+    $public = ($p['is_public'] ?? 1) || $mine || ($me && $me['role'] !== 'user');
+    $base = ['id' => $id, 'name' => $u['name'], 'role' => $u['role'], 'since' => $u['created_at'], 'mine' => $mine,
+        'color' => $p['color'] ?? '', 'avatar' => avatar_url(['id' => $id, 'has_avatar' => !empty($p['avatar']), 'avatar_v' => $p['avatar_v'] ?? 0])];
+    if (!$public) out($base + ['private' => true]);
+    $stats = [
+        'comments' => (int) q("SELECT COUNT(*) FROM comments WHERE user_id = ? AND status = 'visible'", [$id])->fetchColumn(),
+        'approved' => (int) q("SELECT COUNT(*) FROM suggestions WHERE user_id = ? AND status = 'approved'", [$id])->fetchColumn(),
+        'suggestions' => (int) q('SELECT COUNT(*) FROM suggestions WHERE user_id = ?', [$id])->fetchColumn(),
+        'likes' => (int) q('SELECT COUNT(*) FROM likes WHERE user_id = ?', [$id])->fetchColumn(),
+    ];
+    $comments = q("SELECT id, ref, body, created_at AS at FROM comments WHERE user_id = ? AND status = 'visible' ORDER BY id DESC LIMIT 10", [$id])->fetchAll();
+    $likes = ($p['show_likes'] ?? 1) || $mine ? array_column(q('SELECT ref FROM likes WHERE user_id = ? ORDER BY created_at DESC LIMIT 24', [$id])->fetchAll(), 'ref') : [];
+    out($base + [
+        'bio' => $p['bio'] ?? '', 'location' => $p['location'] ?? '', 'website' => $p['website'] ?? '', 'youtube' => $p['youtube'] ?? '',
+        'instagram' => $p['instagram'] ?? '', 'flying' => $p['flying'] ?? '', 'setup' => json_decode($p['setup'] ?? '[]', true) ?: [],
+        'is_public' => (bool) ($p['is_public'] ?? 1), 'show_likes' => (bool) ($p['show_likes'] ?? 1),
+        'stats' => $stats, 'comments' => $comments, 'likes' => $likes,
+    ]);
+
+case 'avatar':
+    $row = q('SELECT avatar FROM profiles WHERE user_id = ?', [(int) arg('id')])->fetch();
+    if (!$row || !preg_match('~^data:(image/(?:png|jpeg|webp));base64,([A-Za-z0-9+/=]+)$~', (string) $row['avatar'], $m)) { http_response_code(404); exit; }
+    header('Content-Type: ' . $m[1]);
+    header('X-Content-Type-Options: nosniff');
+    header('Cache-Control: public, max-age=604800');
+    echo base64_decode($m[2]);
+    exit;
+
+case 'profile_save':
+    if (!$post) fail('POST attendu.', 405);
+    $u = require_user();
+    $b = body();
+    $old = profile_row((int) $u['id']);
+    $flying = arg('flying', 30);
+    if ($flying !== '' && !in_array($flying, FLYING, true)) fail('Type de vol inconnu.');
+    $color = arg('color', 7);
+    if ($color !== '' && !in_array($color, COLORS, true)) fail('Couleur inconnue.');
+    $setup = array_values(array_unique(array_filter(array_map(fn ($r) => mb_substr(trim((string) $r), 0, 64), is_array($b['setup'] ?? null) ? $b['setup'] : []),
+        fn ($r) => $r !== '' && !preg_match('/[\s<>"\']/', $r))));
+    if (count($setup) > 8) fail('8 moteurs au maximum dans votre setup.');
+    $avatar = $old['avatar'] ?? null;
+    $version = (int) ($old['avatar_v'] ?? 0);
+    if (array_key_exists('avatar', $b)) {
+        $a = (string) $b['avatar'];
+        if ($a === '') {
+            $avatar = null;
+        } else {
+            // Only small PNG / JPEG / WebP images, checked as real images
+            if (!preg_match('~^data:image/(png|jpeg|webp);base64,([A-Za-z0-9+/=]+)$~', $a, $m)) fail('Image refusée : PNG, JPEG ou WebP uniquement.');
+            $bin = base64_decode($m[2], true);
+            if ($bin === false || strlen($bin) > 200000) fail('Image trop lourde (200 Ko au maximum).');
+            $info = @getimagesizefromstring($bin);
+            if (!$info || $info[0] > 1024 || $info[1] > 1024 || !in_array($info['mime'], ['image/png', 'image/jpeg', 'image/webp'], true)) fail('Image illisible ou trop grande.');
+            $avatar = 'data:' . $info['mime'] . ';base64,' . base64_encode($bin);
+        }
+        $version++;
+    }
+    // Only the fields sent are changed; the others keep their saved value
+    $keep = fn (string $k, $new, string $col = '') => array_key_exists($k, $b) ? $new : ($old[$col ?: $k] ?? null);
+    $vals = [$keep('bio', arg('bio', 280)), $keep('location', arg('location', 60)), $keep('website', clean_url(arg('website', 200))),
+        $keep('youtube', clean_url(arg('youtube', 200), 'youtube.com')), $keep('instagram', clean_url(arg('instagram', 200), 'instagram.com')),
+        $keep('color', $color ?: null), $avatar, $version, $keep('setup', json_encode($setup)), $keep('flying', $flying ?: null),
+        $keep('is_public', arg('is_public') === '0' ? 0 : 1) ?? 1, $keep('show_likes', arg('show_likes') === '0' ? 0 : 1) ?? 1, now()];
+    if ($old) {
+        q('UPDATE profiles SET bio = ?, location = ?, website = ?, youtube = ?, instagram = ?, color = ?, avatar = ?, avatar_v = ?, setup = ?, flying = ?, is_public = ?, show_likes = ?, updated_at = ? WHERE user_id = ?',
+            array_merge($vals, [$u['id']]));
+    } else {
+        q('INSERT INTO profiles (bio, location, website, youtube, instagram, color, avatar, avatar_v, setup, flying, is_public, show_likes, updated_at, user_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+            array_merge($vals, [$u['id']]));
+    }
+    out(['user' => me_payload(current_user()), 'message' => 'Profil enregistré.']);
+
+case 'account_update':
+    if (!$post) fail('POST attendu.', 405);
+    $u = current_user();
+    if (!$u) fail('Connectez-vous pour faire cela.', 401);
+    $full = q('SELECT pass_hash, email FROM users WHERE id = ?', [$u['id']])->fetch();
+    $pass = (string) (body()['current'] ?? '');
+    $checkPass = function () use ($full, $pass) {
+        if ($full['pass_hash'] && !password_verify($pass, $full['pass_hash'])) fail('Mot de passe actuel incorrect.', 403);
+    };
+    throttle('account', (string) $u['id'], 10, 15);
+    $msg = [];
+    $name = arg('name', 40);
+    if ($name !== '' && $name !== $u['name']) {
+        if (mb_strlen($name) < 2) fail('Choisissez un pseudo d\'au moins 2 caractères.');
+        q('UPDATE users SET name = ? WHERE id = ?', [$name, $u['id']]);
+        $msg[] = 'Pseudo modifié.';
+    }
+    $email = mb_strtolower(arg('email', 190));
+    if ($email !== '' && $email !== $full['email']) {
+        $checkPass();
+        if (!valid_email($email)) fail('Adresse email invalide.');
+        if (q('SELECT id FROM users WHERE email = ? AND id <> ?', [$email, $u['id']])->fetch()) fail('Cette adresse est déjà utilisée.');
+        $tok = token();
+        q('UPDATE users SET email = ?, verified = 0, verify_token = ? WHERE id = ?', [$email, $tok, $u['id']]);
+        send_mail($email, 'Confirmez votre nouvelle adresse Multi-Motors', "Bonjour,\n\nConfirmez votre nouvelle adresse :\n"
+            . rtrim((string) cfg('site_url'), '/') . '/api/index.php?action=verify&token=' . $tok . "\n");
+        $msg[] = 'Adresse modifiée : confirmez-la avec le lien envoyé par email.';
+    }
+    $new = (string) (body()['password'] ?? '');
+    if ($new !== '') {
+        $checkPass();
+        if (strlen($new) < 8) fail('Le nouveau mot de passe doit faire au moins 8 caractères.');
+        q('UPDATE users SET pass_hash = ? WHERE id = ?', [password_hash($new, PASSWORD_DEFAULT), $u['id']]);
+        $msg[] = 'Mot de passe modifié.';
+    }
+    out(['user' => me_payload(current_user()), 'message' => $msg ? implode(' ', $msg) : 'Rien à modifier.']);
+
+case 'account_delete':
+    if (!$post) fail('POST attendu.', 405);
+    $u = current_user();
+    if (!$u) fail('Connectez-vous pour faire cela.', 401);
+    if (arg('confirm') !== 'SUPPRIMER') fail('Tapez SUPPRIMER pour confirmer.');
+    $full = q('SELECT pass_hash FROM users WHERE id = ?', [$u['id']])->fetch();
+    if ($full['pass_hash'] && !password_verify((string) (body()['current'] ?? ''), $full['pass_hash'])) fail('Mot de passe incorrect.', 403);
+    // Likes and profile go; comments are removed; validated corrections stay in the catalogue, without a name
+    q('DELETE FROM likes WHERE user_id = ?', [$u['id']]);
+    q('DELETE FROM profiles WHERE user_id = ?', [$u['id']]);
+    q("UPDATE comments SET status = 'deleted' WHERE user_id = ?", [$u['id']]);
+    q('DELETE FROM users WHERE id = ?', [$u['id']]);
+    start_session();
+    $_SESSION = [];
+    session_destroy();
+    out(['user' => null, 'message' => 'Votre compte a été supprimé.']);
 
 // --------------------------------------------------------- member actions
 case 'like':
