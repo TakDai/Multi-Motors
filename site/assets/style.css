@@ -1416,3 +1416,24 @@ html, body { overflow-x: hidden; }
 @keyframes page-fade { from { opacity: 0; } to { opacity: 1; } }
 /* Touch screens: a tap on the logo gives the same tilt */
 @media (hover: none) { .site-logo:active img { transform: rotate(-10deg) scale(1.08); transition-duration: .2s; } }
+
+/* --- Validating a search: the page glides down to the results ------------- */
+#app.searching .screen { animation: search-away 1s cubic-bezier(.5, 0, .2, 1) both; }
+#app.searching .sep { transform-origin: 50% 50%; animation: sep-draw .8s cubic-bezier(.2, .8, .2, 1) .35s both; }
+#app.searching .count { animation: count-pop .5s cubic-bezier(.3, 1.5, .5, 1) .6s both; }
+#app.searching #rows .row { animation: fade-up .55s cubic-bezier(.2, .8, .2, 1) both; animation-delay: calc(.55s + var(--i, 0) * 60ms); }
+@keyframes search-away { 0% { opacity: 1; transform: none; } 45% { opacity: .35; transform: scale(.97) translateY(-12px); } 100% { opacity: 1; transform: none; } }
+@keyframes sep-draw { from { transform: scaleX(0); opacity: 0; } to { transform: none; opacity: 1; } }
+@keyframes count-pop { from { opacity: 0; transform: translateY(8px) scale(.9); } to { opacity: 1; transform: none; } }
+@media (prefers-reduced-motion: reduce) {
+  #app.searching .screen, #app.searching .sep { animation: none !important; }
+  #app.searching .count, #app.searching #rows .row { animation: page-fade .4s ease both !important; }
+}
+
+/* --- Motor page: the brand logo above the motor name ------------------------ */
+.d-top { flex-direction: column; gap: 6px; }
+.d-top .logo, .d-top .brand-word { position: static; animation: fade-up .5s cubic-bezier(.2, .8, .2, 1) both; }
+.d-top h1 { padding-inline: 0; }
+.d-top .logo img.brand-logo { width: auto; height: 46px; max-width: 200px; max-height: none; object-fit: contain; }
+/* The T-Motor drawing of the mockup has transparent margins: shown whole, margins taken back */
+.d-top .logo img:not(.brand-logo) { width: 200px; height: auto; object-fit: contain; margin: -17px 0 -13px; }

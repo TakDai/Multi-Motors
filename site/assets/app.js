@@ -1101,6 +1101,30 @@
     }
 
     buildSuggestions();
+    // Validating a search: an eased scroll down to the results, the search screen fading away above,
+    // then the separator line, the count and the cards come in (see .searching in style.css)
+    function searchScroll() {
+      const target = $("sep").getBoundingClientRect().top + scrollY;
+      const from = scrollY, dist = target - from, app = $("app");
+      app.classList.remove("searching"); void app.offsetWidth; app.classList.add("searching");
+      setTimeout(() => app.classList.remove("searching"), 1600);
+      if (matchMedia("(prefers-reduced-motion: reduce)").matches || Math.abs(dist) < 4) return scrollTo(0, target);
+      const html = document.documentElement, prev = html.style.scrollBehavior;
+      html.style.scrollBehavior = "auto";
+      const dur = Math.min(1100, 500 + Math.abs(dist) * 0.5), t0 = performance.now();
+      const ease = (t) => (t < 0.5 ? 4 * t * t * t : 1 - (-2 * t + 2) ** 3 / 2);
+      let stop = false;
+      const cancel = () => { stop = true; };
+      addEventListener("wheel", cancel, { once: true, passive: true });
+      addEventListener("touchstart", cancel, { once: true, passive: true });
+      const step = (now) => {
+        const t = Math.min(1, (now - t0) / dur);
+        if (!stop) scrollTo(0, from + dist * ease(t));
+        if (t < 1 && !stop) requestAnimationFrame(step);
+        else { html.style.scrollBehavior = prev; removeEventListener("wheel", cancel); removeEventListener("touchstart", cancel); }
+      };
+      requestAnimationFrame(step);
+    }
     const refresh = () => { readFilters(); state.shown = PAGE; advSummary(); renderList(); };
     buildAdv(refresh);
     ["spec-form", "adv"].forEach((id) => { $(id).addEventListener("input", refresh); $(id).addEventListener("change", refresh); });
@@ -1113,7 +1137,7 @@
       $("liste").hidden = false;
       $("liste").classList.add("reveal");
       refresh();
-      $("sep").scrollIntoView({ block: "start" });
+      searchScroll();
     });
     $("q").addEventListener("input", (ev) => { state.q = ev.target.value.trim(); state.shown = PAGE; renderList(); });
     $("sort").addEventListener("change", (ev) => { state.sort = ev.target.value; renderList(); });
