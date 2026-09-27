@@ -1,0 +1,5 @@
+# Only index.php is public; configuration and helpers are never served
+<FilesMatch "^(config|config\.sample|lib|schema)\.php$|\.(sqlite|db|log)$">
+  Require all denied
+</FilesMatch>
+Options -Indexes

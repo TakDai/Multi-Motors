@@ -1,0 +1,2 @@
+Site Multi-Motors prêt à servir, généré automatiquement depuis la branche Moteurs (bdca55f).
+Ne pas modifier ici : les changements sont écrasés à chaque mise à jour.
