@@ -2,7 +2,9 @@
 
 Source: the IMG column, or else the first photo of the motor's family
 (site/data/photos.json). The empty background around the motor is cut away and
-the motor is centred on a white square, so every card shows it at the same size.
+the motor is centred on a square, so every card shows it at the same size; a plain
+light background is made transparent (only the part connected to the edges, so the
+white parts of the motor stay), which lets the motor sit on any card colour.
 The site then shows the photo from our own server instead of hot-linking the
 shop (links break, some shops block it). site/data/thumbs.json maps REF -> file;
 thumbnails no longer used are deleted.
@@ -13,7 +15,7 @@ import csv, hashlib, io, json, sys
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 import requests
-from PIL import Image
+from PIL import Image, ImageDraw, ImageFilter
 
 ROOT = Path(__file__).resolve().parent.parent
 OUT = ROOT / "site" / "assets" / "motors"
@@ -21,7 +23,7 @@ MAP = ROOT / "site" / "data" / "thumbs.json"
 UA = {"User-Agent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 Chrome/124 Safari/537.36"}
 
 
-VERSION = "v2"  # bump when the processing changes: every thumbnail is made again
+VERSION = "v3"  # bump when the processing changes: every thumbnail is made again
 
 
 def name_for(url):
@@ -51,10 +53,40 @@ def frame(im, size=360, margin=0.08):
         box = mask.getbbox()
         if box and (box[2] - box[0]) * (box[3] - box[1]) > 0.02 * w * h:
             rgb = rgb.crop((max(0, box[0] - step), max(0, box[1] - step), min(w, box[2] + step), min(h, box[3] + step)))
+    plain = max(max(c) - min(c) for c in zip(*corners)) < 40
     side = int(max(rgb.size) * (1 + 2 * margin))
-    canvas = Image.new("RGB", (side, side), (255, 255, 255) if sum(bg) > 600 else bg)
+    canvas = Image.new("RGB", (side, side), bg if plain else (255, 255, 255))
     canvas.paste(rgb, ((side - rgb.width) // 2, (side - rgb.height) // 2))
-    return canvas.resize((size, size), Image.LANCZOS)
+    canvas = canvas.resize((size, size), Image.LANCZOS)
+    if not (plain and sum(bg) > 600):
+        return canvas
+    return cut_background(canvas, bg)
+
+
+def cut_background(im, bg, tol=18):
+    """Light plain background -> transparent: pixels close to the background colour
+    that are connected to the edges of the picture (flood fill), edges softened."""
+    w, h = im.size
+    px = im.load()
+    near = Image.new("L", (w, h), 0)
+    npx = near.load()
+    for y in range(h):
+        for x in range(w):
+            r, g, b = px[x, y]
+            if max(abs(r - bg[0]), abs(g - bg[1]), abs(b - bg[2])) <= tol:
+                npx[x, y] = 255
+    for x in range(0, w, 6):
+        for y in (0, h - 1):
+            if npx[x, y] == 255:
+                ImageDraw.floodfill(near, (x, y), 128)
+    for y in range(0, h, 6):
+        for x in (0, w - 1):
+            if npx[x, y] == 255:
+                ImageDraw.floodfill(near, (x, y), 128)
+    alpha = near.point(lambda v: 0 if v == 128 else 255).filter(ImageFilter.GaussianBlur(0.7))
+    out = im.convert("RGBA")
+    out.putalpha(alpha)
+    return out
 
 
 def fetch(url):
