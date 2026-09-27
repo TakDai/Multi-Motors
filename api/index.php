@@ -2,6 +2,12 @@
 // Multi-Motors community API: accounts, likes, comments, change suggestions,
 // moderation and site news. One endpoint: api/index.php?action=<name>
 declare(strict_types=1);
+if (PHP_VERSION_ID < 80100) {
+    http_response_code(500);
+    header('Content-Type: application/json; charset=utf-8');
+    echo json_encode(['error' => 'PHP ' . PHP_VERSION . ' est trop ancien : il faut PHP 8.1 ou plus (fichier .ovhconfig du site).']);
+    exit;
+}
 require __DIR__ . '/lib.php';
 require __DIR__ . '/schema.php';
 
@@ -10,7 +16,28 @@ const FIELDS = ['NOM', 'VERSION', 'CLASSE', 'KV', 'POIDS', 'D MOTEUR', 'H MOTEUR
     'CLOCHE', 'CONFIG', 'RESISTANCE', 'UTILISATION', 'LIEN', 'IMG', 'AUTRE'];
 const ROLES = ['user', 'moderator', 'admin'];
 
-if (!is_file(__DIR__ . '/config.php')) fail('Le serveur n\'est pas encore configuré.', 503);
+if (!is_file(__DIR__ . '/config.php')) fail('Les comptes ne sont pas encore ouverts : la base de données du site n\'est pas encore configurée.', 503);
+
+// Configuration and database problems: a clear message instead of an empty error page
+// (never the password itself)
+foreach (['db_dsn', 'db_user', 'db_pass', 'admin_email'] as $k) {
+    if (preg_match('/A_REMPLIR|_ICI\b|XXXX/', (string) cfg($k, ''))) fail("Configuration incomplète : la valeur « $k » de api/config.php n'a pas été remplie.", 503);
+}
+set_exception_handler(function (Throwable $e): void {
+    $msg = 'Erreur du serveur.';
+    if ($e instanceof PDOException) {
+        $code = (int) ($e->errorInfo[1] ?? 0) ?: (preg_match('/\[(\d{4})\]/', $e->getMessage(), $m) ? (int) $m[1] : 0);
+        $msg = match (true) {
+            $code === 1045 => 'Connexion à la base refusée : utilisateur ou mot de passe incorrect dans api/config.php.',
+            $code === 1044 || $code === 1049 => 'Base de données introuvable : vérifiez le nom de la base (dbname) dans api/config.php.',
+            in_array($code, [2002, 2005, 2006], true) => 'Serveur de base introuvable : vérifiez l\'adresse (host) dans api/config.php.',
+            default => 'Erreur de base de données (' . ($code ?: 'inconnue') . ').',
+        };
+    }
+    error_log('Multi-Motors API: ' . $e->getMessage());
+    if (!headers_sent()) { http_response_code(500); header('Content-Type: application/json; charset=utf-8'); }
+    echo json_encode(['error' => $msg], JSON_UNESCAPED_UNICODE);
+});
 
 $action = $_GET['action'] ?? '';
 $post = $_SERVER['REQUEST_METHOD'] === 'POST';
@@ -92,9 +119,7 @@ case 'register':
     $role = $email === mb_strtolower((string) cfg('admin_email', '')) ? 'admin' : 'user';
     q('INSERT INTO users (email, name, pass_hash, role, verified, verify_token, created_at) VALUES (?, ?, ?, ?, 0, ?, ?)',
         [$email, $name, password_hash($pass, PASSWORD_DEFAULT), $role, $tok, now()]);
-    $link = rtrim((string) cfg('site_url'), '/') . '/api/index.php?action=verify&token=' . $tok;
-    send_mail($email, 'Confirmez votre compte Multi-Motors',
-        "Bonjour $name,\n\nConfirmez votre adresse pour activer votre compte :\n$link\n\nÀ bientôt sur Multi-Motors.");
+    send_verify_mail($email, $name, $tok);
     login_as((int) db()->lastInsertId());
     out(['user' => me_payload(current_user()), 'message' => 'Compte créé. Un lien de confirmation vous a été envoyé par email.']);
 
@@ -107,6 +132,19 @@ case 'verify':
     }
     header('Location: ' . rtrim((string) cfg('site_url'), '/') . '/#' . ($u ? 'compte-confirme' : 'lien-invalide'));
     exit;
+
+case 'resend_verify':
+    // A new confirmation link for the signed-in member whose address is not confirmed yet
+    if (!$post) fail('POST attendu.', 405);
+    $u = current_user();
+    if (!$u) fail('Connectez-vous pour faire cela.', 401);
+    if ($u['verified']) out(['message' => 'Votre adresse est déjà confirmée.']);
+    throttle('resend_verify', (string) $u['id'], 3, 60);
+    $tok = token();
+    q('UPDATE users SET verify_token = ? WHERE id = ?', [$tok, $u['id']]);
+    $sent = send_verify_mail((string) $u['email'], (string) $u['name'], $tok);
+    if (!$sent) fail('L\'email n\'a pas pu être envoyé. Réessayez plus tard.', 500);
+    out(['message' => 'Un nouveau lien de confirmation vient d\'être envoyé à ' . $u['email'] . '.']);
 
 case 'login':
     if (!$post) fail('POST attendu.', 405);
@@ -373,8 +411,7 @@ case 'account_update':
         if (q('SELECT id FROM users WHERE email = ? AND id <> ?', [$email, $u['id']])->fetch()) fail('Cette adresse est déjà utilisée.');
         $tok = token();
         q('UPDATE users SET email = ?, verified = 0, verify_token = ? WHERE id = ?', [$email, $tok, $u['id']]);
-        send_mail($email, 'Confirmez votre nouvelle adresse Multi-Motors', "Bonjour,\n\nConfirmez votre nouvelle adresse :\n"
-            . rtrim((string) cfg('site_url'), '/') . '/api/index.php?action=verify&token=' . $tok . "\n");
+        send_verify_mail($email, (string) $u['name'], $tok, true);
         $msg[] = 'Adresse modifiée : confirmez-la avec le lien envoyé par email.';
     }
     $new = (string) (body()['password'] ?? '');

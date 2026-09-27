@@ -1074,6 +1074,66 @@
     setTimeout(() => { app.classList.remove("page-out"); location.hash = to; }, 170);
   });
 
+  // --- Home: random motor ("roulette" on the central motor) --------------------------------
+  // Motor photos replace one another, slower and slower, then a flash opens the sheet of the one drawn.
+  // Drawn among motors with a photo and a well filled sheet (the most complete ones first).
+  function randomMotor() {
+    const box = $("hero-random");
+    if (!box || box.classList.contains("spinning")) return;
+    const withPhoto = state.motors.filter((m) => state.thumbs[m.REF]);
+    if (!withPhoto.length) return;
+    const best = withPhoto.filter((m) => completeness(m) >= 9);
+    const pool = best.length >= 20 ? best : withPhoto.slice().sort((a, b) => completeness(b) - completeness(a)).slice(0, 300);
+    const pick = () => pool[Math.floor(Math.random() * pool.length)];
+    const winner = pick();
+    // Frames: other motors (one per model), then the winner; each frame shown a little longer than the last
+    const seen = new Set([famKey(winner)]), frames = [];
+    for (let i = 0; frames.length < 16 && i < 400; i++) {
+      const m = pick();
+      if (!seen.has(famKey(m))) { seen.add(famKey(m)); frames.push(m); }
+    }
+    frames.push(winner);
+    const img = box.querySelector("img"), original = img.getAttribute("src");
+    const reduce = matchMedia("(prefers-reduced-motion: reduce)").matches;
+    box.classList.add("spinning");
+    // Time each frame stays: quick at first, then slower and slower (about 5 s in all)
+    const n = frames.length;
+    const delay = (k) => Math.round(110 + 520 * Math.pow(k / (n - 1), 2.4));
+    // Preload so no frame is blank
+    Promise.all(frames.map((m) => new Promise((ok) => { const i = new Image(); i.onload = i.onerror = ok; i.src = state.thumbs[m.REF]; })))
+      .then(() => {
+        let k = 0;
+        const show = () => {
+          const m = frames[k], d = delay(k);
+          img.src = state.thumbs[m.REF];
+          img.alt = `${m.MARQUE} ${m.NOM}`;
+          img.classList.add("is-photo");
+          // The pop of each picture lasts a bit less than the time it stays on screen
+          img.style.setProperty("--tick", `${Math.min(320, Math.round(d * 0.8))}ms`);
+          img.classList.remove("tick"); void img.offsetWidth; img.classList.add("tick");
+          k++;
+          if (k < n && !reduce) setTimeout(show, d);
+          else setTimeout(() => finish(m), reduce ? 200 : 750);
+        };
+        const finish = (m) => {
+          // The flash covers the whole screen and stays while the motor page opens under it
+          const flash = document.createElement("div");
+          flash.className = "roulette-flash";
+          document.body.appendChild(flash);
+          box.classList.add("won");
+          setTimeout(() => { location.hash = `#m/${encodeURIComponent(m.REF)}`; }, reduce ? 100 : 260);
+          setTimeout(() => {
+            flash.remove();
+            box.classList.remove("spinning", "won");
+            img.src = original; img.alt = ""; img.classList.remove("is-photo", "tick"); img.style.removeProperty("--tick");
+          }, 1100);
+        };
+        show();
+      });
+  }
+  $("hero-random")?.addEventListener("click", randomMotor);
+  $("hero-random")?.addEventListener("keydown", (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); randomMotor(); } });
+
   // --- Routing -------------------------------------------------------------
   function route() {
     const h = location.hash;

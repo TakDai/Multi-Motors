@@ -184,6 +184,7 @@
     el.innerHTML = C.user
       ? `<button type="button" class="nav-pill acct-btn" aria-haspopup="true" aria-expanded="false">${avatar(C.user, "xs")}${esc(C.user.name)}${C.user.role !== "user" ? `<em>${ROLE_LABEL[C.user.role]}</em>` : ""}</button>
          <div class="acct-menu" hidden>
+           ${C.user.verified === false ? `<button type="button" class="acct-verify" data-resend-verify>⚠ Adresse non confirmée<small>Renvoyer le lien de confirmation</small></button>` : ""}
            <a href="#moi">Mon espace</a>
            <a href="#u/${C.user.id}">Mon profil</a>
            <a href="#profil">Modifier mon profil</a>
@@ -465,8 +466,10 @@
     const named = motors.filter((m) => m.NOM && !/KV · [\d.]+ g$/.test(m.NOM));
     const models = new Set(named.map((m) => `${m.MARQUE}|${m.NOM}`));
     const count = (o) => Object.values(o || {}).filter((v) => (Array.isArray(v) ? v.length : v)).length;
+    const namedBrands = new Set(named.map((m) => m.MARQUE));
     const cards = [
-      [motors.length, "moteurs"], [models.size, "modèles"], [new Set(motors.map((m) => m.MARQUE)).size, "marques"],
+      [named.length, "moteurs identifiés", `+ ${nf(motors.length - named.length)} sans nom de modèle`], [models.size, "modèles"],
+      [namedBrands.size, "marques", `+ ${nf(new Set(motors.map((m) => m.MARQUE)).size - namedBrands.size)} sans modèle identifié`],
       [motors.filter((m) => st.thumbs[m.REF]).length, "moteurs en photo"],
       [Object.values(st.fab || {}).filter((f) => f.specs).length, "fiches fabricant"],
       [Object.values(st.fab || {}).reduce((a, f) => a + (f.tests || []).length, 0) + Object.values(st.bench || {}).reduce((a, t) => a + t.length, 0), "bancs d'essai"],
@@ -474,7 +477,7 @@
       [Object.values(C.prices || {}).filter((p) => p.offers?.length).length, "moteurs avec prix"],
     ].filter(([n]) => n > 0);
     return `<section class="cat-stats" aria-label="Le catalogue aujourd'hui"><h2>Le catalogue aujourd'hui</h2>
-      <div class="stats">${cards.map(([n, l], i) => `<div class="stat" style="--i:${i}"><b data-count="${n}">${nf(n)}</b><span>${l}</span></div>`).join("")}</div></section>`;
+      <div class="stats">${cards.map(([n, l, sub], i) => `<div class="stat" style="--i:${i}"><b data-count="${n}">${nf(n)}</b><span>${l}</span>${sub ? `<small>${sub}</small>` : ""}</div>`).join("")}</div></section>`;
   }
   function drawFeed(kind) {
     const v = $("view-actus");
@@ -802,7 +805,11 @@
     const ab = t.closest(".acct-btn");
     if (ab) { const menu = ab.nextElementSibling; menu.hidden = !menu.hidden; ab.setAttribute("aria-expanded", String(!menu.hidden)); return; }
     if (!t.closest(".acct-menu")) document.querySelectorAll(".acct-menu").forEach((m) => (m.hidden = true));
-    if (t.closest("[data-logout]")) { await api("logout", {}); C.user = null; renderAccount(); toast("Vous êtes déconnecté."); return refreshCurrent(); }
+    if (t.closest("[data-resend-verify]")) {
+      try { toast((await api("resend_verify", {})).message, "good"); } catch (e) { toast(e.message, "bad"); }
+      return;
+    }
+        if (t.closest("[data-logout]")) { await api("logout", {}); C.user = null; renderAccount(); toast("Vous êtes déconnecté."); return refreshCurrent(); }
     const lk = t.closest("[data-like]");
     if (lk) {
       if (!C.user) return authForm("login");
