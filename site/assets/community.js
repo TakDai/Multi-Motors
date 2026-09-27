@@ -620,7 +620,7 @@
     let p = {};
     try { p = await get("profile", { id: C.user.id }); } catch (e) { /* profile not created yet */ }
     P.setup = [...(p.setup || [])]; P.avatar = undefined; P.color = p.color || "";
-    const tabs = [["profil", "Profil"], ["compte", "Compte"], ["confidentialite", "Confidentialité"]];
+    const tabs = [["profil", "Profil"], ["compte", "Compte"], ["confidentialite", "Confidentialité"], ["preferences", "Préférences"]];
     const sel = (a, b) => (a === b ? " selected" : "");
     v.innerHTML = `<div class="pf-wrap pf-editor">
       <div class="pf-edit-top"><h1>Mon profil</h1><a class="ghost-btn" href="#u/${C.user.id}">Voir mon profil public →</a></div>
@@ -687,6 +687,15 @@
         <p class="m-error" role="alert" hidden></p>
         <div class="pf-actions"><button class="btn-red" type="submit">Enregistrer</button></div>
       </form>
+      <div class="card pf-form" data-pf="preferences" ${P.tab === "preferences" ? "" : "hidden"}>
+        <h3 class="pf-h">Apparence</h3>
+        <p class="pf-hint">Enregistrée sur cet appareil. Le bouton lune / soleil en haut de page bascule aussi entre clair et sombre.</p>
+        <div class="pf-themes" role="radiogroup" aria-label="Thème">
+          ${[["auto", "Automatique", "Suit le réglage de l'appareil"], ["light", "Clair", "Fond blanc"], ["dark", "Sombre", "Fond noir, plus reposant la nuit"]].map(([v, l, h]) => `
+          <label class="pf-theme pf-theme-${v}"><input type="radio" name="theme" value="${v}" data-theme-choice ${(() => { try { return localStorage.getItem("mm_theme") || "auto"; } catch (e) { return "auto"; } })() === v ? "checked" : ""}>
+            <span class="pf-theme-prev" aria-hidden="true"><i></i><i></i><i></i></span><b>${l}</b><small>${h}</small></label>`).join("")}
+        </div>
+      </div>
     </div>`;
     P.profile = p;
     drawSetup();

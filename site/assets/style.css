@@ -1437,3 +1437,59 @@ html, body { overflow-x: hidden; }
 .d-top .logo img.brand-logo { width: auto; height: 46px; max-width: 200px; max-height: none; object-fit: contain; }
 /* The T-Motor drawing of the mockup has transparent margins: shown whole, margins taken back */
 .d-top .logo img:not(.brand-logo) { width: 200px; height: auto; object-fit: contain; margin: -17px 0 -13px; }
+
+/* ================= Mode sombre ================= */
+/* The whole page is inverted (the site uses black on white everywhere), then pictures that are
+   photos are inverted back so they keep their real colours. Line drawings and black brand logos
+   are left inverted: they become white on the dark background. */
+html[data-theme="dark"] { background: #fff; filter: invert(1) hue-rotate(180deg); color-scheme: light; } /* white, inverted to black with the rest */
+html[data-theme="dark"] :is(img.is-photo, .g-main img, .g-th img, .sheet-imgs img, .video-media img, .hero-img img, .av img, .combo-peek .peek-img, iframe, video) {
+  filter: invert(1) hue-rotate(180deg);
+}
+/* Photos on white keep a soft frame instead of a harsh white square */
+html[data-theme="dark"] img.is-photo { border-radius: 8px; }
+html[data-theme="dark"] .site-logo:hover img, html[data-theme="dark"] .site-logo:focus-visible img { filter: drop-shadow(0 4px 6px rgba(255, 255, 255, .25)); }
+/* Switching theme: a short cross-fade */
+html.theme-fade, html.theme-fade * { transition: filter .45s ease, background-color .45s ease !important; }
+
+/* Moon / sun button in the top bar */
+.theme-btn { display: inline-grid; place-items: center; width: 34px; height: 34px; padding: 0; border: 2px dashed var(--dash); border-radius: 50%; background: #fff; color: #000; cursor: pointer;
+  transition: transform .35s cubic-bezier(.3, 1.6, .5, 1), border-color .2s; }
+.theme-btn:hover { transform: rotate(-20deg) scale(1.08); border-style: solid; border-color: #000; }
+.theme-btn svg { grid-area: 1 / 1; width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; transition: opacity .3s, transform .45s cubic-bezier(.3, 1.4, .5, 1); }
+.theme-btn .i-moon { fill: currentColor; }
+.theme-btn .i-sun { opacity: 0; transform: rotate(-90deg) scale(.5); }
+html[data-theme="dark"] .theme-btn .i-moon { opacity: 0; transform: rotate(90deg) scale(.5); }
+html[data-theme="dark"] .theme-btn .i-sun { opacity: 1; transform: none; }
+@media (max-width: 600px) { .theme-btn { width: 28px; height: 28px; } .theme-btn svg { width: 15px; height: 15px; } }
+
+/* Préférences: theme choice with a small preview */
+.pf-themes { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 12px; margin-top: 8px; }
+.pf-theme { position: relative; display: grid; gap: 4px; padding: 12px; border: 2px dashed var(--dash); border-radius: 12px; cursor: pointer; transition: border-color .2s, transform .2s; }
+.pf-theme:hover { transform: translateY(-2px); }
+.pf-theme:has(input:checked) { border-style: solid; border-color: var(--red); }
+.pf-theme input { position: absolute; opacity: 0; pointer-events: none; }
+.pf-theme small { font-weight: 500; color: rgba(0, 0, 0, .6); }
+.pf-theme-prev { display: flex; gap: 4px; height: 44px; margin-bottom: 4px; padding: 6px; border-radius: 8px; border: 1px solid rgba(0, 0, 0, .15); background: #fff; }
+.pf-theme-prev i { flex: 1; border-radius: 4px; background: rgba(0, 0, 0, .8); }
+.pf-theme-prev i:nth-child(2) { flex: 2; background: rgba(0, 0, 0, .15); }
+.pf-theme-prev i:nth-child(3) { background: var(--red); flex: .6; }
+/* Previews always show their real colours: the dark one is drawn inverted in light mode,
+   the light and automatic ones are inverted back in dark mode */
+.pf-theme-auto .pf-theme-prev { background: linear-gradient(90deg, #fff 50%, #111 50%); }
+html:not([data-theme="dark"]) .pf-theme-dark .pf-theme-prev,
+html[data-theme="dark"] :is(.pf-theme-light, .pf-theme-auto) .pf-theme-prev { filter: invert(1) hue-rotate(180deg); }
+
+/* ================= Haut de page ================= */
+.to-top { position: fixed; z-index: 60; right: max(16px, env(safe-area-inset-right)); bottom: max(18px, env(safe-area-inset-bottom)); display: grid; place-items: center;
+  width: 48px; height: 48px; padding: 0; border: 2px solid #000; border-radius: 50%; background: #fff; color: #000; cursor: pointer; box-shadow: 0 6px 18px rgba(0, 0, 0, .18);
+  opacity: 0; transform: translateY(20px) scale(.6); pointer-events: none; transition: opacity .3s, transform .4s cubic-bezier(.3, 1.5, .5, 1), background-color .2s, color .2s; }
+.to-top.on { opacity: 1; transform: none; pointer-events: auto; }
+.to-top:hover { background: #000; color: #fff; transform: translateY(-3px); }
+.to-top svg { width: 22px; height: 22px; fill: none; stroke: currentColor; stroke-width: 2.4; stroke-linecap: round; stroke-linejoin: round; }
+.to-top:hover svg { animation: nudge-up .8s ease-in-out infinite; }
+.to-top.launch svg { animation: launch .6s cubic-bezier(.5, 0, .2, 1) both; }
+@keyframes nudge-up { 0%, 100% { transform: none; } 50% { transform: translateY(-3px); } }
+@keyframes launch { 0% { transform: none; } 40% { transform: translateY(4px); } 100% { transform: translateY(-26px); opacity: 0; } }
+@media (max-width: 600px) { .to-top { width: 42px; height: 42px; } }
+@media (prefers-reduced-motion: reduce) { .to-top { transition: opacity .3s !important; transform: none !important; } .to-top svg { animation: none !important; } }

@@ -1023,6 +1023,65 @@
     }
   }
 
+  // --- Theme: light, dark or the device's choice (Mes préférences, or the moon/sun button) ----
+  const THEME_KEY = "mm_theme";
+  const darkQuery = matchMedia("(prefers-color-scheme: dark)");
+  const themeChoice = () => { try { return localStorage.getItem(THEME_KEY) || "auto"; } catch (e) { return "auto"; } };
+  function applyTheme(choice = themeChoice(), animate = false) {
+    const dark = choice === "dark" || (choice === "auto" && darkQuery.matches);
+    const root = document.documentElement;
+    if (animate && !matchMedia("(prefers-reduced-motion: reduce)").matches) {
+      root.classList.add("theme-fade");
+      setTimeout(() => root.classList.remove("theme-fade"), 450);
+    }
+    root.dataset.theme = dark ? "dark" : "light";
+    const b = document.getElementById("theme-btn");
+    if (b) { b.setAttribute("aria-label", dark ? "Passer en mode clair" : "Passer en mode sombre"); b.title = dark ? "Mode clair" : "Mode sombre"; }
+    document.querySelectorAll("[data-theme-choice]").forEach((i) => (i.checked = i.value === choice));
+  }
+  function setTheme(choice) {
+    try { localStorage.setItem(THEME_KEY, choice); } catch (e) { /* private mode: this visit only */ }
+    applyTheme(choice, true);
+  }
+  darkQuery.addEventListener?.("change", () => themeChoice() === "auto" && applyTheme("auto", true));
+  applyTheme();
+  document.getElementById("theme-btn")?.addEventListener("click", () => setTheme(document.documentElement.dataset.theme === "dark" ? "light" : "dark"));
+  document.addEventListener("change", (e) => { if (e.target.matches?.("[data-theme-choice]")) setTheme(e.target.value); });
+
+  // --- Eased scroll to a height of the page (search results, back to top) ----------------
+  function glide(target, onEnd) {
+    const from = scrollY, dist = target - from;
+    if (matchMedia("(prefers-reduced-motion: reduce)").matches || Math.abs(dist) < 4) { scrollTo(0, target); onEnd?.(); return; }
+    const html = document.documentElement, prev = html.style.scrollBehavior;
+    html.style.scrollBehavior = "auto";
+    const dur = Math.min(1100, 500 + Math.abs(dist) * 0.35), t0 = performance.now();
+    const ease = (t) => (t < 0.5 ? 4 * t * t * t : 1 - (-2 * t + 2) ** 3 / 2);
+    let stop = false;
+    const cancel = () => { stop = true; };
+    addEventListener("wheel", cancel, { once: true, passive: true });
+    addEventListener("touchstart", cancel, { once: true, passive: true });
+    const step = (now) => {
+      const t = Math.min(1, (now - t0) / dur);
+      if (!stop) scrollTo(0, from + dist * ease(t));
+      if (t < 1 && !stop) requestAnimationFrame(step);
+      else { html.style.scrollBehavior = prev; removeEventListener("wheel", cancel); removeEventListener("touchstart", cancel); onEnd?.(); }
+    };
+    requestAnimationFrame(step);
+  }
+  window.MM_glide = glide;
+
+  // --- Back to top: appears once the page has been scrolled down --------------------------
+  {
+    const up = document.getElementById("to-top");
+    if (up) {
+      let ticking = false;
+      const check = () => { ticking = false; const show = scrollY > Math.max(500, innerHeight * 0.8); if (show !== up.classList.contains("on")) { up.hidden = false; up.classList.toggle("on", show); } };
+      addEventListener("scroll", () => { if (!ticking) { ticking = true; requestAnimationFrame(check); } }, { passive: true });
+      up.addEventListener("click", () => { up.classList.add("launch"); glide(0, () => up.classList.remove("launch")); });
+      check();
+    }
+  }
+
   // --- Page changes: every page that appears (or a new motor page) fades in ----
   const pageIn = (v) => { v.classList.remove("page-in"); void v.offsetWidth; v.classList.add("page-in"); };
   new MutationObserver((list) => list.forEach((r) => { if (r.target.classList.contains("view") && r.oldValue !== null && !r.target.hidden) pageIn(r.target); }))
@@ -1104,26 +1163,10 @@
     // Validating a search: an eased scroll down to the results, the search screen fading away above,
     // then the separator line, the count and the cards come in (see .searching in style.css)
     function searchScroll() {
-      const target = $("sep").getBoundingClientRect().top + scrollY;
-      const from = scrollY, dist = target - from, app = $("app");
+      const app = $("app");
       app.classList.remove("searching"); void app.offsetWidth; app.classList.add("searching");
       setTimeout(() => app.classList.remove("searching"), 1600);
-      if (matchMedia("(prefers-reduced-motion: reduce)").matches || Math.abs(dist) < 4) return scrollTo(0, target);
-      const html = document.documentElement, prev = html.style.scrollBehavior;
-      html.style.scrollBehavior = "auto";
-      const dur = Math.min(1100, 500 + Math.abs(dist) * 0.5), t0 = performance.now();
-      const ease = (t) => (t < 0.5 ? 4 * t * t * t : 1 - (-2 * t + 2) ** 3 / 2);
-      let stop = false;
-      const cancel = () => { stop = true; };
-      addEventListener("wheel", cancel, { once: true, passive: true });
-      addEventListener("touchstart", cancel, { once: true, passive: true });
-      const step = (now) => {
-        const t = Math.min(1, (now - t0) / dur);
-        if (!stop) scrollTo(0, from + dist * ease(t));
-        if (t < 1 && !stop) requestAnimationFrame(step);
-        else { html.style.scrollBehavior = prev; removeEventListener("wheel", cancel); removeEventListener("touchstart", cancel); }
-      };
-      requestAnimationFrame(step);
+      glide($("sep").getBoundingClientRect().top + scrollY);
     }
     const refresh = () => { readFilters(); state.shown = PAGE; advSummary(); renderList(); };
     buildAdv(refresh);
