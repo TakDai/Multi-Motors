@@ -2,6 +2,12 @@
 // Multi-Motors community API: accounts, likes, comments, change suggestions,
 // moderation and site news. One endpoint: api/index.php?action=<name>
 declare(strict_types=1);
+if (PHP_VERSION_ID < 80100) {
+    http_response_code(500);
+    header('Content-Type: application/json; charset=utf-8');
+    echo json_encode(['error' => 'PHP ' . PHP_VERSION . ' est trop ancien : il faut PHP 8.1 ou plus (fichier .ovhconfig du site).']);
+    exit;
+}
 require __DIR__ . '/lib.php';
 require __DIR__ . '/schema.php';
 
@@ -11,6 +17,27 @@ const FIELDS = ['NOM', 'VERSION', 'CLASSE', 'KV', 'POIDS', 'D MOTEUR', 'H MOTEUR
 const ROLES = ['user', 'moderator', 'admin'];
 
 if (!is_file(__DIR__ . '/config.php')) fail('Les comptes ne sont pas encore ouverts : la base de données du site n\'est pas encore configurée.', 503);
+
+// Configuration and database problems: a clear message instead of an empty error page
+// (never the password itself)
+foreach (['db_dsn', 'db_user', 'db_pass', 'admin_email'] as $k) {
+    if (preg_match('/A_REMPLIR|_ICI\b|XXXX/', (string) cfg($k, ''))) fail("Configuration incomplète : la valeur « $k » de api/config.php n'a pas été remplie.", 503);
+}
+set_exception_handler(function (Throwable $e): void {
+    $msg = 'Erreur du serveur.';
+    if ($e instanceof PDOException) {
+        $code = (int) ($e->errorInfo[1] ?? 0) ?: (preg_match('/\[(\d{4})\]/', $e->getMessage(), $m) ? (int) $m[1] : 0);
+        $msg = match (true) {
+            $code === 1045 => 'Connexion à la base refusée : utilisateur ou mot de passe incorrect dans api/config.php.',
+            $code === 1044 || $code === 1049 => 'Base de données introuvable : vérifiez le nom de la base (dbname) dans api/config.php.',
+            in_array($code, [2002, 2005, 2006], true) => 'Serveur de base introuvable : vérifiez l\'adresse (host) dans api/config.php.',
+            default => 'Erreur de base de données (' . ($code ?: 'inconnue') . ').',
+        };
+    }
+    error_log('Multi-Motors API: ' . $e->getMessage());
+    if (!headers_sent()) { http_response_code(500); header('Content-Type: application/json; charset=utf-8'); }
+    echo json_encode(['error' => $msg], JSON_UNESCAPED_UNICODE);
+});
 
 $action = $_GET['action'] ?? '';
 $post = $_SERVER['REQUEST_METHOD'] === 'POST';
