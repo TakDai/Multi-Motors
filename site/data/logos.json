@@ -31,6 +31,7 @@
  "FOXEER": "logos/foxeer.png",
  "FOXY": "logos/foxy.png",
  "FPVCYCLE": "logos/fpvcycle.png",
+ "FTX": "logos/ftx.png",
  "GEMFAN": "logos/gemfan.png",
  "GENS ACE": "logos/gens-ace.png",
  "GEPRC": "logos/geprc.png",
@@ -87,5 +88,6 @@
  "TINYWHOOP": "logos/tinywhoop.png",
  "TURNIGY": "logos/turnigy.png",
  "UMMAGAWD": "logos/ummagawd.png",
- "X-TEAM": "logos/x-team.png"
+ "X-TEAM": "logos/x-team.png",
+ "XNOVA": "logos/xnova.png"
 }
