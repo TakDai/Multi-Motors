@@ -1363,3 +1363,9 @@ html, body { overflow-x: hidden; }
 .maker-grid .t-row dt { flex: 0 1 45%; min-width: 0; line-height: 1.35; }
 .maker-grid .t-row dd { overflow-wrap: anywhere; }
 .maker-card h3 small { font-weight: 500; }
+
+/* --- Manufacturer's sheet pictures, shown directly ------------------------ */
+/* The pictures are slices of one long poster: stacked in one column, as on the maker's page */
+.sheet-imgs { display: flex; flex-direction: column; max-width: 760px; margin: 0 auto; border: 1px solid rgba(0, 0, 0, .12); border-radius: 8px; overflow: hidden; background: #fff; }
+.sheet-imgs a { display: block; line-height: 0; }
+.sheet-imgs img { display: block; width: 100%; height: auto; }

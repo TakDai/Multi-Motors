@@ -754,6 +754,18 @@
     </section>`;
   }
 
+  // Pictures of the manufacturer's page, shown as they are: drawings with dimensions, parts supplied…
+  function sheetImages(m) {
+    const f = state.fab[famKey(m)];
+    const list = ((f && f.sheet) || []).map(media).filter((u) => !window.MM_MEDIA || /^data:/.test(u));
+    if (!list.length) return "";
+    return `<section class="tech-card wide sheet-card"><h3><span class="t-ico" aria-hidden="true"><svg viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="16" rx="2"/><circle cx="9" cy="10" r="2"/><path d="M21 17l-6-6-9 9"/></svg></span>
+        Fiche du fabricant en images <small>plans cotés, contenu de la boîte, détails · ${list.length} image${list.length > 1 ? "s" : ""}</small></h3>
+      <div class="sheet-imgs">${list.map((u, i) => `<a href="${esc((f.sheet || [])[i] || u)}" target="_blank" rel="noopener"><img src="${esc(u)}" alt="${esc(`${m.MARQUE} ${m.NOM} — fiche fabricant, image ${i + 1}`)}" loading="lazy" onerror="this.closest('a').remove()"></a>`).join("")}</div>
+      <p class="bench-src">Source : <a href="${esc(f.url)}" target="_blank" rel="noopener">${esc(f.site || hostOf(f.url))}</a> <span class="src-maker">fabricant</span></p>
+    </section>`;
+  }
+
   function benchBlock(m) {
     const f = state.fab[famKey(m)];
     // The manufacturer's own tests first, those for this KV before the others
@@ -774,7 +786,7 @@
       return `<div class="bench-t">
         ${t.title ? `<p class="bench-title">${esc(t.title)}</p>` : ""}
         ${benchChart(t)}
-        ${n > 8 ? `<details class="bench-more"><summary>Voir le tableau (${n} mesures)</summary>${table}</details>` : table}
+        ${n > 8 ? `<details class="bench-more"${own.includes(t) || own.some((o) => o.source === t.source) ? " open" : ""}><summary>Tableau des mesures (${n})</summary>${table}</details>` : table}
         ${safeUrl(t.source) ? `<p class="bench-src">Source : <a href="${esc(t.source)}" target="_blank" rel="noopener">${esc(new URL(t.source).hostname.replace(/^www\./, ""))}</a>${f && t.source === f.url ? ` <span class="src-maker">fabricant</span>` : ""}</p>` : ""}
       </div>`;
     };
@@ -825,6 +837,7 @@
         ${fam.length ? `<section class="tech-card"><h3><span class="t-ico" aria-hidden="true">${I.mot}</span>Autres KV de ce modèle</h3>
           <div class="versions">${fam.map((x) => `<a href="#m/${encodeURIComponent(x.REF)}">${pv("KV", fmt(x.KV))}</a>`).join("")}</div></section>` : ""}
         ${makerSheet(m)}
+        ${sheetImages(m)}
         ${benchBlock(m)}
       </div>`;
   }

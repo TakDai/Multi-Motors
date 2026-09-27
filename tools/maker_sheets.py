@@ -111,7 +111,27 @@ class TMotor:
         imgs = [urljoin(url, i) for i in re.findall(r'<img[^>]+src="([^"]+/(?:uploads|upload|product)[^"]+\.(?:jpe?g|png|webp))"', page, re.I)]
         og = re.findall(r'<meta[^>]+property="og:image"[^>]+content="([^"]+)"', page)
         return {"url": url, "title": title, "model": self.model(title), "specs": specs, "tests": tests,
-                "images": list(dict.fromkeys(og + imgs))[:10]}
+                "images": list(dict.fromkeys(og + imgs))[:10], "sheet": self.sheet_images(page, url)}
+
+    @staticmethod
+    def sheet_images(page, url):
+        """Pictures of the product description, in page order: drawings with dimensions,
+        parts supplied, construction details (product photos, menus and lists excluded)."""
+        out = []
+        for src in re.findall(r'<img[^>]+?(?:data-src|data-original|src)="([^"]+)"', page, re.I):
+            u = urljoin(url, src.strip())
+            if re.search(r"goods_img|thumb_img|source_img|category_img|logo|icon|mobile|/themes/|\.gif", u, re.I):
+                continue
+            if not re.search(r"/images/\d{6}/[^/]+\.(jpe?g|png|webp)$|img\.tmotor\.com/products/.+\.(jpe?g|png|webp)$", u, re.I):
+                continue
+            out.append(u)
+        seen, res = set(), []
+        for u in out:
+            k = re.sub(r"\.(jpe?g|png|webp)$", "", u, flags=re.I)
+            if k not in seen:
+                seen.add(k)
+                res.append(u)
+        return res[:24]
 
 
 KV_LABEL = re.compile(r"^(kv|kv value|kv \(rpm/v\)|test item|motor item|model no\.?(/ ?kv)?|item no\.?)$", re.I)
@@ -299,7 +319,8 @@ def main():
             # Every spelling of the model in the catalogue ("AS 2312 LONG SHAFT", "AT2312 LONG SHAFT")
             for nm in dict.fromkeys(r["NOM"] for r in fam):
                 fk = f"{brand}|{nm}"
-                fab[fk] = {"url": url, "site": re.sub(r"^https?://", "", maker.host), "specs": {k: v for k, v in specs.items() if v}, "tests": seen}
+                fab[fk] = {"url": url, "site": re.sub(r"^https?://", "", maker.host), "specs": {k: v for k, v in specs.items() if v}, "tests": seen,
+                           "sheet": p["sheet"]}
                 if p["images"]:
                     photos[fk] = list(dict.fromkeys((photos.get(fk) or []) + p["images"]))[:10]
         print(f"  {read} fiches lues, {n_models} modèles", flush=True)
