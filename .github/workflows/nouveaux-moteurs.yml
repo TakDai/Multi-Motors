@@ -46,6 +46,9 @@ jobs:
       - name: Moteurs vendus en boutique qui manquent au catalogue
         run: python tools/shop_motors.py || true
 
+      - name: Fiches techniques des sites fabricants (T-Motor…)
+        run: python tools/maker_sheets.py || true
+
       - name: Compléter les fiches (500 familles par jour)
         run: python tools/enrich.py --limit 500 || true
 

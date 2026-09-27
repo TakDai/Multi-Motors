@@ -13,7 +13,7 @@ Motors:
   its values complete the named motor and the row is removed;
 - motors without a name that repeat each other (brand, KV, weight): one kept.
 
-Data keyed by "BRAND|MODEL" (site/data/photos.json, videos.json) follows the new
+Data keyed by "BRAND|MODEL" (site/data/photos.json, videos.json, fabricant.json, bench.json) follows the new
 brand names; REF-keyed data of removed motors moves to the motor they were merged into.
 
 Usage: python tools/dedupe.py
@@ -128,6 +128,14 @@ def main():
             nk = fam_new(k)
             nd[nk] = list({json.dumps(x, sort_keys=True): x for x in (nd.get(nk) or []) + (v or [])}.values())
         p.write_text(json.dumps(nd, ensure_ascii=False, separators=(",", ":")))
+    for name in ("fabricant", "bench"):
+        p = DATA / f"{name}.json"
+        if p.exists():
+            d = json.loads(p.read_text())
+            nd = {}
+            for k, v in d.items():
+                nd.setdefault(fam_new(k), v)
+            p.write_text(json.dumps(nd, ensure_ascii=False, separators=(",", ":")))
     for name in ("prix", "thumbs"):
         p = DATA / f"{name}.json"
         if not p.exists():

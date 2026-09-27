@@ -26,7 +26,7 @@
   const brandLogo = (upper) => (LOGOS[upper] ? asset(LOGOS[upper]) : logoSrc({ MARQUE: upper }));
   // Extension points used by community.js (accounts, likes, prices, news…)
   const hooks = (window.MM_HOOKS = window.MM_HOOKS || {});
-  const state = { motors: [], thumbs: {}, videos: {}, photos: {}, tab: "populaire", sort: "", q: "", shown: PAGE, f: {}, adv: {}, logos: {}, bench: {}, revealed: false };
+  const state = { motors: [], thumbs: {}, videos: {}, photos: {}, tab: "populaire", sort: "", q: "", shown: PAGE, f: {}, adv: {}, logos: {}, bench: {}, fab: {}, revealed: false };
 
   // --- CSV -----------------------------------------------------------------
   function parseCSV(text) {
@@ -77,6 +77,19 @@
   const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
   const num = (s) => { const n = parseFloat(String(s ?? "").replace(",", ".")); return Number.isFinite(n) ? n : null; };
   const safeUrl = (u) => (/^https?:\/\//i.test(u || "") ? u : "");
+  const hostOf = (u) => { try { return new URL(u).hostname.replace(/^(www|shop|store)\./, ""); } catch (e) { return ""; } };
+  // Where to see the motor: the manufacturer's own page when known (tools/maker_sheets.py,
+  // photos_sites.py), otherwise the shop the catalogue links to, named as such
+  function linkOf(m) {
+    const f = state.fab[`${m.MARQUE}|${m.NOM}`], lien = safeUrl(m.LIEN);
+    if (f && safeUrl(f.url)) return { url: f.url, label: "Site du fabricant", maker: true, title: `Page officielle ${m.MARQUE} (${f.site || hostOf(f.url)})` };
+    if (lien) return { url: lien, label: `Voir chez ${hostOf(lien)}`, maker: false, title: `Revendeur : ${hostOf(lien)}` };
+    return null;
+  }
+  const linkBtn = (m, cls = "official") => {
+    const l = linkOf(m);
+    return l ? `<a class="${cls} ${l.maker ? "maker" : "shop"}" href="${esc(l.url)}" target="_blank" rel="noopener" title="${esc(l.title)}">${esc(l.label)}</a>` : "";
+  };
   const fmt = (s) => {
     const n = num(s);
     return n === null || !/^\s*[\d.,]+\s*$/.test(String(s)) ? String(s ?? "") : String(Math.round(n * 100) / 100);
@@ -127,7 +140,6 @@
 
   function row(m, i) {
     const href = `#m/${encodeURIComponent(m.REF)}`;
-    const link = safeUrl(m.LIEN);
     return `<article class="row" style="--i:${i % PAGE}">
       <div class="row-id">${brandMark(m)}<a class="name" href="${href}">${esc(m.NOM || m.REF)}</a>${hooks.rowExtra ? hooks.rowExtra(m) : ""}</div>
       <a class="row-img" href="${href}" tabindex="-1" aria-hidden="true">${photo(m)}</a>
@@ -136,7 +148,7 @@
         ${pr("Shaft", val(shaft(m)))}${pr("Entraxe de fixation", val(m["ENTRAXE FIX"]))}${pr("Dimension", pair(fmt(m["D MOTEUR"]), fmt(m["H MOTEUR"])))}${pr("L shaft", val(fmt(m["L SHAFT"])))}
         ${pr("Résistance", val(m.RESISTANCE))}${pr("Utilisation", val(m.UTILISATION))}${pr("Hélice", val(m.HELICE))}${pr("Câble", val(cable(m)))}
         ${pr("Amp max", val(fmt(m.AMP)))}${pr("Puissance max", val(unit(m.PUISSANCE, "W")))}${pr("Voltage", val(m.LIPO))}${pr("Vis hélice", val(m["VIS HEL"]))}
-        ${link ? `<a class="official" href="${esc(link)}" target="_blank" rel="noopener">Lien officiel</a>` : `<span class="official off">Lien officiel</span>`}
+        ${linkBtn(m) || `<span class="official off">Pas de lien</span>`}
       </div>
     </article>`;
   }
@@ -241,7 +253,8 @@
     avec: { type: "chips", flags: {
       "Photo": (m) => !!(state.thumbs[m.REF] || safeUrl(m.IMG)),
       "Vidéos": (m) => (state.videos[famKey(m)] || []).length > 0,
-      "Lien officiel": (m) => !!safeUrl(m.LIEN),
+      "Site du fabricant": (m) => !!linkOf(m)?.maker,
+      "Lien boutique": (m) => !!safeUrl(m.LIEN),
     } },
     res: { type: "rng", get: (m) => firstNum(m.RESISTANCE), unit: "mΩ", step: 1 },
     lcable: { type: "rng", get: (m) => num(m["L CABLE"]), unit: "mm", step: 5 },
@@ -707,10 +720,53 @@
         <text x="12" y="${(H - B) / 2}" class="bc-l" text-anchor="middle" transform="rotate(-90 12 ${(H - B) / 2})">Poussée (g)</text></svg>
       ${list.length > 1 ? `<figcaption>${list.map(([n], i) => `<span><i style="background:${COL[i]}"></i>${esc(n)}</span>`).join("")}</figcaption>` : ""}</figure>`;
   }
+  // --- The manufacturer's own spec sheet (tools/maker_sheets.py), labels in French ----------
+  const FAB_LABELS = [
+    [/^(test item|motor item|model no\.?(\/ ?kv)?|item no\.?)$/i, "Modèle"], [/^kv/i, "KV"], [/internal resistance/i, "Résistance interne"],
+    [/^configuration/i, "Configuration"], [/shaft diameter|output shaft/i, "Ø de l'axe"], [/motor dimensions|motor size/i, "Dimensions (Ø × H)"],
+    [/weight.*(incl|including)|motor weight|^weight/i, "Poids (câbles compris)"], [/weight excluding/i, "Poids sans câbles"], [/package weight/i, "Poids emballé"],
+    [/^lead|lead cable|cable length|wire spec/i, "Câbles"], [/bearing/i, "Roulements"], [/rated voltage|no\.? ?of cells|battery/i, "Tension (LiPo)"],
+    [/peak current|max.* current/i, "Courant max"], [/max\.? ?power|rated power/i, "Puissance max"], [/idle current/i, "Courant à vide"],
+    [/max\.? ?thrust/i, "Poussée max"], [/magnet/i, "Aimants"], [/copper wire|enamel/i, "Bobinage"], [/insulation|withdraw voltage/i, "Test d'isolation"],
+    [/rotor dynamic/i, "Équilibrage du rotor"], [/motor dynamic/i, "Équilibrage du moteur"], [/^stator/i, "Stator"], [/^ip$/i, "Indice de protection"],
+    [/propeller recommendation|^recommendation$/i, "Hélice conseillée"], [/esc recommendation/i, "ESC conseillé"], [/centrifugal cooling/i, "Refroidissement centrifuge"],
+    [/package size|packing size/i, "Emballage"], [/torsion|torque/i, "Couple"], [/hole size/i, "Perçage"], [/ambient/i, "Température ambiante"],
+  ];
+  const frLabel = (l) => {
+    const hit = FAB_LABELS.find(([re]) => re.test(l.trim()));
+    if (!hit) return l;
+    const extra = (l.match(/\(([^)]*\d[^)]*)\)/) || [])[1]; // "(180s)", "(10V)"
+    return extra && !/^(mm|g|a|w|mΩ)$/i.test(extra) ? `${hit[1]} (${extra})` : hit[1];
+  };
+  const frValue = (v) => String(v).replace(/\bYES\b/g, "Oui").replace(/\bNO\b/g, "Non").replace(/Imported/gi, "Importés").replace(/Enamel(l)?ed Wire/gi, "Fil émaillé")
+    .replace(/high temperature resistance/gi, "résistance haute température").replace(/Level/g, "Classe");
+  function makerSheet(m) {
+    const f = state.fab[famKey(m)];
+    if (!f || !f.specs) return "";
+    const kv = fmt(m.KV), mine = f.specs[kv] || f.specs[String(num(m.KV))] || [];
+    const rows = [...(f.specs["*"] || []), ...mine].filter(([l]) => !/^kv/i.test(l));
+    if (rows.length < 3) return "";
+    const others = Object.keys(f.specs).filter((k) => k !== "*" && k !== kv);
+    return `<section class="tech-card wide maker-card"><h3><span class="t-ico" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M6 3h9l4 4v14H6z"/><path d="M14 3v5h5M9 12h7M9 16h7"/></svg></span>
+        Fiche technique du fabricant <small>${mine.length ? `version KV${esc(kv)}` : "toutes versions"}${others.length ? ` · existe aussi en KV${others.map(esc).join(", KV")}` : ""}</small></h3>
+      <dl class="maker-grid">${rows.map(([l, v]) => `<div class="t-row"><dt title="${esc(l)}">${esc(frLabel(l))}</dt><dd>${esc(frValue(v))}</dd></div>`).join("")}</dl>
+      <p class="bench-src">Source : <a href="${esc(f.url)}" target="_blank" rel="noopener">${esc(f.site || hostOf(f.url))}</a> <span class="src-maker">fabricant</span></p>
+    </section>`;
+  }
+
   function benchBlock(m) {
-    const tabs = state.bench[famKey(m)] || [];
+    const f = state.fab[famKey(m)];
+    // The manufacturer's own tests first, those for this KV before the others
+    const kvRe = new RegExp(`kv\\s*${esc(fmt(m.KV))}(?!\\d)|(?<!\\d)${esc(fmt(m.KV))}\\s*kv`, "i");
+    const mine = (t) => t.rows.some((r) => kvRe.test(r.join(" "))) || kvRe.test(t.title || "");
+    const own = ((f && f.tests) || []).slice().sort((a, b) => mine(b) - mine(a));
+    const tabs = [...own, ...(state.bench[famKey(m)] || [])];
     if (!tabs.length) return "";
     const one = (t) => {
+      // A table covering several KV: the rows of this KV only when there are some
+      if (own.includes(t) && mine(t) && t.rows.some((r) => r.length > 1 && !kvRe.test(r.join(" ")))) {
+        t = { ...t, rows: t.rows.filter((r) => r.length === 1 || kvRe.test(r.join(" "))) };
+      }
       const n = t.rows.filter((r) => r.length > 1).length;
       const table = `<div class="bench-scroll"><table><thead><tr>${t.headers.map((h) => `<th>${esc(h)}</th>`).join("")}</tr></thead>
           <tbody>${t.rows.map((r) => r.length === 1 ? `<tr class="bench-sec"><td colspan="${t.headers.length}">${esc(r[0])}</td></tr>`
@@ -719,7 +775,7 @@
         ${t.title ? `<p class="bench-title">${esc(t.title)}</p>` : ""}
         ${benchChart(t)}
         ${n > 8 ? `<details class="bench-more"><summary>Voir le tableau (${n} mesures)</summary>${table}</details>` : table}
-        ${safeUrl(t.source) ? `<p class="bench-src">Source : <a href="${esc(t.source)}" target="_blank" rel="noopener">${esc(new URL(t.source).hostname.replace(/^www\./, ""))}</a></p>` : ""}
+        ${safeUrl(t.source) ? `<p class="bench-src">Source : <a href="${esc(t.source)}" target="_blank" rel="noopener">${esc(new URL(t.source).hostname.replace(/^www\./, ""))}</a>${f && t.source === f.url ? ` <span class="src-maker">fabricant</span>` : ""}</p>` : ""}
       </div>`;
     };
     return `<section class="tech-card wide bench-card"><h3>Banc d'essai <small>${tabs.length} essai${tabs.length > 1 ? "s" : ""} publié${tabs.length > 1 ? "s" : ""} par le fabricant ou la boutique</small></h3>
@@ -736,7 +792,6 @@
     const keyFields = ["POIDS", "D MOTEUR", "H MOTEUR", "D SHAFT", "L SHAFT", "ENTRAXE FIX", "VIS FIX", "LIPO", "CONFIG", "AMP", "PUISSANCE", "TYPE CABLE", "HELICE", "AIMANT", "RESISTANCE", "UTILISATION"];
     const filled = keyFields.filter((k) => has(m[k])).length;
     const pct = Math.round((filled / keyFields.length) * 100);
-    const link = safeUrl(m.LIEN);
     const fam = family(m).filter((x) => x !== m).sort((a, b) => num(a.KV) - num(b.KV));
     const I = {
       id: '<svg viewBox="0 0 24 24"><rect x="4" y="5" width="16" height="14" rx="2"/><path d="M8 10h8M8 14h5"/></svg>',
@@ -748,7 +803,7 @@
     return `<div class="tech-head">
         <div class="meter" role="img" aria-label="Fiche complétée à ${pct} %"><span style="width:${pct}%"></span></div>
         <p>Fiche complétée à <b>${pct} %</b> · ${filled} caractéristiques sur ${keyFields.length}</p>
-        ${link ? `<a class="official" href="${esc(link)}" target="_blank" rel="noopener">Lien officiel</a>` : ""}
+        ${linkBtn(m)}
       </div>
       <div class="tech-grid">
         ${benchmark(m)}
@@ -769,6 +824,7 @@
         ${card("Recommandations", I.reco, [row("Hélice", m.HELICE, "helice"), row("Utilisation", m.UTILISATION, "usage")])}
         ${fam.length ? `<section class="tech-card"><h3><span class="t-ico" aria-hidden="true">${I.mot}</span>Autres KV de ce modèle</h3>
           <div class="versions">${fam.map((x) => `<a href="#m/${encodeURIComponent(x.REF)}">${pv("KV", fmt(x.KV))}</a>`).join("")}</div></section>` : ""}
+        ${makerSheet(m)}
         ${benchBlock(m)}
       </div>`;
   }
@@ -804,16 +860,16 @@
   }
   function panelPhotos(m) {
     const list = gallery(m);
-    const link = safeUrl(m.LIEN);
     // Only real photos here, never the default drawing
-    const linkBtn = link ? `<p class="more-row"><a class="ghost-btn" href="${esc(link)}" target="_blank" rel="noopener">Voir la fiche officielle →</a></p>` : "";
-    if (!list.length) return `<section class="card">${secH("photos", "Photos")}<p class="note">Pas encore de photo pour ce moteur.</p>${linkBtn}</section>`;
+    const l = linkOf(m);
+    const more = l ? `<p class="more-row"><a class="ghost-btn" href="${esc(l.url)}" target="_blank" rel="noopener">${l.maker ? "Voir la fiche du fabricant" : esc(l.label)} →</a></p>` : "";
+    if (!list.length) return `<section class="card">${secH("photos", "Photos")}<p class="note">Pas encore de photo pour ce moteur.</p>${more}</section>`;
     return `<section class="card">${secH("photos", "Photos", `${list.length} photo${list.length > 1 ? "s" : ""}`)}<div class="gallery" data-gallery>
         <div class="g-main"><img src="${esc(list[0])}" alt="${esc(`${m.MARQUE} ${m.NOM}`)}" class="is-photo" onerror="this.closest('[data-gallery]').querySelector('.g-th[aria-current=true]')?.remove();this.remove()">
           ${list.length > 1 ? `<button class="g-nav prev" type="button" aria-label="Photo précédente">‹</button><button class="g-nav next" type="button" aria-label="Photo suivante">›</button>` : ""}
           <span class="g-count">1 / ${list.length}</span></div>
         ${list.length > 1 ? `<div class="g-thumbs">${list.map((u, i) => `<button type="button" class="g-th" data-i="${i}" aria-label="Photo ${i + 1}" aria-current="${i === 0}"><img src="${esc(u)}" alt="" loading="lazy" onerror="this.closest('button').remove()"></button>`).join("")}</div>` : ""}
-      </div>${linkBtn}</section>`;
+      </div>${more}</section>`;
   }
 
 
@@ -958,9 +1014,9 @@
     // community.js is loaded after this file: wait until every script has run
     if (document.readyState === "loading") await new Promise((r) => document.addEventListener("DOMContentLoaded", r));
     try {
-      [state.motors, state.thumbs, state.videos, state.photos, state.logos, state.bench] = await Promise.all([
+      [state.motors, state.thumbs, state.videos, state.photos, state.logos, state.bench, state.fab] = await Promise.all([
         loadCSV().then(parseCSV), loadJSON("thumbs", window.MM_THUMBS), loadJSON("videos", window.MM_VIDEOS), loadJSON("photos", window.MM_PHOTOS),
-        loadJSON("logos", window.MM_LOGOS), loadJSON("bench", window.MM_BENCH),
+        loadJSON("logos", window.MM_LOGOS), loadJSON("bench", window.MM_BENCH), loadJSON("fabricant", window.MM_FAB),
       ]);
     } catch (err) {
       $("empty").textContent = "Le catalogue n'a pas pu être chargé. Réessayez dans quelques minutes.";

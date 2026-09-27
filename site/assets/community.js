@@ -18,7 +18,7 @@
     "L SHAFT": "Longueur shaft (mm)", "TYPE SHAFT": "Type de shaft", "VIS HEL": "Fixation hélice", "VIS FIX": "Vis de fixation",
     "ENTRAXE FIX": "Entraxe de fixation", LIPO: "LiPo (ex. 4S-6S)", "L CABLE": "Longueur câble", "TYPE CABLE": "Section câble (AWG)",
     HELICE: "Hélice recommandée", PUISSANCE: "Puissance max (W)", AMP: "Courant max (A)", AIMANT: "Aimants", CLOCHE: "Cloche",
-    CONFIG: "Configuration (ex. 12N14P)", RESISTANCE: "Résistance", UTILISATION: "Utilisation", LIEN: "Lien officiel",
+    CONFIG: "Configuration (ex. 12N14P)", RESISTANCE: "Résistance", UTILISATION: "Utilisation", LIEN: "Lien (fabricant ou boutique)",
     IMG: "Photo (lien)", AUTRE: "Autre remarque",
   };
   const ROLE_LABEL = { user: "Membre", moderator: "Modération", admin: "Admin" };

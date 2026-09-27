@@ -1179,3 +1179,94 @@ RATE-3115-900,RateFPV,RATE 3115,900,https://www.studiosport.fr/moteur-rate-3115-
 HGLR-X-X,HGLRC,REMPLACEMENT A125,,https://www.studiosport.fr/moteur-de-remplacement-pour-drone-a125-hglrc-a31087.html,Moteur de remplacement pour drone A125 - HGLRC
 IFLI-2812-900,iFlight,NIDICI 2812,900,https://www.studiosport.fr/moteur-fpv-nidici-2812-900-kv-iflight-a31693.html,Moteur FPV NIDICI 2812 900 Kv - iFlight
 IFLI-3115-1250,iFlight,NIDICI 3115 900,1250,https://www.studiosport.fr/moteur-fpv-nidici-3115-900-1250-kv-iflight-a31694.html,Moteur FPV NIDICI 3115 900-1250 Kv - iFlight
+TMOT-U8LITEL-95,T-Motor,U8 LITE L,95,https://store.tmotor.com/product/u8lite-l-kv110-u-efficiency.html,U8 Lite L Efficiency Multirotor UAV Motor KV110
+TMOT-U8LITEL-110,T-Motor,U8 LITE L,110,https://store.tmotor.com/product/u8lite-l-kv110-u-efficiency.html,U8 Lite L Efficiency Multirotor UAV Motor KV110
+TMOT-U15XXL-29,T-Motor,U15XXL,29,https://store.tmotor.com/product/u15xxl-manned-aircraft-uav-motor.html,U15XXL Manned Aircraft Type UAV Motor 12-24S 29KV
+TMOT-U15XL-38,T-Motor,U15XL,38,https://store.tmotor.com/product/u15xl-manned-aircraft-uav-motor.html,U15XL Manned Aircraft Type UAV Motor 12-24S 38KV
+TMOT-U7-280,T-Motor,U7,280,https://store.tmotor.com/product/tmotor-u7-v2-motor-u-power.html,U7 Power Type UAV Motor KV490
+TMOT-U11II-120,T-Motor,U11II,120,https://store.tmotor.com/product/u11-v2-motor-u-power.html,U11Ⅱ Power Type UAV Motor KV120
+TMOT-U15II-100,T-Motor,U15II,100,https://store.tmotor.com/product/u15-v2-motor-u-power-kv80.html,U15II Power Type Heavy Lift Drone Motor KV80
+TMOT-U15L-43,T-Motor,U15L,43,https://store.tmotor.com/product/u15l-manned-aircraft-uav-motor.html,U15L Manned Aircraft Type UAV Motor 12-24S 43KV
+TMOT-U8LITE-85,T-Motor,U8 LITE,85,https://store.tmotor.com/product/u8-lite-kv100-u-efficiency.html,U8 Lite Efficiency Type Multirotor UAV Motor KV100
+TMOT-U8LITE-100,T-Motor,U8 LITE,100,https://store.tmotor.com/product/u8-lite-kv100-u-efficiency.html,U8 Lite Efficiency Type Multirotor UAV Motor KV100
+TMOT-U8LITE-150,T-Motor,U8 LITE,150,https://store.tmotor.com/product/u8-lite-kv100-u-efficiency.html,U8 Lite Efficiency Type Multirotor UAV Motor KV100
+TMOT-U8LITE-190,T-Motor,U8 LITE,190,https://store.tmotor.com/product/u8-lite-kv100-u-efficiency.html,U8 Lite Efficiency Type Multirotor UAV Motor KV100
+TMOT-U8II-85,T-Motor,U8 II,85,https://store.tmotor.com/product/u8-v2-u-efficiency-kv85.html,U8Ⅱ Efficiency Multirotor UAV Motor KV85
+TMOT-U8II-100,T-Motor,U8 II,100,https://store.tmotor.com/product/u8-v2-u-efficiency-kv85.html,U8Ⅱ Efficiency Multirotor UAV Motor KV85
+TMOT-U8II-150,T-Motor,U8 II,150,https://store.tmotor.com/product/u8-v2-u-efficiency-kv85.html,U8Ⅱ Efficiency Multirotor UAV Motor KV85
+TMOT-U8IILITE-100,T-Motor,U8II LITE,100,https://store.tmotor.com/product/u8-v2-lite-u-efficiency.html,U8ⅡLite Efficiency Type Multirotor UAV Motor KV100/KV85
+TMOT-U8IIPRO-100,T-Motor,U8II PRO,100,https://store.tmotor.com/product/u8-2-pro-u-efficiency.html,U8ⅡPRO Efficiency Type Multirotor UAV Motor KV100
+TMOT-U10II-100,T-Motor,U10II,100,https://store.tmotor.com/product/u10-2-u-efficiency.html,U10Ⅱ Efficiency Multirotor UAV Motor KV100
+TMOT-U12II-120,T-Motor,U12II,120,https://store.tmotor.com/product/u12-v2-kv60-u-efficiency.html,U12Ⅱ Efficiency Multirotor UAV Motor KV60
+TMOT-U12II-60,T-Motor,U12II,60,https://store.tmotor.com/product/u12-v2-kv60-u-efficiency.html,U12Ⅱ Efficiency Multirotor UAV Motor KV60
+TMOT-1118-90,T-Motor,MN1118,90,https://store.tmotor.com/product/mn1118-multirotor-uav-motor.html,MN1118 KV90/KV108
+TMOT-1118-108,T-Motor,MN1118,108,https://store.tmotor.com/product/mn1118-multirotor-uav-motor.html,MN1118 KV90/KV108
+TMOT-1123-53,T-Motor,MN1123,53,https://store.tmotor.com/product/mn1123-multirotor-uav-motor.html,MN1123 KV53
+TMOT-1130-45,T-Motor,MN1130,45,https://store.tmotor.com/product/mn1130-multirotor-uav-motor.html,MN1130 KV45/KV53
+TMOT-1130-53,T-Motor,MN1130,53,https://store.tmotor.com/product/mn1130-multirotor-uav-motor.html,MN1130 KV45/KV53
+TMOT-1315-100,T-Motor,MN1315,100,https://store.tmotor.com/product/mn1315-multirotor-uav-motor.html,MN1315 KV100
+TMOT-1320-49,T-Motor,MN1320,49,https://store.tmotor.com/product/mn1320-multirotor-uav-motor.html,MN1320 KV49
+TMOT-1325-47,T-Motor,MN1325,47,https://store.tmotor.com/product/mn1325-multirotor-uav-motor.html,MN1325 KV47
+TMOT-1115-110,T-Motor,MN1115,110,https://store.tmotor.com/product/mn1115-multirotor-uav-motor.html,MN1115 KV110/KV130
+TMOT-1115-130,T-Motor,MN1115,130,https://store.tmotor.com/product/mn1115-multirotor-uav-motor.html,MN1115 KV110/KV130
+TMOT-1330-40,T-Motor,MN1330,40,https://store.tmotor.com/product/mn1330-multirotor-uav-motor.html,MN1330 KV40
+TMOT-2806-400,T-Motor,MN2806,400,https://store.tmotor.com/product/mn2806-motor-antigravity-type.html,MN2806 Antigravity Multirotor UAVs Motor KV400/KV650
+TMOT-2806-650,T-Motor,MN2806,650,https://store.tmotor.com/product/mn2806-motor-antigravity-type.html,MN2806 Antigravity Multirotor UAVs Motor KV400/KV650
+TMOT-8012-100,T-Motor,MN8012,100,https://store.tmotor.com/product/mn8012-motor-antigravity-type.html,MN8012 Antigravity Multirotor VTOL UAV Motor KV100
+TMOT-GB362-30,T-Motor,GB36-2,30,https://store.tmotor.com/product/gb36-2-gimbal-type.html,GB36-2 Gimbal Type 3-6S UAV Drone Motor KV30
+TMOT-2317-1400,T-Motor,AS 2317 LONG SHAFT,1400,https://store.tmotor.com/product/at2317-long-shaft-fixed-wing-motor.html,AT2317 Long Shaft Outdoor 3D Trainer Glider Motor-KV1400/KV880/KV1250
+TMOT-AX435A-220,T-Motor,AX435-A,220,https://store.tmotor.com/product/ax435-a-kv220-fixed-wing-motor.html,AX435-A
+TMOT-AX435A-250,T-Motor,AX435-A,250,https://store.tmotor.com/product/ax435-a-kv220-fixed-wing-motor.html,AX435-A
+TMOT-AX435B-220,T-Motor,AX435-B,220,https://store.tmotor.com/product/ax435-b-kv220-fixed-wing-motor.html,AX435-B
+TMOT-AX435B-250,T-Motor,AX435-B,250,https://store.tmotor.com/product/ax435-b-kv220-fixed-wing-motor.html,AX435-B
+TMOT-AX525A-250,T-Motor,AX525-A,250,https://store.tmotor.com/product/ax525-a-kv250-fixed-wing-motor.html,AX525-A
+TMOT-AX525B-250,T-Motor,AX525-B,250,https://store.tmotor.com/product/ax525-b-kv250-fixed-wing-motor.html,AX525-B
+TMOT-AX530A-260,T-Motor,AX530-A,260,https://store.tmotor.com/product/ax530-a-kv260-fixed-wing-motor.html,AX530-A
+TMOT-AX530B-260,T-Motor,AX530-B,260,https://store.tmotor.com/product/ax530-b-kv260-fixed-wing-motor.html,AX530-B
+TMOT-V505-260,T-Motor,V505,260,https://store.tmotor.com/product/v505-vtol-motor.html,V505 KV260 12S Vtol Drone Power
+TMOT-V602-180,T-Motor,V602,180,https://store.tmotor.com/product/v602-vtol-motor.html,V602 KV180 12S Vtol Brushless Drone Motor
+TMOT-V605-210,T-Motor,V605,210,https://store.tmotor.com/product/v605-vtol-motor.html,V605 KV210 12S Vtol Brushless Drone Motor
+TMOT-V804-170,T-Motor,V804,170,https://store.tmotor.com/product/v804-vtol-motor.html,V804 KV170 12S Brushless Motor for Vtol Drone
+TMOT-V807-170,T-Motor,V807,170,https://store.tmotor.com/product/v807-vtol-motor.html,V807 KV170 12S Vtol Brushless Drone Motor
+TMOT-V10-160,T-Motor,V10,160,https://store.tmotor.com/product/v10-vtol-motor.html,V10 KV160 12S Brushless Motor for Large Vtol
+TMOT-V10L-170,T-Motor,V10L,170,https://store.tmotor.com/product/v10l-vtol-motor.html,V10L KV170 12S Brushless Vtol Drone Motor
+TMOT-V13L-65,T-Motor,V13L,65,https://store.tmotor.com/product/v13l-vtol-motor.html,V13L KV65 24S Brushless Big Vtol Drone Motor
+TMOT-1040-150,T-Motor,VL1040,150,https://store.tmotor.com/product/vl1040-kv150-vtol-uav-motor.html,VL1040 KV150
+TMOT-1155-65,T-Motor,VL1155,65,https://store.tmotor.com/product/vl1155-kv65-vtol-uav-motor.html,VL1155 KV65
+TMOT-1165-60,T-Motor,VL1165,60,https://store.tmotor.com/product/vl1165-kv60-vtol-uav-motor.html,VL1165 KV60
+TMOT-1180-60,T-Motor,VL1180,60,https://store.tmotor.com/product/vl1180-kv60-vtol-uav-motor.html,VL1180 KV60
+TMOT-1380-60,T-Motor,VL1380,60,https://store.tmotor.com/product/vl1380-kv60-vtol-uav-motor.html,VL1380 KV60
+TMOT-5009-275,T-Motor,VL5009,275,https://store.tmotor.com/product/vl5009-brushless-motor-for-uavs.html,VL5009
+TMOT-6011-180,T-Motor,VL6011,180,https://store.tmotor.com/product/vl6011-powerful-drone-motor-for-uavs.html,VL6011
+TMOT-6013-210,T-Motor,VL6013,210,https://store.tmotor.com/product/vl6013-heavy-drone-motor-for-uavs.html,VL6013
+TMOT-8020-180,T-Motor,AT8020,180,https://store.tmotor.com/product/at8020-fixed-wing-motor.html,AT8020 55CC VTOL UAV Fixed Wing Aircraft Long Shaft Motor 180KV/210KV
+TMOT-8020-210,T-Motor,AT8020,210,https://store.tmotor.com/product/at8020-fixed-wing-motor.html,AT8020 55CC VTOL UAV Fixed Wing Aircraft Long Shaft Motor 180KV/210KV
+TMOT-8025-160,T-Motor,AT8025,160,https://store.tmotor.com/product/at8025-fixed-wing-motor.html,AT8025 70CC VTOL UAV Fixed Wing Aircraft Long Shaft Motor KV160/KV190
+TMOT-8025-190,T-Motor,AT8025,190,https://store.tmotor.com/product/at8025-fixed-wing-motor.html,AT8025 70CC VTOL UAV Fixed Wing Aircraft Long Shaft Motor KV160/KV190
+TMOT-8030-160,T-Motor,AT8030,160,https://store.tmotor.com/product/at8030-brushless-outdoor-fixed-wing-motor.html,AT8030 85CC VTOL UAV Fixed Wing Aircraft Long Shaft MotorKV160/KV190
+TMOT-8030-190,T-Motor,AT8030,190,https://store.tmotor.com/product/at8030-brushless-outdoor-fixed-wing-motor.html,AT8030 85CC VTOL UAV Fixed Wing Aircraft Long Shaft MotorKV160/KV190
+TMOT-5220-380,T-Motor,AT5220A,380,https://store.tmotor.com/product/at5220-a-fixed-wing-motor.html,AT5220A 20-25CC VTOL Fixed Wing Aircraft Shaft Motor KV220/KV380
+TMOT-5230-200,T-Motor,AT5230B,200,https://store.tmotor.com/product/at5230-b-fixed-wing-motor.html,AT5230B 25-30CC VTOL Fixed Wing Aircraft Shaft Motor KV200
+TMOT-5330-220,T-Motor,AT5330A,220,https://store.tmotor.com/product/at5330-a-fixed-wing-motor.html,AT5330A 25-30CC VTOL Fixed Wing Aircraft Shaft Motor KV220
+TMOT-1030-90,T-Motor,AT1030,90,https://store.tmotor.com/product/fixed-wing-motor-at1030.html,AT1030 110CC
+TMOT-1040-90,T-Motor,AT1040,90,https://store.tmotor.com/product/fixed-wing-motor-at1040.html,AT1040 130CC
+TMOT-1050-90,T-Motor,AT1050,90,https://store.tmotor.com/product/fixed-wing-motor-at1050.html,AT1050 150CC
+TMOT-2806-650-2,T-Motor,MN2806 EVO,650,https://store.tmotor.com/product/antigravity-mn2806-evo-motor.html,Antigravity MN2806 EVO KV650
+TMOT-6007-160,T-Motor,MN6007 II,160,https://store.tmotor.com/product/mn6007-v2-motor-antigravity-type.html,MN6007 II Multirotor VTOL UAV Motor KV160/KV320
+TMOT-6007-320,T-Motor,MN6007 II,320,https://store.tmotor.com/product/mn6007-v2-motor-antigravity-type.html,MN6007 II Multirotor VTOL UAV Motor KV160/KV320
+TMOT-8014-100,T-Motor,MN8014,100,https://store.tmotor.com/product/mn8014-motor-antigravity-type.html,MN8014 Antigravity Multirotor VTOL UAV Motor KV100
+TMOT-8017-120,T-Motor,MN8017,120,https://store.tmotor.com/product/mn8017-motor-antigravity-type.html,MN8017 Antigravity Multirotor UAVs Motor KV120
+TMOT-4116-340,T-Motor,MN4116,340,https://store.tmotor.com/product/mn4116-motor-navigator-type.html,MN4116 Multi-Motor Fixed Wing UAV Motor KV340/KV450
+TMOT-4116-450,T-Motor,MN4116,450,https://store.tmotor.com/product/mn4116-motor-navigator-type.html,MN4116 Multi-Motor Fixed Wing UAV Motor KV340/KV450
+TMOT-4112-320,T-Motor,MN4112,320,https://store.tmotor.com/product/mn4112-motor-navigator-type.html,MN4112 Multi-Motor Fixed Wing UAV Motor KV320/KV420
+TMOT-4112-420,T-Motor,MN4112,420,https://store.tmotor.com/product/mn4112-motor-navigator-type.html,MN4112 Multi-Motor Fixed Wing UAV Motor KV320/KV420
+TMOT-4110-300,T-Motor,MN4110,300,https://store.tmotor.com/product/mn4110-motor-navigator-type.html,MN4110 Multirotor Fixed Wing UAV Motor KV300/KV340/KV400
+TMOT-4110-340,T-Motor,MN4110,340,https://store.tmotor.com/product/mn4110-motor-navigator-type.html,MN4110 Multirotor Fixed Wing UAV Motor KV300/KV340/KV400
+TMOT-4110-400,T-Motor,MN4110,400,https://store.tmotor.com/product/mn4110-motor-navigator-type.html,MN4110 Multirotor Fixed Wing UAV Motor KV300/KV340/KV400
+TMOT-MN501S-300,T-Motor,MN501-S,300,https://store.tmotor.com/product/mn501-s-kv240-motor-navigator-type.html,MN501-S IP45 Multirotor Fixed Wing UAV Motor KV240
+TMOT-MN601S-320,T-Motor,MN601-S,320,https://store.tmotor.com/product/mn601-s-kv170-motor-navigator-type.html,MN601-S IP45 Multirotor Fixed Wing UAV KV170 2PCS/SET
+TMOT-MN605S-170,T-Motor,MN605-S,170,https://store.tmotor.com/product/mn605-s-kv170-motor-navigator-type.html,MN605-S IP45 Multirotor Fixed Wing UAV Motor KV170 2PCS/SET
+TMOT-MN605S-320,T-Motor,MN605-S,320,https://store.tmotor.com/product/mn605-s-kv170-motor-navigator-type.html,MN605-S IP45 Multirotor Fixed Wing UAV Motor KV170 2PCS/SET
+TMOT-MN805S-120,T-Motor,MN805-S,120,https://store.tmotor.com/product/mn805-s-kv120-motor-navigator-type.html,MN805-S IP45 Multirotor Fixed Wing UAV Motor KV120
+TMOT-MN805S-150,T-Motor,MN805-S,150,https://store.tmotor.com/product/mn805-s-kv120-motor-navigator-type.html,MN805-S IP45 Multirotor Fixed Wing UAV Motor KV120
+TMOT-MN805S-170,T-Motor,MN805-S,170,https://store.tmotor.com/product/mn805-s-kv120-motor-navigator-type.html,MN805-S IP45 Multirotor Fixed Wing UAV Motor KV120

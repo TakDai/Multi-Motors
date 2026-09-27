@@ -1352,3 +1352,14 @@ html, body { overflow-x: hidden; }
 .rv-form > * { width: 100%; }
 .rv-form > .btn-red { width: auto; }
 .rv-rate { justify-content: flex-end; width: auto !important; align-self: flex-start; }
+
+/* --- Links: manufacturer's page vs reseller ------------------------------ */
+.official.shop { background: #fff; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 240px; padding: 0 10px; }
+.official.maker::before { content: "✓ "; font-weight: 700; }
+.src-maker { display: inline-block; margin-left: 6px; padding: 1px 7px; border-radius: 999px; background: var(--red); color: #000; font-size: 11px; font-weight: 700; }
+
+/* --- Manufacturer's spec sheet -------------------------------------------- */
+.maker-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 0 18px; margin: 0; }
+.maker-grid .t-row dt { flex: 0 1 45%; min-width: 0; line-height: 1.35; }
+.maker-grid .t-row dd { overflow-wrap: anywhere; }
+.maker-card h3 small { font-weight: 500; }
