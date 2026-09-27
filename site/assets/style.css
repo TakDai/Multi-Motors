@@ -1387,5 +1387,8 @@ html, body { overflow-x: hidden; }
   transition: max-width .35s cubic-bezier(.2, .8, .2, 1), opacity .25s; }
 .site-logo:hover .site-name, .site-logo:focus-visible .site-name { max-width: 220px; opacity: 1; }
 .title-in-view .site-name { display: none; }
+/* Home: the big title already names the site, so no logo; "Actualités" takes its place on the left */
+#app:has(#view-home:not([hidden])) .site-logo { display: none; }
+#app:has(#view-home:not([hidden])) .topnav > .nav-pill[href="#actus"] { margin-right: auto; }
 @media (max-width: 600px) { .site-logo img { width: 36px; } }
 @media (hover: none) { .site-name { display: none; } }
