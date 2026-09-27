@@ -1027,7 +1027,18 @@
   const pageIn = (v) => { v.classList.remove("page-in"); void v.offsetWidth; v.classList.add("page-in"); };
   new MutationObserver((list) => list.forEach((r) => { if (r.target.classList.contains("view") && r.oldValue !== null && !r.target.hidden) pageIn(r.target); }))
     .observe(document.getElementById("app"), { subtree: true, attributes: true, attributeFilter: ["hidden"], attributeOldValue: true });
-  document.addEventListener("animationend", (e) => { if (e.animationName === "page-in") e.target.classList.remove("page-in"); });
+  document.addEventListener("animationend", (e) => { if (/^page-(in|fade)$/.test(e.animationName)) e.target.classList.remove("page-in"); });
+  // A link to another page: the current page fades out, then the new one comes in
+  document.addEventListener("click", (e) => {
+    const a = e.target.closest('a[href^="#"]');
+    if (!a || e.defaultPrevented || e.button || e.metaKey || e.ctrlKey || e.shiftKey) return;
+    const to = a.getAttribute("href");
+    if (to === location.hash || (to === "#" && !location.hash) || a.dataset.scroll || a.closest(".d-tabs,[role=tablist]")) return;
+    e.preventDefault();
+    const app = document.getElementById("app");
+    app.classList.add("page-out");
+    setTimeout(() => { app.classList.remove("page-out"); location.hash = to; }, 170);
+  });
 
   // --- Routing -------------------------------------------------------------
   function route() {

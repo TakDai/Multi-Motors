@@ -1398,10 +1398,21 @@ html, body { overflow-x: hidden; }
 @media (hover: none) { .site-name { display: none; } }
 
 /* --- Page changes: the new page fades and rises in ------------------------- */
-.view.page-in { animation: page-in .5s cubic-bezier(.2, .8, .2, 1) both; }
-@keyframes page-in { from { opacity: 0; transform: translateY(16px); filter: blur(4px); } to { opacity: 1; transform: none; filter: none; } }
+.view.page-in { animation: page-in .7s cubic-bezier(.16, .84, .24, 1) both; }
+@keyframes page-in { 0% { opacity: 0; transform: translateY(36px) scale(.98); filter: blur(6px); } 60% { opacity: 1; filter: none; } 100% { opacity: 1; transform: none; filter: none; } }
+/* The page being left fades out quickly before the new one comes in */
+#app.page-out .view:not([hidden]) { opacity: 0; transform: translateY(-10px); transition: opacity .16s ease-in, transform .16s ease-in; }
 .topnav .nav-pill { transition: transform .25s cubic-bezier(.3, 1.4, .5, 1), background-color .2s, border-color .2s, color .2s; }
+/* Reduced motion: no movement, but the fades stay (they are what shows the change) */
+/* (!important: the general rule above turns every animation off in that mode) */
 @media (prefers-reduced-motion: reduce) {
-  .site-logo, .view.page-in { animation: none; }
-  .site-logo img, .site-name, .site-name i { transition: none; }
+  .view.page-in { animation: page-fade .45s ease both !important; }
+  .site-logo { animation: page-fade .45s ease both !important; }
+  .site-logo:hover img, .site-logo:focus-visible img { transform: none; }
+  .site-name { transition: max-width .3s ease !important; }
+  .site-name i { transform: none; filter: none; transition: opacity .3s ease !important; }
+  #app.page-out .view:not([hidden]) { transform: none; transition: opacity .16s ease-in !important; }
 }
+@keyframes page-fade { from { opacity: 0; } to { opacity: 1; } }
+/* Touch screens: a tap on the logo gives the same tilt */
+@media (hover: none) { .site-logo:active img { transform: rotate(-10deg) scale(1.08); transition-duration: .2s; } }
