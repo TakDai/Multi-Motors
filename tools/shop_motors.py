@@ -42,7 +42,7 @@ NOISE = re.compile(r"\b(brushless|fpv|drone|racing|race|freestyle|cinematic|cine
 NOT_BRANDS = {"editionyukisavage", "unite", "camerabutter", "fpvstorerc", "fpvelite", "hqprop", "sequre", "quadifier", "hypetrain"}
 # Accessories whose title mentions the motor they fit ("bearing for 22xx motors")
 ACCESSORY = re.compile(r"\b(roulements?|bearings?|plugs?|screws?|vis|magnets?|aimants?|stators? only|connecteurs?|connectors?|"
-                       r"guards?|tubes?|protections?|covers?)\b", re.I)
+                       r"guards?|tubes?|protections?|covers?|brushed|coreless|[àa] balais)\b", re.I)  # not brushless motors
 # Words that only mean "accessory" when the title gives no KV ("spare part motor 16000KV" is a motor)
 MAYBE_ACCESSORY = re.compile(r"\b(replacement|spare|kit|bells?|cloches?|shafts?)\b", re.I)
 COLORS = r"(black|white|red|blue|green|orange|gold|golden|silver|grey|gray|purple|pink|yellow|rainbow|royal|gunmetal|titanium|" \
