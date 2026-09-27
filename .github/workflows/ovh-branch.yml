@@ -1,0 +1,60 @@
+name: Site prêt pour OVH (branche ovh)
+
+# Construit le site tel qu'il doit être servi (contenu de site/ + data/moteurs.csv)
+# et le pousse sur la branche "ovh". L'hébergement OVH est associé à cette branche
+# (Hébergements > Sites internet > Associer Git) : son webhook récupère chaque mise à jour.
+on:
+  # Après chaque recherche quotidienne (ses commits ne déclenchent pas "push")
+  workflow_run:
+    workflows: ["Recherche quotidienne des nouveaux moteurs"]
+    types: [completed]
+  push:
+    branches: [Moteurs]
+    paths: ["site/**", "catalogue/moteurs.csv", ".github/workflows/ovh-branch.yml"]
+  workflow_dispatch: {}
+
+permissions:
+  contents: write
+
+concurrency:
+  group: ovh-branch
+  cancel-in-progress: true
+
+jobs:
+  build:
+    if: github.event_name != 'workflow_run' || github.event.workflow_run.conclusion == 'success'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.repository.default_branch }}
+
+      - name: Préparer les fichiers du site
+        run: |
+          mkdir -p build/data
+          cp -r site/. build/
+          cp catalogue/moteurs.csv build/data/moteurs.csv
+          rm -f build/api/config.php
+          # La configuration de la base (api/config.php) se dépose une fois sur l'hébergement, jamais dans Git
+          printf 'api/config.php\n' > build/.gitignore
+          printf 'Site Multi-Motors prêt à servir, généré automatiquement depuis la branche %s (%s).\nNe pas modifier ici : les changements sont écrasés à chaque mise à jour.\n' \
+            "${{ github.event.repository.default_branch }}" "$(git rev-parse --short HEAD)" > build/LISEZMOI.txt
+
+      - name: Pousser sur la branche ovh
+        # Historique conservé (pas de push forcé) : OVH met à jour son dossier par un simple "pull"
+        run: |
+          REPO="https://x-access-token:${{ github.token }}@github.com/${{ github.repository }}.git"
+          if git ls-remote --exit-code --heads "$REPO" ovh >/dev/null; then
+            git clone -q --depth 1 --branch ovh "$REPO" out
+          else
+            mkdir out && git -C out init -q -b ovh && git -C out remote add origin "$REPO"
+          fi
+          find out -mindepth 1 -maxdepth 1 ! -name .git -exec rm -rf {} +
+          cp -r build/. out/
+          cd out
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          if git diff --cached --quiet; then echo "Rien de nouveau à publier."; exit 0; fi
+          git commit -q -m "Site du $(date -u +%F) ($(git -C .. rev-parse --short HEAD))"
+          git push -q origin ovh

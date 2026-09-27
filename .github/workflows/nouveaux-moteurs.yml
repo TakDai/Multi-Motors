@@ -43,6 +43,12 @@ jobs:
           REQUEST_DELAY_MAX: "3"
         run: python -m multi_motors_ai.main --once --output github
 
+      - name: Moteurs vendus en boutique qui manquent au catalogue
+        run: python tools/shop_motors.py || true
+
+      - name: Fiches techniques des sites fabricants (T-Motor…)
+        run: python tools/maker_sheets.py || true
+
       - name: Compléter les fiches (500 familles par jour)
         run: python tools/enrich.py --limit 500 || true
 
@@ -58,12 +64,17 @@ jobs:
           python tools/videos.py --limit 300 || true
           python tools/photos.py || true
           python tools/photos_sites.py || true
+          python tools/photos_dedupe.py || true
+          python tools/bench.py || true
 
       - name: Miniatures et fil d'actualité
         run: |
           python tools/thumbs.py || true
           python tools/logos.py || true
           python tools/actus.py || true
+
+      - name: Uniformiser le format des caractéristiques
+        run: python tools/normalize.py
 
       - name: Publier sur GitHub
         run: |

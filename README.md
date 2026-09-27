@@ -145,13 +145,14 @@ GetFPV, RaceDayQuads, Pyrodrone, BetaFPV, iFlight-RC
 
 Le workflow `.github/workflows/nouveaux-moteurs.yml` s'exécute chaque jour à 06:00 UTC (08:00 à Paris en été) :
 
-1. importe le tableau Google (export xlsx) avec `tools/import_sheet.py` : nouveaux moteurs et valeurs ajoutées dans le tableau ; les lignes aux colonnes décalées sont réalignées (poids, puissance) ;
+1. importe le tableau Google (export xlsx) avec `tools/import_sheet.py` : nouveaux moteurs et valeurs ajoutées dans le tableau ; les lignes aux colonnes décalées sont réalignées (poids, puissance)  ; puis `tools/dedupe.py` fusionne les doublons : une seule écriture par marque (les marques connues sous deux noms sont listées dans `catalogue/marques_alias.json`) et un seul moteur par marque + modèle + KV ;
 2. cherche les nouveaux moteurs sur internet (`python -m multi_motors_ai.main --once --output github`) ;
+   puis ajoute les moteurs vendus par les boutiques qui manquent au catalogue (`tools/shop_motors.py` : rayon moteurs complet de 15 boutiques, marque, modèle, classe et KV reconnus dans chaque produit, caractéristiques lues sur la fiche produit, sources dans `catalogue/ajouts_boutiques.csv`) ;
 3. complète 500 fiches par jour depuis les pages produit des boutiques (`tools/enrich.py`) ;
 4. intègre les corrections validées par la communauté (`tools/community_sync.py`) ;
 5. relève les prix et les photos dans 15 boutiques (`tools/prices.py`, liste dans `tools/shops.py` : RaceDayQuads, Pyrodrone, NewBeeDrone, Rotor Riot, SpeedyFPV, FPVFaster, Quadmula, Unmanned Tech, Drone-FPV-Racer, Studiosport et les boutiques officielles Emax, RushFPV, BetaFPV, HGLRC, Diatone) : 400 modèles par jour, les prix les plus anciens d'abord ;
-6. ajoute des vidéos de review, des photos des sites fabricants (`tools/photos_sites.py`), les miniatures, les logos des nouvelles marques et le fil d'actualité ;
-7. commit le tout ; le workflow `deploy-ovh.yml` met ensuite le site en ligne.
+6. ajoute des vidéos de review, des photos des sites fabricants (`tools/photos_sites.py`), retire les photos en double (`tools/photos_dedupe.py`, par empreinte visuelle), relève les tableaux de poussée / banc d'essai des fiches produit (`tools/bench.py`, affichés sous la fiche technique avec leur courbe), les miniatures, les logos des nouvelles marques et le fil d'actualité ;
+7. uniformise l'écriture des caractéristiques (`tools/normalize.py` : « 150 mm », « 20 AWG », « 5\" », « 16x16 », « 46.8 mΩ ») puis commit le tout ; le workflow `deploy-ovh.yml` met ensuite le site en ligne.
 
 **Important :** GitHub ne lance les tâches planifiées que depuis la branche par défaut du dépôt (`Moteurs`). Tant que ces fichiers ne sont que sur une autre branche, rien ne tourne automatiquement.
 
@@ -169,6 +170,10 @@ python -m http.server 8000
 ```
 
 ### Mise en ligne sur OVH
+
+**Méthode conseillée : association Git (sans identifiants à stocker).** Le workflow `.github/workflows/ovh-branch.yml` construit le site prêt à servir (contenu de `site/` + `data/moteurs.csv`) et le pousse sur la branche **`ovh`** après chaque recherche quotidienne et chaque modification de `Moteurs`. Dans l'espace client OVH : *Web Cloud → Hébergements → Sites internet → Associer Git* sur le dossier de multi-motors.fr (vide au départ), dépôt `https://github.com/TakDai/Multi-Motors`, branche `ovh` ; puis, dans GitHub (*Settings → Webhooks → Add webhook*), coller l'« Url de webhook » donnée par OVH (type `application/json`, évènement *push*). La configuration de la base (`api/config.php`, modèle `api/config.sample.php`) se dépose une seule fois dans le dossier par FTP ou le gestionnaire de fichiers OVH ; elle n'est jamais dans Git.
+
+**Autre méthode : FTP.**
 
 Le workflow `.github/workflows/deploy-ovh.yml` envoie le site par FTP sur l'hébergement OVH après chaque recherche quotidienne et à chaque modification de `site/` sur `Moteurs`. Il n'efface aucun fichier existant sur l'hébergement.
 
@@ -214,6 +219,9 @@ Au déploiement, `tools/make_config.py` écrit `api/config.php` à partir de ces
 ### Fonctionnement
 
 - **Comptes** : email + mot de passe (lien de confirmation par email, mot de passe oublié) ou Google.
+- **Profils** : chaque membre a une page publique (`#u/ID`) avec photo ou initiales sur une couleur, présentation, localisation, type de vol, liens (site, YouTube, Instagram), badges gagnés (contributeur, avis, setup partagé…), statistiques, « Mon setup » (jusqu'à 8 moteurs du catalogue), moteurs aimés et derniers avis. La page **Modifier mon profil** (`#profil`) permet aussi de changer de pseudo, d'email ou de mot de passe, de rendre son profil privé, de masquer ses « j'aime » et de supprimer son compte. Les photos sont recadrées et réduites dans le navigateur, puis vérifiées par le serveur (PNG, JPEG ou WebP, 200 Ko au maximum). La table `profiles` est créée automatiquement.
+- **Mon espace** (`#moi`) : historique des moteurs consultés (sur l'appareil, et sur le compte une fois connecté), moteurs aimés, « Mes moteurs » (possédés, testés, envies, avec une note perso, affichés aussi sur le profil public) et mes avis. Sur chaque fiche, les boutons « Je le possède / Je l'ai testé / Il me fait envie » et le nombre de pilotes qui l'ont en main.
+- **Avis** : note sur 5, qualités et défauts (une par ligne), texte libre ; la note moyenne s'affiche sur la fiche. Tables `garage` et `history` et colonnes `rating`, `pros`, `cons` ajoutées automatiquement.
 - **J'aime** et **commentaires** par moteur ; l'onglet « Best-seller » trie par nombre de j'aime.
 - **Suggestions de modification** : un membre propose une nouvelle valeur (avec sa source) ; un modérateur la valide (éventuellement corrigée) ou la refuse depuis **#admin**. Validée, elle s'affiche tout de suite sur la fiche (« Corrigé par la communauté ») et la tâche quotidienne l'intègre au catalogue (`tools/community_sync.py`).
 - **Panneau d'administration** (`#admin`) : suggestions, commentaires (masquer / supprimer), membres (rôles modérateur / admin, suspension), actualités du site.

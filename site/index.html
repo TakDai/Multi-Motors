@@ -12,7 +12,7 @@
 <!--APP-->
 <div id="app">
   <nav class="topnav" aria-label="Navigation">
-    <a class="nav-pill" href="#">Catalogue</a>
+    <a class="site-logo" href="#" aria-label="Multi-Motors — accueil" title="Multi-Motors — accueil"><img src="assets/img/logo-multi-motors.png" alt="Multi-Motors" width="74" height="81"><span class="site-name" aria-hidden="true"><i style="--i:0">M</i><i style="--i:1">u</i><i style="--i:2">l</i><i style="--i:3">t</i><i style="--i:4">i</i><i style="--i:5">-</i><i style="--i:6">M</i><i style="--i:7">o</i><i style="--i:8">t</i><i style="--i:9">o</i><i style="--i:10">r</i><i style="--i:11">s</i></span></a>
     <a class="nav-pill" href="#actus">Actualités</a>
     <span id="acct"></span>
   </nav>
@@ -130,6 +130,7 @@
   <!-- ================= ACTUALITÉS / ADMINISTRATION ================= -->
   <section id="view-actus" class="view" data-extra hidden></section>
   <section id="view-admin" class="view" data-extra hidden></section>
+  <section id="view-profile" class="view" data-extra hidden></section>
 
   <!-- ================= PAGE MOTEUR ================= -->
   <section id="view-detail" class="view" hidden>
@@ -139,6 +140,7 @@
 </div>
 <dialog id="modal" aria-label="Fenêtre"></dialog>
 <div id="toasts" aria-live="polite"></div>
+<button type="button" class="to-top" id="to-top" aria-label="Remonter en haut de la page" title="Haut de page" hidden><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 19V5M5.5 11.5L12 5l6.5 6.5"/></svg></button>
 <!--/APP-->
 <script src="assets/app.js"></script>
 <script src="assets/community.js"></script>

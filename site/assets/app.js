@@ -26,7 +26,7 @@
   const brandLogo = (upper) => (LOGOS[upper] ? asset(LOGOS[upper]) : logoSrc({ MARQUE: upper }));
   // Extension points used by community.js (accounts, likes, prices, news…)
   const hooks = (window.MM_HOOKS = window.MM_HOOKS || {});
-  const state = { motors: [], thumbs: {}, videos: {}, photos: {}, tab: "populaire", sort: "", q: "", shown: PAGE, f: {}, adv: {}, logos: {}, revealed: false };
+  const state = { motors: [], thumbs: {}, videos: {}, photos: {}, tab: "populaire", sort: "", q: "", shown: PAGE, f: {}, adv: {}, logos: {}, bench: {}, fab: {}, revealed: false };
 
   // --- CSV -----------------------------------------------------------------
   function parseCSV(text) {
@@ -77,6 +77,19 @@
   const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
   const num = (s) => { const n = parseFloat(String(s ?? "").replace(",", ".")); return Number.isFinite(n) ? n : null; };
   const safeUrl = (u) => (/^https?:\/\//i.test(u || "") ? u : "");
+  const hostOf = (u) => { try { return new URL(u).hostname.replace(/^(www|shop|store)\./, ""); } catch (e) { return ""; } };
+  // Where to see the motor: the manufacturer's own page when known (tools/maker_sheets.py,
+  // photos_sites.py), otherwise the shop the catalogue links to, named as such
+  function linkOf(m) {
+    const f = state.fab[`${m.MARQUE}|${m.NOM}`], lien = safeUrl(m.LIEN);
+    if (f && safeUrl(f.url)) return { url: f.url, label: "Site du fabricant", maker: true, title: `Page officielle ${m.MARQUE} (${f.site || hostOf(f.url)})` };
+    if (lien) return { url: lien, label: `Voir chez ${hostOf(lien).replace(/\.(com|net|org|fr|de|eu|io|us|ca|shop|store|co\.uk|com\.au)$/, "")}`, maker: false, title: `Revendeur : ${hostOf(lien)}` };
+    return null;
+  }
+  const linkBtn = (m, cls = "official") => {
+    const l = linkOf(m);
+    return l ? `<a class="${cls} ${l.maker ? "maker" : "shop"}" href="${esc(l.url)}" target="_blank" rel="noopener" title="${esc(l.title)}">${esc(l.label)}</a>` : "";
+  };
   const fmt = (s) => {
     const n = num(s);
     return n === null || !/^\s*[\d.,]+\s*$/.test(String(s)) ? String(s ?? "") : String(Math.round(n * 100) / 100);
@@ -84,7 +97,20 @@
   const norm = (s) => String(s || "").toLowerCase().replace(/[\s*×]/g, "x").replace(/[^a-z0-9.x]/g, "");
   const has = (v) => v !== undefined && v !== null && String(v).trim() !== "";
 
-  const family = (m) => state.motors.filter((x) => x.MARQUE === m.MARQUE && x.NOM === m.NOM);
+  // The KV versions of a model (same brand and name), indexed once per catalogue
+  let famIdx = null, famFor = null;
+  const family = (m) => {
+    if (famFor !== state.motors) {
+      famIdx = new Map();
+      for (const x of state.motors) {
+        const k = `${x.MARQUE}|${x.NOM}`;
+        if (!famIdx.has(k)) famIdx.set(k, []);
+        famIdx.get(k).push(x);
+      }
+      famFor = state.motors;
+    }
+    return famIdx.get(`${m.MARQUE}|${m.NOM}`) || [m];
+  };
   const kvList = (m) => [...new Set(family(m).map((x) => fmt(x.KV)).filter(Boolean))].sort((a, b) => num(a) - num(b));
   const shaft = (m) => (/^M\d/i.test(m["VIS HEL"] || "") ? m["VIS HEL"] : has(m["D SHAFT"]) ? `${fmt(m["D SHAFT"])}mm` : "");
   const weight = (m) => (has(m.POIDS) ? `${fmt(m.POIDS)}GR` : "");
@@ -123,20 +149,37 @@
   const one = (v) => (has(v) ? `<span class="val" title="${esc(v)}">${esc(v)}</span>` : `<span class="val na">—</span>`);
   const val = (v) => `<span class="vals">${one(v)}</span>`;
   const pair = (a, b) => `<span class="vals">${has(a) || has(b) ? `${one(a)}<span class="x">X</span>${one(b)}` : one("")}</span>`;
-  const kvVals = (m) => `<span class="vals">${kvList(m).slice(0, 3).map(one).join(`<span class="x">X</span>`) || one("")}</span>`;
 
-  function row(m, i) {
+  // Several values of the versions shown together: one value, or "min – max"
+  const spread = (list, get, u = "") => {
+    const v = list.map(get).filter(has);
+    const n = v.map(num).filter((x) => x !== null);
+    if (!v.length) return "";
+    if (n.length === v.length && n.length > 1 && Math.min(...n) !== Math.max(...n)) return `${fmt(Math.min(...n))}–${fmt(Math.max(...n))}${u}`;
+    return /^[\d.,]+$/.test(v[0]) ? `${fmt(v[0])}${u}` : v[0];
+  };
+  // KV of the versions shown: each one opens its own page
+  const kvLinks = (list) => {
+    const vs = list.filter((x) => has(x.KV)).sort((a, b) => num(a.KV) - num(b.KV));
+    if (!vs.length) return `<span class="vals">${one("")}</span>`;
+    const max = 5, more = vs.length - max;
+    return `<span class="vals kv-list">${vs.slice(0, max).map((x) => `<a class="val kv-link" href="#m/${encodeURIComponent(x.REF)}" title="Voir la version KV${esc(fmt(x.KV))}">${esc(fmt(x.KV))}</a>`).join("")}${more > 0 ? `<span class="val kv-more">+${more}</span>` : ""}</span>`;
+  };
+
+  function row(g, i) {
+    // g: the versions of one model that match the search, the best placed first
+    const list = Array.isArray(g) ? g : [g], m = list[0];
     const href = `#m/${encodeURIComponent(m.REF)}`;
-    const link = safeUrl(m.LIEN);
+    const w = spread(list, (x) => x.POIDS, "GR");
     return `<article class="row" style="--i:${i % PAGE}">
       <div class="row-id">${brandMark(m)}<a class="name" href="${href}">${esc(m.NOM || m.REF)}</a>${hooks.rowExtra ? hooks.rowExtra(m) : ""}</div>
-      <a class="row-img" href="${href}" tabindex="-1" aria-hidden="true">${photo(m)}</a>
+      <a class="row-img" href="${href}" tabindex="-1" aria-hidden="true">${photo(list.find((x) => state.thumbs[x.REF] || safeUrl(x.IMG)) || m)}</a>
       <div class="specs">
-        ${pr("Classe", val(m.CLASSE))}${pr("Poids", val(weight(m)))}${pr("Configuration", val(m.CONFIG))}${pr("KV", kvVals(m))}
+        ${pr("Classe", val(m.CLASSE))}${pr("Poids", val(w))}${pr("Configuration", val(m.CONFIG))}${pr(list.length > 1 ? `${list.length} KV` : "KV", kvLinks(list))}
         ${pr("Shaft", val(shaft(m)))}${pr("Entraxe de fixation", val(m["ENTRAXE FIX"]))}${pr("Dimension", pair(fmt(m["D MOTEUR"]), fmt(m["H MOTEUR"])))}${pr("L shaft", val(fmt(m["L SHAFT"])))}
-        ${pr("Résistance", val(m.RESISTANCE))}${pr("Utilisation", val(m.UTILISATION))}${pr("Hélice", val(m.HELICE))}${pr("Câble", val(cable(m)))}
-        ${pr("Amp max", val(fmt(m.AMP)))}${pr("Puissance max", val(unit(m.PUISSANCE, "W")))}${pr("Voltage", val(m.LIPO))}${pr("Vis hélice", val(m["VIS HEL"]))}
-        ${link ? `<a class="official" href="${esc(link)}" target="_blank" rel="noopener">Lien officiel</a>` : `<span class="official off">Lien officiel</span>`}
+        ${pr("Résistance", val(list.length > 1 ? spread(list, (x) => x.RESISTANCE) : m.RESISTANCE))}${pr("Utilisation", val(m.UTILISATION))}${pr("Hélice", val(m.HELICE))}${pr("Câble", val(cable(m)))}
+        ${pr("Amp max", val(spread(list, (x) => x.AMP)))}${pr("Puissance max", val(spread(list, (x) => x.PUISSANCE, "W")))}${pr("Voltage", val(list.length > 1 ? [...new Set(list.map((x) => x.LIPO).filter(has))].join(" / ") : m.LIPO))}${pr("Vis hélice", val(m["VIS HEL"]))}
+        ${linkBtn(m) || `<span class="official off">Pas de lien</span>`}
       </div>
     </article>`;
   }
@@ -185,7 +228,12 @@
   const inc = (field, q) => String(field || "").toLowerCase().includes(q);
   function matches(m) {
     const f = state.f, q = state.q.toLowerCase();
-    if (q && ![m.REF, m.MARQUE, m.NOM, m.VERSION, m.CLASSE, m.KV].join(" ").toLowerCase().includes(q)) return false;
+    if (q) {
+      // "x-nova", "x nova" and "xnova" find the same motors
+      const hay = [m.REF, m.MARQUE, m.NOM, m.VERSION, m.CLASSE, m.KV].join(" ").toLowerCase();
+      const compact = (x) => x.replace(/[^a-z0-9.]/g, "");
+      if (!hay.includes(q) && !compact(hay).includes(compact(q))) return false;
+    }
     if (f.kv && !(num(m.KV) && num(m.KV) >= f.kv[0] && num(m.KV) <= f.kv[1])) return false;
     if (f.poids !== null && !(num(m.POIDS) !== null && num(m.POIDS) <= f.poids)) return false;
     if (f.classe && !(m.CLASSE || "").replace(/\s/g, "").startsWith(f.classe)) return false;
@@ -225,7 +273,7 @@
   const awg = (s) => num(String(s).replace(/\D+/g, "")) ?? 99;
   const ADV = {
     marque: { type: "combo", get: (m) => clean(m.MARQUE).toUpperCase() },
-    cable: { type: "chips", get: (m) => m["TYPE CABLE"], order: (a, b) => awg(a) - awg(b), label: (v) => v.replace(/awg/i, " AWG") },
+    cable: { type: "chips", get: (m) => m["TYPE CABLE"], order: (a, b) => awg(a) - awg(b), label: (v) => v.replace(/\s*awg/i, " AWG") },
     aimant: { type: "chips", get: (m) => m.AIMANT, max: 6 },
     cloche: { type: "chips", get: (m) => m.CLOCHE, max: 6 },
     // How the propeller is held: threaded shaft (Tige), nut (Écrou), screws (Vis) or Popo mount
@@ -236,7 +284,8 @@
     avec: { type: "chips", flags: {
       "Photo": (m) => !!(state.thumbs[m.REF] || safeUrl(m.IMG)),
       "Vidéos": (m) => (state.videos[famKey(m)] || []).length > 0,
-      "Lien officiel": (m) => !!safeUrl(m.LIEN),
+      "Site du fabricant": (m) => !!linkOf(m)?.maker,
+      "Lien boutique": (m) => !!safeUrl(m.LIEN),
     } },
     res: { type: "rng", get: (m) => firstNum(m.RESISTANCE), unit: "mΩ", step: 1 },
     lcable: { type: "rng", get: (m) => num(m["L CABLE"]), unit: "mm", step: 5 },
@@ -456,21 +505,37 @@
     return list.slice().sort(by);
   }
 
+  // The logo's name on hover is not needed while the big home title is on screen
+  if ("IntersectionObserver" in window) {
+    const t = document.querySelector("#view-home .big-title");
+    if (t) new IntersectionObserver(([e]) => document.body.classList.toggle("title-in-view", e.isIntersecting)).observe(t);
+  }
+
   function renderList() {
     if (!state.revealed) return;
-    const list = sorted(state.motors.filter(matches));
+    // One card per model: its KV versions that match the search are shown together
+    const groups = new Map();
+    for (const m of sorted(state.motors.filter(matches))) {
+      const k = famKey(m);
+      if (!groups.has(k)) groups.set(k, []);
+      groups.get(k).push(m);
+    }
+    const list = [...groups.values()];
+    const nMotors = list.reduce((a, g) => a + g.length, 0);
     $("rows").innerHTML = list.slice(0, state.shown).map(row).join("");
     // "Afficher plus" only animates the newly added rows
     [...$("rows").children].slice(0, state.shown - PAGE).forEach((r) => (r.style.animation = "none"));
     $("more").hidden = list.length <= state.shown;
     $("empty").hidden = list.length > 0;
-    $("count").textContent = `${list.length} moteur${list.length > 1 ? "s" : ""} sur ${state.motors.length}`;
+    $("count").textContent = `${list.length} modèle${list.length > 1 ? "s" : ""} · ${nMotors} moteur${nMotors > 1 ? "s" : ""} sur ${state.motors.length}`;
     document.querySelectorAll(".tab").forEach((t) => t.setAttribute("aria-selected", String(t.dataset.tab === state.tab)));
   }
 
   // --- Motor page ----------------------------------------------------------
   // Short explanations shown by the "i" icons of the technical sheet
   const GLOSSARY = {
+    volume: "Volume du stator (π × rayon² × hauteur), calculé à partir de ses dimensions. C'est la mesure qui compare le mieux la « taille » réelle de deux moteurs : à volume égal, couple comparable.",
+    ratio: "Puissance max divisée par le poids du moteur, calculée à partir de la fiche. Plus il est élevé, plus le moteur est puissant pour sa masse.",
     kv: "Tours par minute et par volt, à vide. KV élevé : le moteur tourne vite (petites hélices, basse tension). KV bas : plus de couple (grandes hélices, haute tension).",
     classe: "Taille du stator : les deux premiers chiffres donnent son diamètre, les deux derniers sa hauteur, en mm. 2207 = stator de 22 × 7 mm.",
     poids: "Masse d'un moteur, câbles compris sauf mention contraire. Sur un drone, 4 moteurs : chaque gramme compte quatre fois.",
@@ -638,14 +703,152 @@
     return bars.length ? `<section class="tech-card wide"><h3>Repères <small>parmi ${peers.length} moteurs ${esc(m.CLASSE)} du catalogue</small></h3><div class="bench-grid">${bars.join("")}</div></section>` : "";
   }
 
+  // Values worked out from the sheet (shown with a "calculé" mark)
+  function statorVolume(m) {
+    const d = num(m["D STATOR"]), h = num(m["H STATOR"]);
+    return d && h ? (Math.PI * (d / 2) ** 2 * h) / 1000 : null; // cm³
+  }
+  function powerRatio(m) {
+    const p = num(m.PUISSANCE), w = num(m.POIDS);
+    return p && w ? p / w : null; // W/g
+  }
+
+  // --- Bench tests: tables from the product pages (tools/bench.py) and a thrust curve ------
+  const cellNum = (c) => { const x = parseFloat(String(c).replace(",", ".").replace(/[^\d.\-]/g, "")); return Number.isFinite(x) ? x : null; };
+  function benchChart(t) {
+    // A column is usable as an axis when its values really change along the rows
+    const varies = (i) => new Set(t.rows.filter((r) => r.length > 1).map((r) => cellNum(r[i])).filter((v) => v !== null)).size >= 3;
+    const col = (re) => t.headers.findIndex((h, i) => re.test(h) && !/temp|no-?load|idle|kv\b/i.test(h) && varies(i));
+    const y = col(/thrust|pouss|traction/i);
+    let x = col(/throttle|gaz|%/i), xl = "Gaz (%)";
+    if (x < 0) { x = col(/watt|power|puissance|\(w\)/i); xl = "Puissance (W)"; }
+    if (x < 0) { x = col(/amp|current|courant|\(a\)/i); xl = "Courant (A)"; }
+    if (y < 0 || x < 0 || x === y) return "";
+    const pc = t.headers.findIndex((h) => /prop|h[ée]lice/i.test(h));
+    // Several voltages in one table: one curve per propeller and voltage
+    // (real voltage steps only: a few values, each measured several times — not the sag during a run)
+    const vc = t.headers.findIndex((h, i) => {
+      if (!/volt|\(v\)/i.test(h) || /no-?load/i.test(h)) return false;
+      const c = {};
+      t.rows.filter((r) => r.length > 1).forEach((r) => (c[r[i]] = (c[r[i]] || 0) + 1));
+      const v = Object.values(c);
+      return v.length > 1 && v.length <= 4 && v.every((n) => n >= 3);
+    });
+    const series = new Map();
+    let section = "";
+    for (const r of t.rows) {
+      if (r.length === 1) { section = r[0]; continue; }
+      const xv = cellNum(r[x]), yv = cellNum(r[y]);
+      if (xv === null || yv === null) continue;
+      const name = [section, pc >= 0 ? r[pc] : "", vc >= 0 && vc !== x && cellNum(r[vc]) !== null ? `${cellNum(r[vc])} V` : ""].filter(Boolean).join(" · ") || "Essai";
+      if (!series.has(name)) series.set(name, []);
+      series.get(name).push([xv, yv]);
+    }
+    const list = [...series].filter(([, pts]) => pts.length >= 3).slice(0, 6);
+    if (!list.length) return "";
+    const all = list.flatMap(([, p]) => p);
+    const X0 = Math.min(...all.map((p) => p[0])), X1 = Math.max(...all.map((p) => p[0]));
+    const Y1 = Math.max(...all.map((p) => p[1])) * 1.05;
+    const W = 640, H = 260, L = 52, B = 34, T = 12, R = 12;
+    const sx = (v) => L + ((v - X0) / (X1 - X0 || 1)) * (W - L - R), sy = (v) => H - B - (v / (Y1 || 1)) * (H - B - T);
+    const COL = ["#111111", "#ff5757", "#3a86ff", "#06a77d", "#ff9f1c", "#8338ec"];
+    const ticks = (a, b, n) => Array.from({ length: n + 1 }, (_, i) => a + ((b - a) * i) / n);
+    const grid = ticks(0, Y1, 4).map((v) => `<line x1="${L}" x2="${W - R}" y1="${sy(v)}" y2="${sy(v)}" class="bc-grid"/><text x="${L - 6}" y="${sy(v) + 4}" class="bc-t" text-anchor="end">${Math.round(v)}</text>`).join("")
+      + ticks(X0, X1, 5).map((v) => `<text x="${sx(v)}" y="${H - B + 16}" class="bc-t" text-anchor="middle">${Math.round(v * 10) / 10}</text>`).join("");
+    const lines = list.map(([name, pts], i) => {
+      pts.sort((a, b) => a[0] - b[0]);
+      return `<polyline points="${pts.map((p) => `${sx(p[0]).toFixed(1)},${sy(p[1]).toFixed(1)}`).join(" ")}" fill="none" stroke="${COL[i]}" stroke-width="2.2"/>`
+        + pts.map((p) => `<circle cx="${sx(p[0]).toFixed(1)}" cy="${sy(p[1]).toFixed(1)}" r="3" fill="${COL[i]}"><title>${esc(name)} : ${p[1]} g à ${p[0]}</title></circle>`).join("");
+    }).join("");
+    return `<figure class="bench-chart"><svg viewBox="0 0 ${W} ${H}" role="img" aria-label="Poussée en grammes selon ${esc(xl)}">${grid}${lines}
+        <text x="${(L + W - R) / 2}" y="${H - 4}" class="bc-l" text-anchor="middle">${esc(xl)}</text>
+        <text x="12" y="${(H - B) / 2}" class="bc-l" text-anchor="middle" transform="rotate(-90 12 ${(H - B) / 2})">Poussée (g)</text></svg>
+      ${list.length > 1 ? `<figcaption>${list.map(([n], i) => `<span><i style="background:${COL[i]}"></i>${esc(n)}</span>`).join("")}</figcaption>` : ""}</figure>`;
+  }
+  // --- The manufacturer's own spec sheet (tools/maker_sheets.py), labels in French ----------
+  const FAB_LABELS = [
+    [/^(test item|motor item|model no\.?(\/ ?kv)?|item no\.?)$/i, "Modèle"], [/^kv/i, "KV"], [/internal resistance/i, "Résistance interne"],
+    [/^configuration/i, "Configuration"], [/shaft diameter|output shaft/i, "Ø de l'axe"], [/motor dimensions|motor size/i, "Dimensions (Ø × H)"],
+    [/weight.*(incl|including)|motor weight|^weight/i, "Poids (câbles compris)"], [/weight excluding/i, "Poids sans câbles"], [/package weight/i, "Poids emballé"],
+    [/^lead|lead cable|cable length|wire spec/i, "Câbles"], [/bearing/i, "Roulements"], [/rated voltage|no\.? ?of cells|battery/i, "Tension (LiPo)"],
+    [/peak current|max.* current/i, "Courant max"], [/max\.? ?power|rated power/i, "Puissance max"], [/idle current/i, "Courant à vide"],
+    [/max\.? ?thrust/i, "Poussée max"], [/magnet/i, "Aimants"], [/copper wire|enamel/i, "Bobinage"], [/insulation|withdraw voltage/i, "Test d'isolation"],
+    [/rotor dynamic/i, "Équilibrage du rotor"], [/motor dynamic/i, "Équilibrage du moteur"], [/^stator/i, "Stator"], [/^ip$/i, "Indice de protection"],
+    [/propeller recommendation|^recommendation$/i, "Hélice conseillée"], [/esc recommendation/i, "ESC conseillé"], [/centrifugal cooling/i, "Refroidissement centrifuge"],
+    [/package size|packing size/i, "Emballage"], [/torsion|torque/i, "Couple"], [/hole size/i, "Perçage"], [/ambient/i, "Température ambiante"],
+  ];
+  const frLabel = (l) => {
+    const hit = FAB_LABELS.find(([re]) => re.test(l.trim()));
+    if (!hit) return l;
+    const extra = (l.match(/\(([^)]*\d[^)]*)\)/) || [])[1]; // "(180s)", "(10V)"
+    return extra && !/^(mm|g|a|w|mΩ)$/i.test(extra) ? `${hit[1]} (${extra})` : hit[1];
+  };
+  const frValue = (v) => String(v).replace(/\bYES\b/g, "Oui").replace(/\bNO\b/g, "Non").replace(/Imported/gi, "Importés").replace(/Enamel(l)?ed Wire/gi, "Fil émaillé")
+    .replace(/high temperature resistance/gi, "résistance haute température").replace(/Level/g, "Classe");
+  function makerSheet(m) {
+    const f = state.fab[famKey(m)];
+    if (!f || !f.specs) return "";
+    const kv = fmt(m.KV), mine = f.specs[kv] || f.specs[String(num(m.KV))] || [];
+    const rows = [...(f.specs["*"] || []), ...mine].filter(([l]) => !/^kv/i.test(l));
+    if (rows.length < 3) return "";
+    const others = Object.keys(f.specs).filter((k) => k !== "*" && k !== kv);
+    return `<section class="tech-card wide maker-card"><h3><span class="t-ico" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M6 3h9l4 4v14H6z"/><path d="M14 3v5h5M9 12h7M9 16h7"/></svg></span>
+        Fiche technique du fabricant <small>${mine.length ? `version KV${esc(kv)}` : "toutes versions"}${others.length ? ` · existe aussi en KV${others.map(esc).join(", KV")}` : ""}</small></h3>
+      <dl class="maker-grid">${rows.map(([l, v]) => `<div class="t-row"><dt title="${esc(l)}">${esc(frLabel(l))}</dt><dd>${esc(frValue(v))}</dd></div>`).join("")}</dl>
+      <p class="bench-src">Source : <a href="${esc(f.url)}" target="_blank" rel="noopener">${esc(f.site || hostOf(f.url))}</a> <span class="src-maker">fabricant</span></p>
+    </section>`;
+  }
+
+  // Pictures of the manufacturer's page, shown as they are: drawings with dimensions, parts supplied…
+  function sheetImages(m) {
+    const f = state.fab[famKey(m)];
+    const list = ((f && f.sheet) || []).map(media).filter((u) => !window.MM_MEDIA || /^data:/.test(u));
+    if (!list.length) return "";
+    return `<section class="tech-card wide sheet-card"><h3><span class="t-ico" aria-hidden="true"><svg viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="16" rx="2"/><circle cx="9" cy="10" r="2"/><path d="M21 17l-6-6-9 9"/></svg></span>
+        Fiche du fabricant en images <small>plans cotés, contenu de la boîte, détails · ${list.length} image${list.length > 1 ? "s" : ""}</small></h3>
+      <div class="sheet-imgs">${list.map((u, i) => `<a href="${esc((f.sheet || [])[i] || u)}" target="_blank" rel="noopener"><img src="${esc(u)}" alt="${esc(`${m.MARQUE} ${m.NOM} — fiche fabricant, image ${i + 1}`)}" loading="lazy" onerror="this.closest('a').remove()"></a>`).join("")}</div>
+      <p class="bench-src">Source : <a href="${esc(f.url)}" target="_blank" rel="noopener">${esc(f.site || hostOf(f.url))}</a> <span class="src-maker">fabricant</span></p>
+    </section>`;
+  }
+
+  function benchBlock(m) {
+    const f = state.fab[famKey(m)];
+    // The manufacturer's own tests first, those for this KV before the others
+    const kvRe = new RegExp(`kv\\s*${esc(fmt(m.KV))}(?!\\d)|(?<!\\d)${esc(fmt(m.KV))}\\s*kv`, "i");
+    const mine = (t) => t.rows.some((r) => kvRe.test(r.join(" "))) || kvRe.test(t.title || "");
+    const own = ((f && f.tests) || []).slice().sort((a, b) => mine(b) - mine(a));
+    const tabs = [...own, ...(state.bench[famKey(m)] || [])];
+    if (!tabs.length) return "";
+    const one = (t) => {
+      // A table covering several KV: the rows of this KV only when there are some
+      if (own.includes(t) && mine(t) && t.rows.some((r) => r.length > 1 && !kvRe.test(r.join(" ")))) {
+        t = { ...t, rows: t.rows.filter((r) => r.length === 1 || kvRe.test(r.join(" "))) };
+      }
+      const n = t.rows.filter((r) => r.length > 1).length;
+      const table = `<div class="bench-scroll"><table><thead><tr>${t.headers.map((h) => `<th>${esc(h)}</th>`).join("")}</tr></thead>
+          <tbody>${t.rows.map((r) => r.length === 1 ? `<tr class="bench-sec"><td colspan="${t.headers.length}">${esc(r[0])}</td></tr>`
+            : `<tr>${r.map((c) => `<td>${esc(c)}</td>`).join("")}</tr>`).join("")}</tbody></table></div>`;
+      return `<div class="bench-t">
+        ${t.title ? `<p class="bench-title">${esc(t.title)}</p>` : ""}
+        ${benchChart(t)}
+        ${n > 8 ? `<details class="bench-more"${own.includes(t) || own.some((o) => o.source === t.source) ? " open" : ""}><summary>Tableau des mesures (${n})</summary>${table}</details>` : table}
+        ${safeUrl(t.source) ? `<p class="bench-src">Source : <a href="${esc(t.source)}" target="_blank" rel="noopener">${esc(new URL(t.source).hostname.replace(/^www\./, ""))}</a>${f && t.source === f.url ? ` <span class="src-maker">fabricant</span>` : ""}</p>` : ""}
+      </div>`;
+    };
+    return `<section class="tech-card wide bench-card"><h3>Banc d'essai <small>${tabs.length} essai${tabs.length > 1 ? "s" : ""} publié${tabs.length > 1 ? "s" : ""} par le fabricant ou la boutique</small></h3>
+      ${tabs.slice(0, 3).map(one).join("")}
+      ${tabs.length > 3 ? `<details class="bench-more bench-others"><summary>Voir les ${tabs.length - 3} autres essais</summary>${tabs.slice(3).map(one).join("")}</details>` : ""}
+    </section>`;
+  }
+
   function panelTech(m) {
-    const row = (label, v, k) => `<div class="t-row ${has(v) ? "" : "na"}"><dt>${esc(label)}${info(k)}</dt><dd>${esc(has(v) ? v : "Non renseigné")}</dd></div>`;
+    const row = (label, v, k, calc) => `<div class="t-row ${has(v) ? "" : "na"}"><dt>${esc(label)}${info(k)}</dt><dd>${esc(has(v) ? v : "Non renseigné")}${calc && has(v) ? `<small class="calc">calculé</small>` : ""}</dd></div>`;
+    const vol = statorVolume(m), ratio = powerRatio(m);
     const card = (title, icon, rows) => `<section class="tech-card"><h3><span class="t-ico" aria-hidden="true">${icon}</span>${title}</h3><dl>${rows.join("")}</dl></section>`;
     const vm = vmax(m);
     const keyFields = ["POIDS", "D MOTEUR", "H MOTEUR", "D SHAFT", "L SHAFT", "ENTRAXE FIX", "VIS FIX", "LIPO", "CONFIG", "AMP", "PUISSANCE", "TYPE CABLE", "HELICE", "AIMANT", "RESISTANCE", "UTILISATION"];
     const filled = keyFields.filter((k) => has(m[k])).length;
     const pct = Math.round((filled / keyFields.length) * 100);
-    const link = safeUrl(m.LIEN);
     const fam = family(m).filter((x) => x !== m).sort((a, b) => num(a.KV) - num(b.KV));
     const I = {
       id: '<svg viewBox="0 0 24 24"><rect x="4" y="5" width="16" height="14" rx="2"/><path d="M8 10h8M8 14h5"/></svg>',
@@ -657,25 +860,30 @@
     return `<div class="tech-head">
         <div class="meter" role="img" aria-label="Fiche complétée à ${pct} %"><span style="width:${pct}%"></span></div>
         <p>Fiche complétée à <b>${pct} %</b> · ${filled} caractéristiques sur ${keyFields.length}</p>
-        ${link ? `<a class="official" href="${esc(link)}" target="_blank" rel="noopener">Lien officiel</a>` : ""}
+        ${linkBtn(m)}
       </div>
       <div class="tech-grid">
         ${benchmark(m)}
         ${card("Identité", I.id, [row("Référence", m.REF), row("Marque", m.MARQUE), row("Modèle", m.NOM), row("Version", m.VERSION), row("Classe", m.CLASSE, "classe")])}
         ${card("Moteur & stator", I.mot, [row("KV", fmt(m.KV), "kv"), row("Poids", unit(m.POIDS, " g"), "poids"),
           row("Stator", has(m["D STATOR"]) ? `${fmt(m["D STATOR"])} × ${fmt(m["H STATOR"])} mm` : "", "stator"),
+          row("Volume du stator", vol ? `${vol.toLocaleString("fr-FR", { maximumFractionDigits: 2 })} cm³` : "", "volume", true),
           row("Dimensions (Ø × H)", has(m["D MOTEUR"]) ? `${fmt(m["D MOTEUR"])} × ${fmt(m["H MOTEUR"]) || "?"} mm` : "", "dims"),
           row("Configuration", m.CONFIG, "config"), row("Aimants", m.AIMANT, "aimant"), row("Cloche", m.CLOCHE, "cloche")])}
         ${card("Axe & fixation", I.axe, [row("Ø shaft", unit(m["D SHAFT"], " mm"), "shaft"), row("Longueur shaft", unit(m["L SHAFT"], " mm"), "lshaft"),
           row("Type de shaft", m["TYPE SHAFT"], "typeshaft"), row("Fixation hélice", m["VIS HEL"], "vishel"),
           row("Entraxe fixation", m["ENTRAXE FIX"], "entraxe"), row("Vis de fixation", m["VIS FIX"], "visfix")])}
         ${card("Électrique", I.elec, [row("LiPo", m.LIPO, "voltage"), row("Tension nominale", m.VOLTAGE, "voltage"),
-          row("Puissance max", unit(m.PUISSANCE, " W"), "puissance"), row("Courant max", unit(m.AMP, " A"), "amp"),
+          row("Puissance max", unit(m.PUISSANCE, " W"), "puissance"), row("Puissance / poids", ratio ? `${ratio.toLocaleString("fr-FR", { maximumFractionDigits: 1 })} W/g` : "", "ratio", true),
+          row("Courant max", unit(m.AMP, " A"), "amp"),
           row("Résistance", m.RESISTANCE, "resistance"), row("Vitesse max théorique", vm ? `${vm.toLocaleString("fr-FR")} tr/min` : "", "vmax"),
           row("Câble", [m["TYPE CABLE"], m["L CABLE"]].filter(has).join(" · "), "cable")])}
         ${card("Recommandations", I.reco, [row("Hélice", m.HELICE, "helice"), row("Utilisation", m.UTILISATION, "usage")])}
         ${fam.length ? `<section class="tech-card"><h3><span class="t-ico" aria-hidden="true">${I.mot}</span>Autres KV de ce modèle</h3>
           <div class="versions">${fam.map((x) => `<a href="#m/${encodeURIComponent(x.REF)}">${pv("KV", fmt(x.KV))}</a>`).join("")}</div></section>` : ""}
+        ${makerSheet(m)}
+        ${sheetImages(m)}
+        ${benchBlock(m)}
       </div>`;
   }
 
@@ -704,21 +912,22 @@
 
   // Photo gallery: hosted thumbnail, shop photos (tools/photos.py), original image
   function gallery(m) {
-    const urls = [state.thumbs[m.REF], ...(state.photos[famKey(m)] || []), safeUrl(m.IMG)].filter(Boolean);
+    // The thumbnail is made from the IMG photo: showing both would show the same picture twice
+    const urls = [state.thumbs[m.REF], ...(state.photos[famKey(m)] || []), state.thumbs[m.REF] ? "" : safeUrl(m.IMG)].filter(Boolean);
     return [...new Set(urls)].map(media).filter((u) => !window.MM_MEDIA || /^data:/.test(u));
   }
   function panelPhotos(m) {
     const list = gallery(m);
-    const link = safeUrl(m.LIEN);
     // Only real photos here, never the default drawing
-    const linkBtn = link ? `<p class="more-row"><a class="ghost-btn" href="${esc(link)}" target="_blank" rel="noopener">Voir la fiche officielle →</a></p>` : "";
-    if (!list.length) return `<section class="card">${secH("photos", "Photos")}<p class="note">Pas encore de photo pour ce moteur.</p>${linkBtn}</section>`;
+    const l = linkOf(m);
+    const more = l ? `<p class="more-row"><a class="ghost-btn" href="${esc(l.url)}" target="_blank" rel="noopener">${l.maker ? "Voir la fiche du fabricant" : esc(l.label)} →</a></p>` : "";
+    if (!list.length) return `<section class="card">${secH("photos", "Photos")}<p class="note">Pas encore de photo pour ce moteur.</p>${more}</section>`;
     return `<section class="card">${secH("photos", "Photos", `${list.length} photo${list.length > 1 ? "s" : ""}`)}<div class="gallery" data-gallery>
         <div class="g-main"><img src="${esc(list[0])}" alt="${esc(`${m.MARQUE} ${m.NOM}`)}" class="is-photo" onerror="this.closest('[data-gallery]').querySelector('.g-th[aria-current=true]')?.remove();this.remove()">
           ${list.length > 1 ? `<button class="g-nav prev" type="button" aria-label="Photo précédente">‹</button><button class="g-nav next" type="button" aria-label="Photo suivante">›</button>` : ""}
           <span class="g-count">1 / ${list.length}</span></div>
         ${list.length > 1 ? `<div class="g-thumbs">${list.map((u, i) => `<button type="button" class="g-th" data-i="${i}" aria-label="Photo ${i + 1}" aria-current="${i === 0}"><img src="${esc(u)}" alt="" loading="lazy" onerror="this.closest('button').remove()"></button>`).join("")}</div>` : ""}
-      </div>${linkBtn}</section>`;
+      </div>${more}</section>`;
   }
 
 
@@ -814,6 +1023,57 @@
     }
   }
 
+  // --- Eased scroll to a height of the page (search results, back to top) ----------------
+  function glide(target, onEnd) {
+    const from = scrollY, dist = target - from;
+    if (matchMedia("(prefers-reduced-motion: reduce)").matches || Math.abs(dist) < 4) { scrollTo(0, target); onEnd?.(); return; }
+    const html = document.documentElement, prev = html.style.scrollBehavior;
+    html.style.scrollBehavior = "auto";
+    const dur = Math.min(1100, 500 + Math.abs(dist) * 0.35), t0 = performance.now();
+    const ease = (t) => (t < 0.5 ? 4 * t * t * t : 1 - (-2 * t + 2) ** 3 / 2);
+    let stop = false;
+    const cancel = () => { stop = true; };
+    addEventListener("wheel", cancel, { once: true, passive: true });
+    addEventListener("touchstart", cancel, { once: true, passive: true });
+    const step = (now) => {
+      const t = Math.min(1, (now - t0) / dur);
+      if (!stop) scrollTo(0, from + dist * ease(t));
+      if (t < 1 && !stop) requestAnimationFrame(step);
+      else { html.style.scrollBehavior = prev; removeEventListener("wheel", cancel); removeEventListener("touchstart", cancel); onEnd?.(); }
+    };
+    requestAnimationFrame(step);
+  }
+  window.MM_glide = glide;
+
+  // --- Back to top: appears once the page has been scrolled down --------------------------
+  {
+    const up = document.getElementById("to-top");
+    if (up) {
+      let ticking = false;
+      const check = () => { ticking = false; const show = scrollY > Math.max(500, innerHeight * 0.8); if (show !== up.classList.contains("on")) { up.hidden = false; up.classList.toggle("on", show); } };
+      addEventListener("scroll", () => { if (!ticking) { ticking = true; requestAnimationFrame(check); } }, { passive: true });
+      up.addEventListener("click", () => { up.classList.add("launch"); glide(0, () => up.classList.remove("launch")); });
+      check();
+    }
+  }
+
+  // --- Page changes: every page that appears (or a new motor page) fades in ----
+  const pageIn = (v) => { v.classList.remove("page-in"); void v.offsetWidth; v.classList.add("page-in"); };
+  new MutationObserver((list) => list.forEach((r) => { if (r.target.classList.contains("view") && r.oldValue !== null && !r.target.hidden) pageIn(r.target); }))
+    .observe(document.getElementById("app"), { subtree: true, attributes: true, attributeFilter: ["hidden"], attributeOldValue: true });
+  document.addEventListener("animationend", (e) => { if (/^page-(in|fade)$/.test(e.animationName)) e.target.classList.remove("page-in"); });
+  // A link to another page: the current page fades out, then the new one comes in
+  document.addEventListener("click", (e) => {
+    const a = e.target.closest('a[href^="#"]');
+    if (!a || e.defaultPrevented || e.button || e.metaKey || e.ctrlKey || e.shiftKey) return;
+    const to = a.getAttribute("href");
+    if (to === location.hash || (to === "#" && !location.hash) || a.dataset.scroll || a.closest(".d-tabs,[role=tablist]")) return;
+    e.preventDefault();
+    const app = document.getElementById("app");
+    app.classList.add("page-out");
+    setTimeout(() => { app.classList.remove("page-out"); location.hash = to; }, 170);
+  });
+
   // --- Routing -------------------------------------------------------------
   function route() {
     const h = location.hash;
@@ -828,6 +1088,7 @@
       $("view-home").hidden = true;
       $("view-detail").hidden = false;
       renderDetail(decodeURIComponent(h.slice(3)));
+      pageIn($("view-detail"));
       window.scrollTo(0, 0);
     } else {
       $("view-detail").hidden = true;
@@ -863,9 +1124,9 @@
     // community.js is loaded after this file: wait until every script has run
     if (document.readyState === "loading") await new Promise((r) => document.addEventListener("DOMContentLoaded", r));
     try {
-      [state.motors, state.thumbs, state.videos, state.photos, state.logos] = await Promise.all([
+      [state.motors, state.thumbs, state.videos, state.photos, state.logos, state.bench, state.fab] = await Promise.all([
         loadCSV().then(parseCSV), loadJSON("thumbs", window.MM_THUMBS), loadJSON("videos", window.MM_VIDEOS), loadJSON("photos", window.MM_PHOTOS),
-        loadJSON("logos", window.MM_LOGOS),
+        loadJSON("logos", window.MM_LOGOS), loadJSON("bench", window.MM_BENCH), loadJSON("fabricant", window.MM_FAB),
       ]);
     } catch (err) {
       $("empty").textContent = "Le catalogue n'a pas pu être chargé. Réessayez dans quelques minutes.";
@@ -874,6 +1135,14 @@
     }
 
     buildSuggestions();
+    // Validating a search: an eased scroll down to the results, the search screen fading away above,
+    // then the separator line, the count and the cards come in (see .searching in style.css)
+    function searchScroll() {
+      const app = $("app");
+      app.classList.remove("searching"); void app.offsetWidth; app.classList.add("searching");
+      setTimeout(() => app.classList.remove("searching"), 1600);
+      glide($("sep").getBoundingClientRect().top + scrollY);
+    }
     const refresh = () => { readFilters(); state.shown = PAGE; advSummary(); renderList(); };
     buildAdv(refresh);
     ["spec-form", "adv"].forEach((id) => { $(id).addEventListener("input", refresh); $(id).addEventListener("change", refresh); });
@@ -886,7 +1155,7 @@
       $("liste").hidden = false;
       $("liste").classList.add("reveal");
       refresh();
-      $("sep").scrollIntoView({ block: "start" });
+      searchScroll();
     });
     $("q").addEventListener("input", (ev) => { state.q = ev.target.value.trim(); state.shown = PAGE; renderList(); });
     $("sort").addEventListener("change", (ev) => { state.sort = ev.target.value; renderList(); });

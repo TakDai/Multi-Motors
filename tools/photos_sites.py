@@ -5,7 +5,8 @@ For each brand of SITES, every product page listed in the site's sitemap(s) is
 matched to the catalogue models by the words of its address (all the words of
 the model name must be in it). Photos come from the sitemap (<image:loc>) or,
 when it lists none, from the page itself (og:image and product pictures).
-They are added to site/data/photos.json (up to 10 photos per family).
+They are added to site/data/photos.json (up to 10 photos per family), and the
+page is recorded as the model's official page in site/data/fabricant.json.
 
 Usage: python tools/photos_sites.py [--brand T-MOTOR]
 """
@@ -20,6 +21,7 @@ from enrich import tokens  # noqa: E402
 ROOT = Path(__file__).resolve().parent.parent
 CAT = ROOT / "catalogue" / "moteurs.csv"
 OUT = ROOT / "site" / "data" / "photos.json"
+FAB = ROOT / "site" / "data" / "fabricant.json"
 MAX_PHOTOS = 10
 UNNAMED = re.compile(r"KV · [\d.]+ g$")
 UA = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124 Safari/537.36"}
@@ -41,7 +43,7 @@ SITES = {
     "DYS": "http://www.dys.hk/sitemap.xml",
 }
 SKIP = re.compile(r"(blog|news|article|category|tag|page|post|policy|about|contact|faq|cart|account|/c/|-c\d)", re.I)
-NOT_MOTOR = re.compile(r"(prop|propeller|frame|esc|stack|controller|camera|battery|goggle|receiver|drone|quad|bnf|pnp|kit|combo|screw|bell|antenna|charger|shaft|bearing|magnet)", re.I)
+NOT_MOTOR = re.compile(r"(adaptor|adapter|edf|blades|prop|propeller|frame|esc|stack|controller|camera|battery|goggle|receiver|drone|quad|bnf|pnp|kit|combo|screw|bell|antenna|charger|shaft|bearing|magnet)", re.I)
 session = requests.Session()
 session.headers.update(UA)
 
@@ -96,7 +98,8 @@ def main():
     with CAT.open(encoding="utf-8") as f:
         rows = [r for r in csv.DictReader(f) if r.get("NOM") and not UNNAMED.search(r["NOM"])]
     photos = json.loads(OUT.read_text()) if OUT.exists() else {}
-    added = 0
+    fab = json.loads(FAB.read_text()) if FAB.exists() else {}
+    added = links = 0
     for brand, sitemap in SITES.items():
         if args.brand and args.brand.upper() != brand:
             continue
@@ -108,8 +111,6 @@ def main():
         found = 0
         for name in fams:
             key = f"{next(r['MARQUE'] for r in rows if r['MARQUE'].upper() == brand and r['NOM'] == name)}|{name}"
-            if len(photos.get(key) or []) >= 4:
-                continue
             need = [t for t in tokens(name) if t not in tokens(brand)] or tokens(name)
             if not need or all(t.isalpha() for t in need) and len(need) < 2:
                 continue  # too vague ("PRO", "RACE"…) to be matched on an address
@@ -117,6 +118,11 @@ def main():
             if not hits:
                 continue
             u = min(hits, key=lambda u: len(slugs[u]))  # the page about this model only, not a combo
+            if not (fab.get(key) or {}).get("url"):
+                fab.setdefault(key, {}).update({"url": u, "site": re.sub(r"^https?://(www\.)?", "", u).split("/")[0]})
+                links += 1
+            if len(photos.get(key) or []) >= 4:
+                continue
             imgs = pages[u] or page_photos(u)
             imgs = [i for i in imgs if not re.search(r"(logo|icon|banner)", i, re.I)]
             if imgs:
@@ -125,7 +131,8 @@ def main():
         added += found
         print(f"{brand}: {len(pages)} pages, {found}/{len(fams)} modèles avec photos", flush=True)
     OUT.write_text(json.dumps(photos, ensure_ascii=False, separators=(",", ":")))
-    print(f"{added} modèles complétés, {sum(1 for v in photos.values() if v)} modèles avec photos")
+    FAB.write_text(json.dumps(fab, ensure_ascii=False, separators=(",", ":")))
+    print(f"{links} pages fabricant ajoutées, {added} modèles complétés, {sum(1 for v in photos.values() if v)} modèles avec photos")
 
 
 if __name__ == "__main__":
