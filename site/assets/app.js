@@ -1023,6 +1023,12 @@
     }
   }
 
+  // --- Page changes: every page that appears (or a new motor page) fades in ----
+  const pageIn = (v) => { v.classList.remove("page-in"); void v.offsetWidth; v.classList.add("page-in"); };
+  new MutationObserver((list) => list.forEach((r) => { if (r.target.classList.contains("view") && r.oldValue !== null && !r.target.hidden) pageIn(r.target); }))
+    .observe(document.getElementById("app"), { subtree: true, attributes: true, attributeFilter: ["hidden"], attributeOldValue: true });
+  document.addEventListener("animationend", (e) => { if (e.animationName === "page-in") e.target.classList.remove("page-in"); });
+
   // --- Routing -------------------------------------------------------------
   function route() {
     const h = location.hash;
@@ -1037,6 +1043,7 @@
       $("view-home").hidden = true;
       $("view-detail").hidden = false;
       renderDetail(decodeURIComponent(h.slice(3)));
+      pageIn($("view-detail"));
       window.scrollTo(0, 0);
     } else {
       $("view-detail").hidden = true;
