@@ -1296,7 +1296,7 @@ html, body { overflow-x: hidden; }
 .bench-scroll { max-height: 420px; overflow: auto; }
 
 /* ---------- Fiche : Mes moteurs ---------- */
-.garage-box { display: flex; flex-wrap: wrap; align-items: center; justify-content: center; gap: 8px; margin: 10px 13px 0; padding: 10px 14px; border: 2px dashed var(--dash); border-radius: 14px; background: #fff; }
+.garage-box { display: flex; flex-wrap: wrap; align-items: center; justify-content: center; gap: 8px; margin: 10px 13px 0; padding: 10px 14px; border-radius: 14px; background: #fff; }
 .gb-title { font: 700 11px var(--font); letter-spacing: .14em; text-transform: uppercase; color: rgba(0, 0, 0, .55); margin-right: 4px; }
 .garage-box [data-gset] {
   display: inline-flex; align-items: center; gap: 6px; height: 32px; padding: 0 14px; border: 1.5px solid rgba(0, 0, 0, .2); border-radius: 16px; background: #fff; cursor: pointer;

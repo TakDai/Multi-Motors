@@ -313,7 +313,11 @@
       <div class="offers">${offers.map((o) => `
         <a class="offer ${o.ttc === best ? "best" : ""} ${o.stock ? "" : "oos"}" href="${esc(o.url)}" target="_blank" rel="noopener">
           <span class="o-shop">${esc(o.shop)}${o.ttc === best ? `<em>Meilleur prix</em>` : ""}</span>
-          <span class="o-price">${priceTag(o.ttc)}<small class="o-orig">${o.pack > 1 ? `lot de ${o.pack} : ` : ""}${o.price.toLocaleString("fr-FR", { minimumFractionDigits: 2 })} ${o.cur === "USD" ? "$ HT" : o.cur === "GBP" ? "£" : "€"}</small></span>
+          <span class="o-price">${priceTag(o.ttc)}<small class="o-orig">${(() => {
+            const sym = o.cur === "USD" ? "$" : o.cur === "GBP" ? "£" : "€";
+            const f = (v) => `${v.toLocaleString("fr-FR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ${sym}`;
+            return `sur la boutique : ${o.pack > 1 ? `lot de ${o.pack} à ${f(o.price)}, soit ${f(o.price / o.pack)} / moteur` : f(o.price)}${o.cur === "USD" ? " (hors TVA)" : ""}`;
+          })()}</small></span>
           <span class="o-stock">${o.stock ? "En stock" : "Rupture"}</span>
           <span class="o-go">Voir l'offre →</span>
         </a>`).join("")}</div>`;
