@@ -261,6 +261,8 @@
     } catch (e) { C.online = false; /* server not configured yet: catalogue still works */ }
     applyOverrides();
     renderAccount();
+    // A motor page opened before the session was known: show the member's options now
+    if (C.user) refreshCurrent();
   };
 
   // Approved community corrections are applied on top of the catalogue
@@ -288,7 +290,8 @@
       <button type="button" class="suggest-btn" data-suggest="${esc(m.REF)}">Suggérer une modification</button>
       ${m._community ? `<span class="community-badge" title="${esc(m._community.map((f) => FIELD_LABELS[f] || f).join(", "))}">Corrigé par la communauté</span>` : ""}
     </div>`);
-    top.nextElementSibling.insertAdjacentHTML("afterend", garageBox(m.REF, null, null));
+    // "Mes moteurs" (owned / tested / wanted) only for a signed-in member
+    if (C.user) top.nextElementSibling.insertAdjacentHTML("afterend", garageBox(m.REF, null, null));
     trackView(m.REF);
     document.querySelector("#detail .d-body").insertAdjacentHTML("beforeend", `
       <section class="d-extra card" id="d-prix">${pricesBlock(m)}</section>
