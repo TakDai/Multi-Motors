@@ -1375,3 +1375,14 @@ html, body { overflow-x: hidden; }
 .kv-link { text-decoration: none; color: inherit; cursor: pointer; transition: background-color .2s, color .2s; }
 .kv-link:hover, .kv-link:focus-visible { background: var(--black, #111); color: #fff; }
 .kv-more { opacity: .6; }
+
+/* --- Multi-Motors logo, top right of every page ---------------------------- */
+.site-logo { display: inline-flex; align-items: center; gap: 8px; margin-left: 6px; color: #000; text-decoration: none; transition: transform .2s; }
+.site-logo:hover { transform: translateY(-1px); }
+.site-logo img { width: 36px; height: auto; display: block; }
+.site-logo span { font: 700 15px var(--font); letter-spacing: .14em; text-transform: uppercase; white-space: nowrap; }
+@media (max-width: 700px) {
+  .site-logo { order: -1; flex-basis: 100%; justify-content: flex-end; margin: 0 0 4px; }
+  .site-logo img { width: 30px; }
+  .site-logo span { font-size: 13px; }
+}
