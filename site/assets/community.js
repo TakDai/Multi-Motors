@@ -435,16 +435,46 @@
     const v = $("view-actus");
     v.hidden = false;
     v.innerHTML = `<div class="page"><h1 class="page-title">Actualités</h1>
+      ${catalogueStats()}
       <div class="chips" role="tablist"><button class="tab" data-actus="all" aria-selected="true">Tout</button><button class="tab" data-actus="moteurs" aria-selected="false">Nouveaux moteurs</button><button class="tab" data-actus="site" aria-selected="false">Le site</button></div>
       <div id="feed"><p class="note">Chargement…</p></div></div>`;
+    // Figures count up when the page opens
+    if (!matchMedia("(prefers-reduced-motion: reduce)").matches) {
+      const els = [...v.querySelectorAll("[data-count]")], t0 = performance.now();
+      const tick = (now) => {
+        const t = Math.min(1, (now - t0) / 1100), e = 1 - (1 - t) ** 3;
+        els.forEach((el) => (el.textContent = nf(Math.round(+el.dataset.count * e))));
+        if (t < 1) requestAnimationFrame(tick);
+      };
+      requestAnimationFrame(tick);
+    }
     (C.online ? get("news").catch(() => []) : Promise.resolve([])).then((news) => {
       const items = [
         ...news.map((n) => ({ kind: "site", at: n.at, title: n.title, body: n.body, author: n.author })),
-        ...(C.actus || []).map((a) => ({ kind: a.type || "moteurs", at: a.date, title: a.title, body: a.body || "", refs: a.refs || [] })),
+        ...(C.actus || []).map((a) => ({ kind: a.type || "moteurs", at: a.date, title: a.title, body: a.body || "", refs: a.refs || [], count: a.count || (a.refs || []).length, models: a.models, brands: a.newBrands || [], nBrands: a.newBrandsCount || 0 })),
       ].sort((a, b) => String(b.at).localeCompare(String(a.at)));
       v._items = items;
       drawFeed("all");
     });
+  }
+  const nf = (n) => Number(n).toLocaleString("fr-FR");
+  // The catalogue today, counted from the data the page has loaded (always up to date)
+  function catalogueStats() {
+    const st = MM().state, motors = st.motors || [];
+    if (!motors.length) return "";
+    const named = motors.filter((m) => m.NOM && !/KV · [\d.]+ g$/.test(m.NOM));
+    const models = new Set(named.map((m) => `${m.MARQUE}|${m.NOM}`));
+    const count = (o) => Object.values(o || {}).filter((v) => (Array.isArray(v) ? v.length : v)).length;
+    const cards = [
+      [motors.length, "moteurs"], [models.size, "modèles"], [new Set(motors.map((m) => m.MARQUE)).size, "marques"],
+      [motors.filter((m) => st.thumbs[m.REF]).length, "moteurs en photo"],
+      [Object.values(st.fab || {}).filter((f) => f.specs).length, "fiches fabricant"],
+      [Object.values(st.fab || {}).reduce((a, f) => a + (f.tests || []).length, 0) + Object.values(st.bench || {}).reduce((a, t) => a + t.length, 0), "bancs d'essai"],
+      [count(st.videos), "modèles avec vidéos"],
+      [Object.values(C.prices || {}).filter((p) => p.offers?.length).length, "moteurs avec prix"],
+    ].filter(([n]) => n > 0);
+    return `<section class="cat-stats" aria-label="Le catalogue aujourd'hui"><h2>Le catalogue aujourd'hui</h2>
+      <div class="stats">${cards.map(([n, l], i) => `<div class="stat" style="--i:${i}"><b data-count="${n}">${nf(n)}</b><span>${l}</span></div>`).join("")}</div></section>`;
   }
   function drawFeed(kind) {
     const v = $("view-actus");
@@ -454,7 +484,9 @@
         <header><span class="n-kind">${i.kind === "site" ? "Le site" : "Nouveaux moteurs"}</span><time>${when(String(i.at).length === 10 ? i.at + " 12:00:00" : i.at)}</time></header>
         <h2>${esc(i.title)}</h2>
         ${i.body ? `<p>${esc(i.body).replace(/\n/g, "<br>")}</p>` : ""}
-        ${i.refs?.length ? `<div class="n-motors">${i.refs.slice(0, 12).map((r) => { const m = motorBy(r); return m ? `<a class="n-motor" href="#m/${encodeURIComponent(r)}">${MM().photo(m)}<span>${esc(m.MARQUE)} ${esc(m.NOM || "")}<small>${esc(m.CLASSE || "")} · ${esc(m.KV || "")}KV</small></span></a>` : ""; }).join("")}${i.refs.length > 12 ? `<span class="note">et ${i.refs.length - 12} autres</span>` : ""}</div>` : ""}
+        ${i.kind === "moteurs" && i.models ? `<p class="n-sum">${nf(i.models)} modèle${i.models > 1 ? "s" : ""}${i.nBrands ? ` · ${nf(i.nBrands)} nouvelle${i.nBrands > 1 ? "s" : ""} marque${i.nBrands > 1 ? "s" : ""}` : ""}</p>` : ""}
+        ${i.brands?.length ? `<p class="n-brands">${i.brands.slice(0, 20).map((b) => `<span>${esc(b)}</span>`).join("")}${i.nBrands > 20 ? `<span class="note">et ${nf(i.nBrands - 20)} autres</span>` : ""}</p>` : ""}
+        ${i.refs?.length ? `<div class="n-motors">${i.refs.slice(0, 12).map((r) => { const m = motorBy(r); return m ? `<a class="n-motor" href="#m/${encodeURIComponent(r)}">${MM().photo(m)}<span>${esc(m.MARQUE)} ${esc(m.NOM || "")}<small>${esc(m.CLASSE || "")} · ${esc(m.KV || "")}KV</small></span></a>` : ""; }).join("")}${i.count > 12 ? `<span class="note">et ${nf(i.count - 12)} autres</span>` : ""}</div>` : ""}
       </article>`).join("") : `<p class="note">Aucune actualité pour l'instant.</p>`;
   }
 
