@@ -184,6 +184,7 @@
     el.innerHTML = C.user
       ? `<button type="button" class="nav-pill acct-btn" aria-haspopup="true" aria-expanded="false">${avatar(C.user, "xs")}${esc(C.user.name)}${C.user.role !== "user" ? `<em>${ROLE_LABEL[C.user.role]}</em>` : ""}</button>
          <div class="acct-menu" hidden>
+           ${C.user.verified === false ? `<button type="button" class="acct-verify" data-resend-verify>⚠ Adresse non confirmée<small>Renvoyer le lien de confirmation</small></button>` : ""}
            <a href="#moi">Mon espace</a>
            <a href="#u/${C.user.id}">Mon profil</a>
            <a href="#profil">Modifier mon profil</a>
@@ -802,7 +803,11 @@
     const ab = t.closest(".acct-btn");
     if (ab) { const menu = ab.nextElementSibling; menu.hidden = !menu.hidden; ab.setAttribute("aria-expanded", String(!menu.hidden)); return; }
     if (!t.closest(".acct-menu")) document.querySelectorAll(".acct-menu").forEach((m) => (m.hidden = true));
-    if (t.closest("[data-logout]")) { await api("logout", {}); C.user = null; renderAccount(); toast("Vous êtes déconnecté."); return refreshCurrent(); }
+    if (t.closest("[data-resend-verify]")) {
+      try { toast((await api("resend_verify", {})).message, "good"); } catch (e) { toast(e.message, "bad"); }
+      return;
+    }
+        if (t.closest("[data-logout]")) { await api("logout", {}); C.user = null; renderAccount(); toast("Vous êtes déconnecté."); return refreshCurrent(); }
     const lk = t.closest("[data-like]");
     if (lk) {
       if (!C.user) return authForm("login");

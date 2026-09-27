@@ -1096,27 +1096,37 @@
     const img = box.querySelector("img"), original = img.getAttribute("src");
     const reduce = matchMedia("(prefers-reduced-motion: reduce)").matches;
     box.classList.add("spinning");
+    // Time each frame stays: quick at first, then slower and slower (about 5 s in all)
+    const n = frames.length;
+    const delay = (k) => Math.round(110 + 520 * Math.pow(k / (n - 1), 2.4));
     // Preload so no frame is blank
     Promise.all(frames.map((m) => new Promise((ok) => { const i = new Image(); i.onload = i.onerror = ok; i.src = state.thumbs[m.REF]; })))
       .then(() => {
         let k = 0;
         const show = () => {
-          const m = frames[k];
+          const m = frames[k], d = delay(k);
           img.src = state.thumbs[m.REF];
           img.alt = `${m.MARQUE} ${m.NOM}`;
           img.classList.add("is-photo");
+          // The pop of each picture lasts a bit less than the time it stays on screen
+          img.style.setProperty("--tick", `${Math.min(320, Math.round(d * 0.8))}ms`);
           img.classList.remove("tick"); void img.offsetWidth; img.classList.add("tick");
           k++;
-          if (k < frames.length && !reduce) setTimeout(show, 55 + 14 * k + (k > frames.length - 5 ? 120 * (k - frames.length + 5) : 0));
-          else finish(m);
+          if (k < n && !reduce) setTimeout(show, d);
+          else setTimeout(() => finish(m), reduce ? 200 : 750);
         };
         const finish = (m) => {
-          box.classList.add("flash");
+          // The flash covers the whole screen and stays while the motor page opens under it
+          const flash = document.createElement("div");
+          flash.className = "roulette-flash";
+          document.body.appendChild(flash);
+          box.classList.add("won");
+          setTimeout(() => { location.hash = `#m/${encodeURIComponent(m.REF)}`; }, reduce ? 100 : 260);
           setTimeout(() => {
-            location.hash = `#m/${encodeURIComponent(m.REF)}`;
-            // Back on the home page later: the drawing again
-            setTimeout(() => { box.classList.remove("spinning", "flash"); img.src = original; img.alt = ""; img.classList.remove("is-photo", "tick"); }, 700);
-          }, reduce ? 150 : 380);
+            flash.remove();
+            box.classList.remove("spinning", "won");
+            img.src = original; img.alt = ""; img.classList.remove("is-photo", "tick"); img.style.removeProperty("--tick");
+          }, 1100);
         };
         show();
       });

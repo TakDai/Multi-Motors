@@ -92,9 +92,7 @@ case 'register':
     $role = $email === mb_strtolower((string) cfg('admin_email', '')) ? 'admin' : 'user';
     q('INSERT INTO users (email, name, pass_hash, role, verified, verify_token, created_at) VALUES (?, ?, ?, ?, 0, ?, ?)',
         [$email, $name, password_hash($pass, PASSWORD_DEFAULT), $role, $tok, now()]);
-    $link = rtrim((string) cfg('site_url'), '/') . '/api/index.php?action=verify&token=' . $tok;
-    send_mail($email, 'Confirmez votre compte Multi-Motors',
-        "Bonjour $name,\n\nConfirmez votre adresse pour activer votre compte :\n$link\n\nÀ bientôt sur Multi-Motors.");
+    send_verify_mail($email, $name, $tok);
     login_as((int) db()->lastInsertId());
     out(['user' => me_payload(current_user()), 'message' => 'Compte créé. Un lien de confirmation vous a été envoyé par email.']);
 
@@ -107,6 +105,19 @@ case 'verify':
     }
     header('Location: ' . rtrim((string) cfg('site_url'), '/') . '/#' . ($u ? 'compte-confirme' : 'lien-invalide'));
     exit;
+
+case 'resend_verify':
+    // A new confirmation link for the signed-in member whose address is not confirmed yet
+    if (!$post) fail('POST attendu.', 405);
+    $u = current_user();
+    if (!$u) fail('Connectez-vous pour faire cela.', 401);
+    if ($u['verified']) out(['message' => 'Votre adresse est déjà confirmée.']);
+    throttle('resend_verify', (string) $u['id'], 3, 60);
+    $tok = token();
+    q('UPDATE users SET verify_token = ? WHERE id = ?', [$tok, $u['id']]);
+    $sent = send_verify_mail((string) $u['email'], (string) $u['name'], $tok);
+    if (!$sent) fail('L\'email n\'a pas pu être envoyé. Réessayez plus tard.', 500);
+    out(['message' => 'Un nouveau lien de confirmation vient d\'être envoyé à ' . $u['email'] . '.']);
 
 case 'login':
     if (!$post) fail('POST attendu.', 405);
@@ -373,8 +384,7 @@ case 'account_update':
         if (q('SELECT id FROM users WHERE email = ? AND id <> ?', [$email, $u['id']])->fetch()) fail('Cette adresse est déjà utilisée.');
         $tok = token();
         q('UPDATE users SET email = ?, verified = 0, verify_token = ? WHERE id = ?', [$email, $tok, $u['id']]);
-        send_mail($email, 'Confirmez votre nouvelle adresse Multi-Motors', "Bonjour,\n\nConfirmez votre nouvelle adresse :\n"
-            . rtrim((string) cfg('site_url'), '/') . '/api/index.php?action=verify&token=' . $tok . "\n");
+        send_verify_mail($email, (string) $u['name'], $tok, true);
         $msg[] = 'Adresse modifiée : confirmez-la avec le lien envoyé par email.';
     }
     $new = (string) (body()['password'] ?? '');

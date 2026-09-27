@@ -114,9 +114,28 @@ function throttle(string $kind, string $key, int $max, int $minutes): void {
 function client_ip(): string { return $_SERVER['REMOTE_ADDR'] ?? '0.0.0.0'; }
 
 function send_mail(string $to, string $subject, string $text): bool {
-    $from = cfg('mail_from', 'no-reply@localhost');
-    $headers = "From: Multi-Motors <$from>\r\nContent-Type: text/plain; charset=utf-8\r\n";
-    return @mail($to, '=?UTF-8?B?' . base64_encode($subject) . '?=', $text, $headers);
+    $from = (string) cfg('mail_from', 'no-reply@localhost');
+    if (!filter_var($from, FILTER_VALIDATE_EMAIL)) $from = 'no-reply@localhost';
+    $headers = implode("\r\n", [
+        "From: Multi-Motors <$from>",
+        "Reply-To: $from",
+        'MIME-Version: 1.0',
+        'Content-Type: text/plain; charset=utf-8',
+        'Content-Transfer-Encoding: 8bit',
+        'X-Mailer: Multi-Motors',
+    ]);
+    $text = str_replace("\n", "\r\n", str_replace("\r\n", "\n", $text));
+    // Envelope sender = the site's address (-f): without it, hosts such as OVH send from a technical
+    // address of the cluster and the messages often end up as spam
+    return @mail($to, '=?UTF-8?B?' . base64_encode($subject) . '?=', $text, $headers, '-f' . $from);
+}
+
+/** Email with the link that confirms the address of an account. */
+function send_verify_mail(string $email, string $name, string $tok, bool $changed = false): bool {
+    $link = rtrim((string) cfg('site_url'), '/') . '/api/index.php?action=verify&token=' . $tok;
+    return send_mail($email, $changed ? 'Confirmez votre nouvelle adresse Multi-Motors' : 'Confirmez votre compte Multi-Motors',
+        "Bonjour $name,\n\n" . ($changed ? "Confirmez votre nouvelle adresse email" : "Confirmez votre adresse pour activer votre compte")
+        . " (commentaires, avis, corrections) :\n$link\n\nSi vous n'êtes pas à l'origine de cette demande, ignorez ce message.\n\nÀ bientôt sur Multi-Motors.");
 }
 
 function token(): string { return bin2hex(random_bytes(24)); }
