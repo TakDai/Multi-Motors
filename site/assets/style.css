@@ -1460,3 +1460,25 @@ html, body { overflow-x: hidden; }
 .n-sum { margin: 2px 0 8px; font-size: 12px; letter-spacing: .1em; text-transform: uppercase; color: rgba(0, 0, 0, .6); }
 .n-brands { display: flex; flex-wrap: wrap; gap: 6px; margin: 0 0 10px; }
 .n-brands span:not(.note) { padding: 3px 9px; border: 1px solid rgba(0, 0, 0, .3); border-radius: 999px; font-size: 11px; letter-spacing: .06em; }
+
+/* --- Home: the central motor draws a random motor ------------------------- */
+#hero-random { position: relative; cursor: pointer; border-radius: 50%; outline-offset: 6px; }
+#hero-random img { transition: transform .35s cubic-bezier(.3, 1.5, .5, 1); }
+#hero-random:hover img { transform: scale(1.04) rotate(-2deg); }
+.hero-hint { position: absolute; left: 50%; bottom: 4%; transform: translate(-50%, 6px); padding: 5px 12px; border-radius: 999px; background: #000; color: #fff;
+  font: 700 11px var(--font); letter-spacing: .14em; text-transform: uppercase; white-space: nowrap; opacity: 0; transition: opacity .25s, transform .3s; pointer-events: none; }
+#hero-random:hover .hero-hint, #hero-random:focus-visible .hero-hint { opacity: 1; transform: translate(-50%, 0); }
+#hero-random.spinning .hero-hint { opacity: 0; }
+/* While spinning: photos in a round white frame, each new one pops in */
+#hero-random.spinning img { animation: none; aspect-ratio: 1; object-fit: contain; background: #fff; border-radius: 50%; box-shadow: 0 0 0 3px #000, 0 14px 30px rgba(0, 0, 0, .2); }
+#hero-random img.tick { animation: roulette-tick .16s cubic-bezier(.2, .8, .2, 1) both !important; }
+@keyframes roulette-tick { from { transform: scale(.86) rotate(-6deg); opacity: .4; filter: blur(2px); } to { transform: none; opacity: 1; filter: none; } }
+/* The final flash */
+.hero-flash { position: fixed; inset: 0; z-index: 90; background: #fff; opacity: 0; pointer-events: none; }
+#hero-random.flash .hero-flash { animation: flash .75s ease-out both; }
+#hero-random.flash img { animation: flash-pop .4s cubic-bezier(.3, 1.6, .5, 1) both !important; }
+@keyframes flash { 0% { opacity: 0; } 25% { opacity: 1; } 100% { opacity: 0; } }
+@keyframes flash-pop { 0% { transform: scale(1); } 60% { transform: scale(1.18); } 100% { transform: scale(1.1); } }
+@media (prefers-reduced-motion: reduce) {
+  #hero-random.flash .hero-flash { animation: page-fade .3s ease reverse both !important; }
+}

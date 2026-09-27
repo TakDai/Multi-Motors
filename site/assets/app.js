@@ -1074,6 +1074,56 @@
     setTimeout(() => { app.classList.remove("page-out"); location.hash = to; }, 170);
   });
 
+  // --- Home: random motor ("roulette" on the central motor) --------------------------------
+  // Motor photos replace one another, slower and slower, then a flash opens the sheet of the one drawn.
+  // Drawn among motors with a photo and a well filled sheet (the most complete ones first).
+  function randomMotor() {
+    const box = $("hero-random");
+    if (!box || box.classList.contains("spinning")) return;
+    const withPhoto = state.motors.filter((m) => state.thumbs[m.REF]);
+    if (!withPhoto.length) return;
+    const best = withPhoto.filter((m) => completeness(m) >= 9);
+    const pool = best.length >= 20 ? best : withPhoto.slice().sort((a, b) => completeness(b) - completeness(a)).slice(0, 300);
+    const pick = () => pool[Math.floor(Math.random() * pool.length)];
+    const winner = pick();
+    // Frames: other motors (one per model), then the winner; each frame shown a little longer than the last
+    const seen = new Set([famKey(winner)]), frames = [];
+    for (let i = 0; frames.length < 16 && i < 400; i++) {
+      const m = pick();
+      if (!seen.has(famKey(m))) { seen.add(famKey(m)); frames.push(m); }
+    }
+    frames.push(winner);
+    const img = box.querySelector("img"), original = img.getAttribute("src");
+    const reduce = matchMedia("(prefers-reduced-motion: reduce)").matches;
+    box.classList.add("spinning");
+    // Preload so no frame is blank
+    Promise.all(frames.map((m) => new Promise((ok) => { const i = new Image(); i.onload = i.onerror = ok; i.src = state.thumbs[m.REF]; })))
+      .then(() => {
+        let k = 0;
+        const show = () => {
+          const m = frames[k];
+          img.src = state.thumbs[m.REF];
+          img.alt = `${m.MARQUE} ${m.NOM}`;
+          img.classList.add("is-photo");
+          img.classList.remove("tick"); void img.offsetWidth; img.classList.add("tick");
+          k++;
+          if (k < frames.length && !reduce) setTimeout(show, 55 + 14 * k + (k > frames.length - 5 ? 120 * (k - frames.length + 5) : 0));
+          else finish(m);
+        };
+        const finish = (m) => {
+          box.classList.add("flash");
+          setTimeout(() => {
+            location.hash = `#m/${encodeURIComponent(m.REF)}`;
+            // Back on the home page later: the drawing again
+            setTimeout(() => { box.classList.remove("spinning", "flash"); img.src = original; img.alt = ""; img.classList.remove("is-photo", "tick"); }, 700);
+          }, reduce ? 150 : 380);
+        };
+        show();
+      });
+  }
+  $("hero-random")?.addEventListener("click", randomMotor);
+  $("hero-random")?.addEventListener("keydown", (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); randomMotor(); } });
+
   // --- Routing -------------------------------------------------------------
   function route() {
     const h = location.hash;

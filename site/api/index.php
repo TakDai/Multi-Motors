@@ -10,7 +10,7 @@ const FIELDS = ['NOM', 'VERSION', 'CLASSE', 'KV', 'POIDS', 'D MOTEUR', 'H MOTEUR
     'CLOCHE', 'CONFIG', 'RESISTANCE', 'UTILISATION', 'LIEN', 'IMG', 'AUTRE'];
 const ROLES = ['user', 'moderator', 'admin'];
 
-if (!is_file(__DIR__ . '/config.php')) fail('Le serveur n\'est pas encore configuré.', 503);
+if (!is_file(__DIR__ . '/config.php')) fail('Les comptes ne sont pas encore ouverts : la base de données du site n\'est pas encore configurée.', 503);
 
 $action = $_GET['action'] ?? '';
 $post = $_SERVER['REQUEST_METHOD'] === 'POST';
