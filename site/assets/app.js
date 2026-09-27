@@ -911,11 +911,44 @@
   }
 
   // Photo gallery: hosted thumbnail, shop photos (tools/photos.py), original image
+  // Same picture under two addresses: other size, other CDN, other format ("_600x600", "?v=2", ".webp"…)
+  const photoKey = (u) => String(u || "").split("?")[0].toLowerCase()
+    .replace(/^https?:\/\/[^/]+/, "").replace(/\/(thumb\/(view|big)\/|goods_img\/|source_img\/|thumb_img\/)/g, "/")
+    .replace(/_(\d+x\d*|\d*x\d+|grande|large|medium|small|compact|master|crop_center)(?=[._])/g, "")
+    .replace(/-\d+x\d+(?=\.)/, "").replace(/\.(jpe?g|png|webp|gif)$/, "").replace(/\/+/g, "/");
   function gallery(m) {
-    // The thumbnail is made from the IMG photo: showing both would show the same picture twice
-    const urls = [state.thumbs[m.REF], ...(state.photos[famKey(m)] || []), state.thumbs[m.REF] ? "" : safeUrl(m.IMG)].filter(Boolean);
-    return [...new Set(urls)].map(media).filter((u) => !window.MM_MEDIA || /^data:/.test(u));
+    const fam = state.photos[famKey(m)] || [];
+    const thumb = state.thumbs[m.REF];
+    // Our thumbnail is the IMG photo (or else the first photo of the family), framed and cut out:
+    // shown first, and the original it comes from is not shown again
+    const source = thumb ? (safeUrl(m.IMG) || fam[0] || "") : "";
+    const seen = new Set(source ? [photoKey(source)] : []);
+    const urls = thumb ? [thumb] : [];
+    for (const u of [...fam, thumb ? "" : safeUrl(m.IMG)]) {
+      if (!u) continue;
+      const k = photoKey(u);
+      if (seen.has(k)) continue;
+      seen.add(k);
+      urls.push(u);
+    }
+    return urls.map(media).filter((u) => !window.MM_MEDIA || /^data:/.test(u));
   }
+  // Pictures that are not a photo of the motor (banners, tall posters) are left out of the gallery
+  window.galleryDrop = (img) => {
+    const gal = img.closest("[data-gallery]"), btn = img.closest(".g-th");
+    if (!gal || !btn) return;
+    const wasCurrent = btn.getAttribute("aria-current") === "true";
+    btn.remove();
+    const thumbs = [...gal.querySelectorAll(".g-th")];
+    if (wasCurrent && thumbs[0]) { thumbs[0].setAttribute("aria-current", "true"); gal.querySelector(".g-main img").src = thumbs[0].querySelector("img").src; }
+    const i = Math.max(0, thumbs.findIndex((b) => b.getAttribute("aria-current") === "true"));
+    const c = gal.querySelector(".g-count"); if (c) c.textContent = `${i + 1} / ${thumbs.length}`;
+    if (thumbs.length < 2) gal.querySelectorAll(".g-nav, .g-thumbs").forEach((e) => e.remove());
+  };
+  window.galleryCheck = (img) => {
+    const r = img.naturalWidth / (img.naturalHeight || 1);
+    if (r > 2.3 || r < 0.43 || img.naturalWidth < 120) window.galleryDrop(img);
+  };
   function panelPhotos(m) {
     const list = gallery(m);
     // Only real photos here, never the default drawing
@@ -923,10 +956,11 @@
     const more = l ? `<p class="more-row"><a class="ghost-btn" href="${esc(l.url)}" target="_blank" rel="noopener">${l.maker ? "Voir la fiche du fabricant" : esc(l.label)} →</a></p>` : "";
     if (!list.length) return `<section class="card">${secH("photos", "Photos")}<p class="note">Pas encore de photo pour ce moteur.</p>${more}</section>`;
     return `<section class="card">${secH("photos", "Photos", `${list.length} photo${list.length > 1 ? "s" : ""}`)}<div class="gallery" data-gallery>
+        <div class="g-stage">${list.length > 1 ? `<button class="g-nav prev" type="button" aria-label="Photo précédente">‹</button>` : ""}
         <div class="g-main"><img src="${esc(list[0])}" alt="${esc(`${m.MARQUE} ${m.NOM}`)}" class="is-photo" onerror="this.closest('[data-gallery]').querySelector('.g-th[aria-current=true]')?.remove();this.remove()">
-          ${list.length > 1 ? `<button class="g-nav prev" type="button" aria-label="Photo précédente">‹</button><button class="g-nav next" type="button" aria-label="Photo suivante">›</button>` : ""}
           <span class="g-count">1 / ${list.length}</span></div>
-        ${list.length > 1 ? `<div class="g-thumbs">${list.map((u, i) => `<button type="button" class="g-th" data-i="${i}" aria-label="Photo ${i + 1}" aria-current="${i === 0}"><img src="${esc(u)}" alt="" loading="lazy" onerror="this.closest('button').remove()"></button>`).join("")}</div>` : ""}
+        ${list.length > 1 ? `<button class="g-nav next" type="button" aria-label="Photo suivante">›</button>` : ""}</div>
+        ${list.length > 1 ? `<div class="g-thumbs">${list.map((u, i) => `<button type="button" class="g-th" data-i="${i}" aria-label="Photo ${i + 1}" aria-current="${i === 0}"><img src="${esc(u)}" alt="" loading="lazy" onload="galleryCheck(this)" onerror="galleryDrop(this)"></button>`).join("")}</div>` : ""}
       </div>${more}</section>`;
   }
 
@@ -1088,7 +1122,7 @@
     const winner = pick();
     // Frames: other motors (one per model), then the winner; each frame shown a little longer than the last
     const seen = new Set([famKey(winner)]), frames = [];
-    for (let i = 0; frames.length < 16 && i < 400; i++) {
+    for (let i = 0; frames.length < 22 && i < 600; i++) {
       const m = pick();
       if (!seen.has(famKey(m))) { seen.add(famKey(m)); frames.push(m); }
     }
@@ -1096,40 +1130,44 @@
     const img = box.querySelector("img"), original = img.getAttribute("src");
     const reduce = matchMedia("(prefers-reduced-motion: reduce)").matches;
     box.classList.add("spinning");
-    // Time each frame stays: quick at first, then slower and slower (about 5 s in all)
+    // Like a slot machine, without movement: the picture simply changes, quickly, then slower
+    // and slower until the motor drawn (about 4.5 s)
     const n = frames.length;
-    const delay = (k) => Math.round(110 + 520 * Math.pow(k / (n - 1), 2.4));
-    // Preload so no frame is blank
-    Promise.all(frames.map((m) => new Promise((ok) => { const i = new Image(); i.onload = i.onerror = ok; i.src = state.thumbs[m.REF]; })))
-      .then(() => {
-        let k = 0;
-        const show = () => {
-          const m = frames[k], d = delay(k);
+    const delay = (k) => Math.round(70 + 480 * Math.pow(k / (n - 1), 2.6));
+    const load = (m) => new Promise((ok) => { const i = new Image(); i.onload = () => ok(true); i.onerror = () => ok(false); i.src = state.thumbs[m.REF]; });
+    // The winner and the first pictures are loaded before starting; the others load meanwhile
+    const ready = frames.map(load);
+    Promise.all([ready[n - 1], ...ready.slice(0, 3)]).then(() => {
+      let k = 0;
+      const show = async () => {
+        const last = k === n - 1;
+        const m = frames[k];
+        // A picture not loaded in time is skipped (never a blank frame)
+        if (last || await Promise.race([ready[k], new Promise((r) => setTimeout(() => r(false), 30))])) {
           img.src = state.thumbs[m.REF];
           img.alt = `${m.MARQUE} ${m.NOM}`;
           img.classList.add("is-photo");
-          // The pop of each picture lasts a bit less than the time it stays on screen
-          img.style.setProperty("--tick", `${Math.min(320, Math.round(d * 0.8))}ms`);
-          img.classList.remove("tick"); void img.offsetWidth; img.classList.add("tick");
-          k++;
-          if (k < n && !reduce) setTimeout(show, d);
-          else setTimeout(() => finish(m), reduce ? 200 : 750);
-        };
-        const finish = (m) => {
-          // The flash covers the whole screen and stays while the motor page opens under it
-          const flash = document.createElement("div");
-          flash.className = "roulette-flash";
-          document.body.appendChild(flash);
-          box.classList.add("won");
-          setTimeout(() => { location.hash = `#m/${encodeURIComponent(m.REF)}`; }, reduce ? 100 : 260);
-          setTimeout(() => {
-            flash.remove();
-            box.classList.remove("spinning", "won");
-            img.src = original; img.alt = ""; img.classList.remove("is-photo", "tick"); img.style.removeProperty("--tick");
-          }, 1100);
-        };
-        show();
-      });
+        }
+        const d = delay(k);
+        k++;
+        if (!last && !reduce) setTimeout(show, d);
+        else setTimeout(() => finish(m), reduce ? 200 : 700);
+      };
+      const finish = (m) => {
+        // The flash covers the whole screen and stays while the motor page opens under it
+        const flash = document.createElement("div");
+        flash.className = "roulette-flash";
+        document.body.appendChild(flash);
+        setTimeout(() => { location.hash = `#m/${encodeURIComponent(m.REF)}`; }, reduce ? 100 : 260);
+        setTimeout(() => {
+          flash.remove();
+          box.classList.remove("spinning");
+          img.src = original; img.alt = ""; img.classList.remove("is-photo");
+        }, 1100);
+      };
+      if (reduce) k = n - 1;
+      show();
+    });
   }
   $("hero-random")?.addEventListener("click", randomMotor);
   $("hero-random")?.addEventListener("keydown", (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); randomMotor(); } });
