@@ -171,6 +171,10 @@ python -m http.server 8000
 
 ### Mise en ligne sur OVH
 
+**Méthode conseillée : association Git (sans identifiants à stocker).** Le workflow `.github/workflows/ovh-branch.yml` construit le site prêt à servir (contenu de `site/` + `data/moteurs.csv`) et le pousse sur la branche **`ovh`** après chaque recherche quotidienne et chaque modification de `Moteurs`. Dans l'espace client OVH : *Web Cloud → Hébergements → Sites internet → Associer Git* sur le dossier de multi-motors.fr (vide au départ), dépôt `https://github.com/TakDai/Multi-Motors`, branche `ovh` ; puis, dans GitHub (*Settings → Webhooks → Add webhook*), coller l'« Url de webhook » donnée par OVH (type `application/json`, évènement *push*). La configuration de la base (`api/config.php`, modèle `api/config.sample.php`) se dépose une seule fois dans le dossier par FTP ou le gestionnaire de fichiers OVH ; elle n'est jamais dans Git.
+
+**Autre méthode : FTP.**
+
 Le workflow `.github/workflows/deploy-ovh.yml` envoie le site par FTP sur l'hébergement OVH après chaque recherche quotidienne et à chaque modification de `site/` sur `Moteurs`. Il n'efface aucun fichier existant sur l'hébergement.
 
 À configurer une fois dans **Settings → Secrets and variables → Actions** du dépôt :

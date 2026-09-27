@@ -1023,31 +1023,6 @@
     }
   }
 
-  // --- Theme: light, dark or the device's choice (Mes préférences, or the moon/sun button) ----
-  const THEME_KEY = "mm_theme";
-  const darkQuery = matchMedia("(prefers-color-scheme: dark)");
-  const themeChoice = () => { try { return localStorage.getItem(THEME_KEY) || "auto"; } catch (e) { return "auto"; } };
-  function applyTheme(choice = themeChoice(), animate = false) {
-    const dark = choice === "dark" || (choice === "auto" && darkQuery.matches);
-    const root = document.documentElement;
-    if (animate && !matchMedia("(prefers-reduced-motion: reduce)").matches) {
-      root.classList.add("theme-fade");
-      setTimeout(() => root.classList.remove("theme-fade"), 450);
-    }
-    root.dataset.theme = dark ? "dark" : "light";
-    const b = document.getElementById("theme-btn");
-    if (b) { b.setAttribute("aria-label", dark ? "Passer en mode clair" : "Passer en mode sombre"); b.title = dark ? "Mode clair" : "Mode sombre"; }
-    document.querySelectorAll("[data-theme-choice]").forEach((i) => (i.checked = i.value === choice));
-  }
-  function setTheme(choice) {
-    try { localStorage.setItem(THEME_KEY, choice); } catch (e) { /* private mode: this visit only */ }
-    applyTheme(choice, true);
-  }
-  darkQuery.addEventListener?.("change", () => themeChoice() === "auto" && applyTheme("auto", true));
-  applyTheme();
-  document.getElementById("theme-btn")?.addEventListener("click", () => setTheme(document.documentElement.dataset.theme === "dark" ? "light" : "dark"));
-  document.addEventListener("change", (e) => { if (e.target.matches?.("[data-theme-choice]")) setTheme(e.target.value); });
-
   // --- Eased scroll to a height of the page (search results, back to top) ----------------
   function glide(target, onEnd) {
     const from = scrollY, dist = target - from;

@@ -63,8 +63,8 @@ jobs:
           OVH_REMOTE_DIR: ${{ vars.OVH_REMOTE_DIR || 'www' }}
         run: |
           if [ -z "$OVH_FTP_HOST" ] || [ -z "$OVH_FTP_USER" ] || [ -z "$LFTP_PASSWORD" ]; then
-            echo "::error::Secrets OVH manquants : ajoutez OVH_FTP_HOST, OVH_FTP_USER et OVH_FTP_PASSWORD dans Settings > Secrets and variables > Actions."
-            exit 1
+            echo "::notice::Pas d'identifiants FTP : envoi FTP ignoré. Le site est publié par la branche ovh (workflow « Site prêt pour OVH ») si l'hébergement est associé à Git."
+            exit 0
           fi
           sudo apt-get install -y -qq lftp >/dev/null
           # Envoie uniquement les fichiers du site, sans rien supprimer d'autre sur l'hébergement
