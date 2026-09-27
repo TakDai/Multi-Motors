@@ -505,6 +505,12 @@
     return list.slice().sort(by);
   }
 
+  // The logo's name on hover is not needed while the big home title is on screen
+  if ("IntersectionObserver" in window) {
+    const t = document.querySelector("#view-home .big-title");
+    if (t) new IntersectionObserver(([e]) => document.body.classList.toggle("title-in-view", e.isIntersecting)).observe(t);
+  }
+
   function renderList() {
     if (!state.revealed) return;
     // One card per model: its KV versions that match the search are shown together

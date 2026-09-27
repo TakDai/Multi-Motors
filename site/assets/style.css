@@ -1377,7 +1377,15 @@ html, body { overflow-x: hidden; }
 .kv-more { opacity: .6; }
 
 /* --- Multi-Motors logo, top left of every page ---------------------------- */
-.site-logo { display: inline-flex; align-items: center; margin-right: auto; text-decoration: none; transition: transform .2s; }
-.site-logo:hover { transform: translateY(-1px) rotate(-4deg); }
+.site-logo { display: inline-flex; align-items: center; margin-right: auto; text-decoration: none; }
+.site-logo img { transition: transform .2s; }
+.site-logo:hover img { transform: translateY(-1px) rotate(-4deg); }
 .site-logo img { width: 44px; height: auto; display: block; }
+.site-logo { position: relative; gap: 8px; }
+/* The name appears on hover of the logo, unless the big home title is on screen */
+.site-name { max-width: 0; overflow: hidden; opacity: 0; white-space: nowrap; color: #000; font: 700 15px var(--font); letter-spacing: .14em; text-transform: uppercase;
+  transition: max-width .35s cubic-bezier(.2, .8, .2, 1), opacity .25s; }
+.site-logo:hover .site-name, .site-logo:focus-visible .site-name { max-width: 220px; opacity: 1; }
+.title-in-view .site-name { display: none; }
 @media (max-width: 600px) { .site-logo img { width: 36px; } }
+@media (hover: none) { .site-name { display: none; } }
