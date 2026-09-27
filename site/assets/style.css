@@ -1481,3 +1481,4 @@ html, body { overflow-x: hidden; }
 /* Account menu: address not confirmed yet */
 .acct-menu .acct-verify { display: grid; gap: 2px; text-align: left; color: #b42318; }
 .acct-menu .acct-verify small { font-weight: 500; font-size: 11px; letter-spacing: .02em; text-transform: none; color: rgba(0, 0, 0, .6); }
+.cat-stats .stat small { margin-top: 3px; font-size: 10px; font-weight: 400; letter-spacing: .04em; opacity: .6; text-align: center; }
