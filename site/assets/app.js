@@ -185,7 +185,12 @@
   const inc = (field, q) => String(field || "").toLowerCase().includes(q);
   function matches(m) {
     const f = state.f, q = state.q.toLowerCase();
-    if (q && ![m.REF, m.MARQUE, m.NOM, m.VERSION, m.CLASSE, m.KV].join(" ").toLowerCase().includes(q)) return false;
+    if (q) {
+      // "x-nova", "x nova" and "xnova" find the same motors
+      const hay = [m.REF, m.MARQUE, m.NOM, m.VERSION, m.CLASSE, m.KV].join(" ").toLowerCase();
+      const compact = (x) => x.replace(/[^a-z0-9.]/g, "");
+      if (!hay.includes(q) && !compact(hay).includes(compact(q))) return false;
+    }
     if (f.kv && !(num(m.KV) && num(m.KV) >= f.kv[0] && num(m.KV) <= f.kv[1])) return false;
     if (f.poids !== null && !(num(m.POIDS) !== null && num(m.POIDS) <= f.poids)) return false;
     if (f.classe && !(m.CLASSE || "").replace(/\s/g, "").startsWith(f.classe)) return false;
