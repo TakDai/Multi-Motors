@@ -1,0 +1,9 @@
+{
+  "_": "Autres noms d'un même modèle, par marque : [expression du nom, nom à garder]. Appliqué par tools/dedupe.py avant de regrouper les KV d'un modèle.",
+  "T-Motor": [
+    ["^A[ST] ?(\\d{4})-?([AB])(?: LONG SHAFT)?$", "AT\\1-\\2"],
+    ["^A[ST] ?(\\d{4}) LONG SHAFT$", "AT\\1 LONG SHAFT"],
+    ["^AT (\\d{4})$", "AT\\1"],
+    ["^ANTIGRAVITY (\\d{4})$", "MN\\1"]
+  ]
+}

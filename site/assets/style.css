@@ -1369,3 +1369,9 @@ html, body { overflow-x: hidden; }
 .sheet-imgs { display: flex; flex-direction: column; max-width: 760px; margin: 0 auto; border: 1px solid rgba(0, 0, 0, .12); border-radius: 8px; overflow: hidden; background: #fff; }
 .sheet-imgs a { display: block; line-height: 0; }
 .sheet-imgs img { display: block; width: 100%; height: auto; }
+
+/* --- One card per model: its KV versions, each linking to its page --------- */
+.pair .vals.kv-list { flex-wrap: wrap; gap: 4px; }
+.kv-link { text-decoration: none; color: inherit; cursor: pointer; transition: background-color .2s, color .2s; }
+.kv-link:hover, .kv-link:focus-visible { background: var(--black, #111); color: #fff; }
+.kv-more { opacity: .6; }

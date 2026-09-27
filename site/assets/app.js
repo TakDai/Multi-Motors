@@ -83,7 +83,7 @@
   function linkOf(m) {
     const f = state.fab[`${m.MARQUE}|${m.NOM}`], lien = safeUrl(m.LIEN);
     if (f && safeUrl(f.url)) return { url: f.url, label: "Site du fabricant", maker: true, title: `Page officielle ${m.MARQUE} (${f.site || hostOf(f.url)})` };
-    if (lien) return { url: lien, label: `Voir chez ${hostOf(lien)}`, maker: false, title: `Revendeur : ${hostOf(lien)}` };
+    if (lien) return { url: lien, label: `Voir chez ${hostOf(lien).replace(/\.(com|net|org|fr|de|eu|io|us|ca|shop|store|co\.uk|com\.au)$/, "")}`, maker: false, title: `Revendeur : ${hostOf(lien)}` };
     return null;
   }
   const linkBtn = (m, cls = "official") => {
@@ -97,7 +97,20 @@
   const norm = (s) => String(s || "").toLowerCase().replace(/[\s*×]/g, "x").replace(/[^a-z0-9.x]/g, "");
   const has = (v) => v !== undefined && v !== null && String(v).trim() !== "";
 
-  const family = (m) => state.motors.filter((x) => x.MARQUE === m.MARQUE && x.NOM === m.NOM);
+  // The KV versions of a model (same brand and name), indexed once per catalogue
+  let famIdx = null, famFor = null;
+  const family = (m) => {
+    if (famFor !== state.motors) {
+      famIdx = new Map();
+      for (const x of state.motors) {
+        const k = `${x.MARQUE}|${x.NOM}`;
+        if (!famIdx.has(k)) famIdx.set(k, []);
+        famIdx.get(k).push(x);
+      }
+      famFor = state.motors;
+    }
+    return famIdx.get(`${m.MARQUE}|${m.NOM}`) || [m];
+  };
   const kvList = (m) => [...new Set(family(m).map((x) => fmt(x.KV)).filter(Boolean))].sort((a, b) => num(a) - num(b));
   const shaft = (m) => (/^M\d/i.test(m["VIS HEL"] || "") ? m["VIS HEL"] : has(m["D SHAFT"]) ? `${fmt(m["D SHAFT"])}mm` : "");
   const weight = (m) => (has(m.POIDS) ? `${fmt(m.POIDS)}GR` : "");
@@ -136,18 +149,36 @@
   const one = (v) => (has(v) ? `<span class="val" title="${esc(v)}">${esc(v)}</span>` : `<span class="val na">—</span>`);
   const val = (v) => `<span class="vals">${one(v)}</span>`;
   const pair = (a, b) => `<span class="vals">${has(a) || has(b) ? `${one(a)}<span class="x">X</span>${one(b)}` : one("")}</span>`;
-  const kvVals = (m) => `<span class="vals">${kvList(m).slice(0, 3).map(one).join(`<span class="x">X</span>`) || one("")}</span>`;
 
-  function row(m, i) {
+  // Several values of the versions shown together: one value, or "min – max"
+  const spread = (list, get, u = "") => {
+    const v = list.map(get).filter(has);
+    const n = v.map(num).filter((x) => x !== null);
+    if (!v.length) return "";
+    if (n.length === v.length && n.length > 1 && Math.min(...n) !== Math.max(...n)) return `${fmt(Math.min(...n))}–${fmt(Math.max(...n))}${u}`;
+    return /^[\d.,]+$/.test(v[0]) ? `${fmt(v[0])}${u}` : v[0];
+  };
+  // KV of the versions shown: each one opens its own page
+  const kvLinks = (list) => {
+    const vs = list.filter((x) => has(x.KV)).sort((a, b) => num(a.KV) - num(b.KV));
+    if (!vs.length) return `<span class="vals">${one("")}</span>`;
+    const max = 5, more = vs.length - max;
+    return `<span class="vals kv-list">${vs.slice(0, max).map((x) => `<a class="val kv-link" href="#m/${encodeURIComponent(x.REF)}" title="Voir la version KV${esc(fmt(x.KV))}">${esc(fmt(x.KV))}</a>`).join("")}${more > 0 ? `<span class="val kv-more">+${more}</span>` : ""}</span>`;
+  };
+
+  function row(g, i) {
+    // g: the versions of one model that match the search, the best placed first
+    const list = Array.isArray(g) ? g : [g], m = list[0];
     const href = `#m/${encodeURIComponent(m.REF)}`;
+    const w = spread(list, (x) => x.POIDS, "GR");
     return `<article class="row" style="--i:${i % PAGE}">
       <div class="row-id">${brandMark(m)}<a class="name" href="${href}">${esc(m.NOM || m.REF)}</a>${hooks.rowExtra ? hooks.rowExtra(m) : ""}</div>
-      <a class="row-img" href="${href}" tabindex="-1" aria-hidden="true">${photo(m)}</a>
+      <a class="row-img" href="${href}" tabindex="-1" aria-hidden="true">${photo(list.find((x) => state.thumbs[x.REF] || safeUrl(x.IMG)) || m)}</a>
       <div class="specs">
-        ${pr("Classe", val(m.CLASSE))}${pr("Poids", val(weight(m)))}${pr("Configuration", val(m.CONFIG))}${pr("KV", kvVals(m))}
+        ${pr("Classe", val(m.CLASSE))}${pr("Poids", val(w))}${pr("Configuration", val(m.CONFIG))}${pr(list.length > 1 ? `${list.length} KV` : "KV", kvLinks(list))}
         ${pr("Shaft", val(shaft(m)))}${pr("Entraxe de fixation", val(m["ENTRAXE FIX"]))}${pr("Dimension", pair(fmt(m["D MOTEUR"]), fmt(m["H MOTEUR"])))}${pr("L shaft", val(fmt(m["L SHAFT"])))}
-        ${pr("Résistance", val(m.RESISTANCE))}${pr("Utilisation", val(m.UTILISATION))}${pr("Hélice", val(m.HELICE))}${pr("Câble", val(cable(m)))}
-        ${pr("Amp max", val(fmt(m.AMP)))}${pr("Puissance max", val(unit(m.PUISSANCE, "W")))}${pr("Voltage", val(m.LIPO))}${pr("Vis hélice", val(m["VIS HEL"]))}
+        ${pr("Résistance", val(list.length > 1 ? spread(list, (x) => x.RESISTANCE) : m.RESISTANCE))}${pr("Utilisation", val(m.UTILISATION))}${pr("Hélice", val(m.HELICE))}${pr("Câble", val(cable(m)))}
+        ${pr("Amp max", val(spread(list, (x) => x.AMP)))}${pr("Puissance max", val(spread(list, (x) => x.PUISSANCE, "W")))}${pr("Voltage", val(list.length > 1 ? [...new Set(list.map((x) => x.LIPO).filter(has))].join(" / ") : m.LIPO))}${pr("Vis hélice", val(m["VIS HEL"]))}
         ${linkBtn(m) || `<span class="official off">Pas de lien</span>`}
       </div>
     </article>`;
@@ -476,13 +507,21 @@
 
   function renderList() {
     if (!state.revealed) return;
-    const list = sorted(state.motors.filter(matches));
+    // One card per model: its KV versions that match the search are shown together
+    const groups = new Map();
+    for (const m of sorted(state.motors.filter(matches))) {
+      const k = famKey(m);
+      if (!groups.has(k)) groups.set(k, []);
+      groups.get(k).push(m);
+    }
+    const list = [...groups.values()];
+    const nMotors = list.reduce((a, g) => a + g.length, 0);
     $("rows").innerHTML = list.slice(0, state.shown).map(row).join("");
     // "Afficher plus" only animates the newly added rows
     [...$("rows").children].slice(0, state.shown - PAGE).forEach((r) => (r.style.animation = "none"));
     $("more").hidden = list.length <= state.shown;
     $("empty").hidden = list.length > 0;
-    $("count").textContent = `${list.length} moteur${list.length > 1 ? "s" : ""} sur ${state.motors.length}`;
+    $("count").textContent = `${list.length} modèle${list.length > 1 ? "s" : ""} · ${nMotors} moteur${nMotors > 1 ? "s" : ""} sur ${state.motors.length}`;
     document.querySelectorAll(".tab").forEach((t) => t.setAttribute("aria-selected", String(t.dataset.tab === state.tab)));
   }
 

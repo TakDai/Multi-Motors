@@ -5,6 +5,12 @@ Brands: one name per brand. Spellings that differ only by case or punctuation
 (Emax / EMAX) take the most common one; brands known under two names
 (KDEDirect / KDE…) follow catalogue/marques_alias.json {"NAME AS WRITTEN": "Name to keep"}.
 
+Model names: one spelling per model of a brand. Names that differ only by spaces,
+hyphens or the decimal sign ("U8 II" / "U8II", "AT 4130" / "AT4130", "2207,5" / "2207.5")
+take the most common one; other names of the same model follow
+catalogue/modeles_alias.json {"Brand": [["regex of the name", "replacement"], ...]}.
+The KV versions of a model thus all carry the same name and show together.
+
 Motors:
 - same brand, model name and KV: one motor, empty fields filled from the others;
 - motor without a model name (a row of the sheet giving only KV, weight and power)
@@ -25,6 +31,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 CAT = ROOT / "catalogue" / "moteurs.csv"
 ALIAS = ROOT / "catalogue" / "marques_alias.json"
+MODEL_ALIAS = ROOT / "catalogue" / "modeles_alias.json"
 DATA = ROOT / "site" / "data"
 UNNAMED = re.compile(r"KV · [\d.]+ g$")
 
@@ -38,6 +45,10 @@ def num(v):
 
 def key(brand):
     return re.sub(r"[^a-z0-9]", "", brand.lower())
+
+
+def mkey(name):
+    return re.sub(r"[\s\-_/]+", "", name.upper().replace(",", "."))
 
 
 def kv(r):
@@ -73,6 +84,29 @@ def main():
         if new != old:
             renamed[old] = new
             r["MARQUE"] = new
+
+    # --- Model names -----------------------------------------------------------
+    rules = {key(b): [(re.compile(a, re.I), rep) for a, rep in v] for b, v in json.loads(MODEL_ALIAS.read_text()).items()
+             if not b.startswith("_")} if MODEL_ALIAS.exists() else {}
+    fam_renamed = {}  # "brand|old name" -> "brand|new name"
+    names = defaultdict(Counter)
+    for r in rows:
+        if r.get("NOM") and not UNNAMED.search(r["NOM"]):
+            n = re.sub(r"\s+", " ", r["NOM"]).strip()
+            for rx, rep in rules.get(key(r["MARQUE"]), []):
+                n = rx.sub(rep, n)
+            r["_nom"] = n
+            names[(key(r["MARQUE"]), mkey(n))][n] += 1
+    # The most common spelling, then the one with spaces (easier to read)
+    best = {k: max(c, key=lambda n: (c[n], n.count(" "), n)) for k, c in names.items()}
+    for r in rows:
+        n = r.pop("_nom", None)
+        if n is None:
+            continue
+        new = best[(key(r["MARQUE"]), mkey(n))]
+        if new != r["NOM"]:
+            fam_renamed[f"{r['MARQUE']}|{r['NOM']}"] = f"{r['MARQUE']}|{new}"
+            r["NOM"] = new
 
     # --- Motors --------------------------------------------------------------
     moved = {}  # removed REF -> REF kept
@@ -118,7 +152,8 @@ def main():
         w.writerows(out)
 
     # --- Data files follow ---------------------------------------------------
-    fam_new = lambda k: f"{renamed.get(k.split('|', 1)[0], k.split('|', 1)[0])}|{k.split('|', 1)[1]}" if "|" in k else k
+    brand_new = lambda k: f"{renamed.get(k.split('|', 1)[0], k.split('|', 1)[0])}|{k.split('|', 1)[1]}" if "|" in k else k
+    fam_new = lambda k: fam_renamed.get(brand_new(k), brand_new(k))
     for name in ("photos", "videos"):
         p = DATA / f"{name}.json"
         if not p.exists():
@@ -147,6 +182,7 @@ def main():
                 d.setdefault(new, v)
         p.write_text(json.dumps(d, ensure_ascii=False, separators=(",", ":")))
 
+    print(f"{len(set(fam_renamed.values()))} modèles réunis sous un seul nom ({len(fam_renamed)} écritures remplacées)")
     print(f"{len(rows)} lignes -> {len(out)} moteurs ({len(rows) - len(out)} doublons fusionnés), "
           f"{len(renamed)} écritures de marque unifiées : {', '.join(f'{a} -> {b}' for a, b in sorted(renamed.items()))}")
 
