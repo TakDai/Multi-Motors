@@ -1377,24 +1377,24 @@ html, body { overflow-x: hidden; }
 .kv-more { opacity: .6; }
 
 /* --- Multi-Motors logo, top left of every page ---------------------------- */
-.site-logo { position: relative; display: inline-flex; align-items: center; gap: 8px; margin-right: auto; text-decoration: none; animation: logo-in .6s cubic-bezier(.2, .9, .3, 1.2) both; }
-.site-logo img { width: 44px; height: auto; display: block; transform-origin: 50% 80%;
+.site-logo { position: relative; display: inline-flex; align-items: center; gap: 12px; margin-right: auto; text-decoration: none; animation: logo-in .6s cubic-bezier(.2, .9, .3, 1.2) both; }
+.site-logo img { width: 74px; height: auto; display: block; transform-origin: 50% 80%;
   transition: transform .55s cubic-bezier(.3, 1.6, .5, 1), filter .3s; }
 .site-logo:hover img, .site-logo:focus-visible img { transform: rotate(-10deg) scale(1.08) translateY(-2px); filter: drop-shadow(0 4px 6px rgba(0, 0, 0, .18)); }
 .site-logo:active img { transform: rotate(-4deg) scale(.96); transition-duration: .15s; }
 @keyframes logo-in { from { opacity: 0; transform: translateX(-12px) rotate(-12deg); } to { opacity: 1; transform: none; } }
 /* The name slides out letter by letter on hover, unless the big home title is on screen */
-.site-name { display: inline-flex; max-width: 0; overflow: hidden; white-space: nowrap; color: #000; font: 700 15px var(--font); letter-spacing: .14em; text-transform: uppercase;
+.site-name { display: inline-flex; max-width: 0; overflow: hidden; white-space: nowrap; color: #000; font: 700 20px var(--font); letter-spacing: .14em; text-transform: uppercase;
   transition: max-width .45s cubic-bezier(.2, .8, .2, 1) .05s; }
 .site-name i { font-style: normal; display: inline-block; opacity: 0; transform: translateX(-8px); filter: blur(3px);
   transition: opacity .3s, transform .4s cubic-bezier(.2, .8, .2, 1), filter .3s; transition-delay: 0s; }
-.site-logo:hover .site-name, .site-logo:focus-visible .site-name { max-width: 220px; transition-delay: 0s; }
+.site-logo:hover .site-name, .site-logo:focus-visible .site-name { max-width: 280px; transition-delay: 0s; }
 .site-logo:hover .site-name i, .site-logo:focus-visible .site-name i { opacity: 1; transform: none; filter: none; transition-delay: calc(var(--i) * 28ms + 60ms); }
 .title-in-view .site-name { display: none; }
 /* Home: the big title already names the site, so no logo; "Actualités" takes its place on the left */
 #app:has(#view-home:not([hidden])) .site-logo { display: none; }
 #app:has(#view-home:not([hidden])) .topnav > .nav-pill[href="#actus"] { margin-right: auto; }
-@media (max-width: 600px) { .site-logo img { width: 36px; } }
+@media (max-width: 600px) { .site-logo img { width: 54px; } }
 @media (hover: none) { .site-name { display: none; } }
 
 /* --- Page changes: the new page fades and rises in ------------------------- */
