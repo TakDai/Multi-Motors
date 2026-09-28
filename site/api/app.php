@@ -214,9 +214,7 @@ case 'forgot':
     if ($u) {
         $tok = token();
         q('UPDATE users SET reset_token = ?, reset_until = ? WHERE id = ?', [$tok, gmdate('Y-m-d H:i:s', time() + 3600), $u['id']]);
-        send_mail($email, 'Nouveau mot de passe Multi-Motors',
-            "Bonjour {$u['name']},\n\nPour choisir un nouveau mot de passe (lien valable 1 heure) :\n" .
-            rtrim((string) cfg('site_url'), '/') . "/#reset/$tok\n\nSi vous n'êtes pas à l'origine de cette demande, ignorez ce message.");
+        send_reset_mail($email, (string) $u['name'], $tok);
     }
     out(['message' => 'Si un compte existe avec cette adresse, un lien vient de lui être envoyé.']);
 
