@@ -46,6 +46,7 @@ try {
     db()->query('SELECT 1 FROM profiles LIMIT 1');
     db()->query('SELECT 1 FROM garage LIMIT 1');
     db()->query('SELECT rating FROM comments LIMIT 1');
+    db()->query('SELECT extra FROM profiles LIMIT 1');
 } catch (PDOException $e) {
     install_schema();
 }
@@ -73,6 +74,31 @@ function avatar_url(array $u): string {
 
 const FLYING = ['Racing', 'Freestyle', 'Long Range', 'Cinematic', 'Cinewhoop', 'Toothpick', 'Whoop', 'Aile volante', 'Avion', 'Hélicoptère'];
 const COLORS = ['#111111', '#ff5757', '#ff9f1c', '#2ec4b6', '#3a86ff', '#8338ec', '#06a77d', '#e63973'];
+const LEVELS = ['Débutant', 'Intermédiaire', 'Confirmé', 'Expert', 'Pro'];
+const SIZES = ['Whoop', '2″', '2,5″', '3″', '3,5″', '4″', '5″', '6″', '7″', '8″ et +'];
+const VIDEO = ['DJI O4', 'DJI O3', 'DJI Vista / Air Unit', 'Walksnail', 'HDZero', 'Analogique'];
+const BANNERS = ['couleur', 'coucher', 'ocean', 'foret', 'nuit', 'carbone', 'circuit', 'aurore'];
+
+// Extra pilot details of a profile, only known values (stored as JSON in profiles.extra)
+function profile_extra(array $p): array {
+    $e = json_decode($p['extra'] ?? '', true);
+    return is_array($e) ? $e : [];
+}
+
+// Banner address (served by ?action=banner) or '' for the preset
+function banner_url(int $id, array $p): string {
+    return !empty($p['banner']) ? 'api/index.php?action=banner&id=' . $id . '&v=' . (int) ($p['banner_v'] ?? 0) : '';
+}
+
+// A picture sent by the profile editor: small PNG / JPEG / WebP, checked as a real image
+function clean_image(string $a, int $max_bytes, int $max_w, int $max_h): string {
+    if (!preg_match('~^data:image/(png|jpeg|webp);base64,([A-Za-z0-9+/=]+)$~', $a, $m)) fail('Image refusée : PNG, JPEG ou WebP uniquement.');
+    $bin = base64_decode($m[2], true);
+    if ($bin === false || strlen($bin) > $max_bytes) fail('Image trop lourde (' . round($max_bytes / 1000) . ' Ko au maximum).');
+    $info = @getimagesizefromstring($bin);
+    if (!$info || $info[0] > $max_w || $info[1] > $max_h || !in_array($info['mime'], ['image/png', 'image/jpeg', 'image/webp'], true)) fail('Image illisible ou trop grande.');
+    return 'data:' . $info['mime'] . ';base64,' . base64_encode($bin);
+}
 
 function clean_url(string $v, string $host = ''): string {
     if ($v === '') return '';
@@ -259,8 +285,10 @@ case 'profile':
     $p = profile_row($id);
     $mine = $me && (int) $me['id'] === $id;
     $public = ($p['is_public'] ?? 1) || $mine || ($me && $me['role'] !== 'user');
+    $extra = profile_extra($p);
     $base = ['id' => $id, 'name' => $u['name'], 'role' => $u['role'], 'since' => $u['created_at'], 'mine' => $mine,
-        'color' => $p['color'] ?? '', 'avatar' => avatar_url(['id' => $id, 'has_avatar' => !empty($p['avatar']), 'avatar_v' => $p['avatar_v'] ?? 0])];
+        'color' => $p['color'] ?? '', 'avatar' => avatar_url(['id' => $id, 'has_avatar' => !empty($p['avatar']), 'avatar_v' => $p['avatar_v'] ?? 0]),
+        'banner' => banner_url($id, $p), 'banner_preset' => $extra['banner_preset'] ?? ''];
     if (!$public) out($base + ['private' => true]);
     $stats = [
         'comments' => (int) q("SELECT COUNT(*) FROM comments WHERE user_id = ? AND status = 'visible'", [$id])->fetchColumn(),
@@ -274,6 +302,7 @@ case 'profile':
         'bio' => $p['bio'] ?? '', 'location' => $p['location'] ?? '', 'website' => $p['website'] ?? '', 'youtube' => $p['youtube'] ?? '',
         'instagram' => $p['instagram'] ?? '', 'flying' => $p['flying'] ?? '', 'setup' => json_decode($p['setup'] ?? '[]', true) ?: [],
         'is_public' => (bool) ($p['is_public'] ?? 1), 'show_likes' => (bool) ($p['show_likes'] ?? 1),
+        'extra' => (object) array_diff_key($extra, ['banner_preset' => 1]),
         'stats' => $stats, 'comments' => $comments, 'likes' => $likes,
         'garage' => q("SELECT ref, status, note FROM garage WHERE user_id = ? AND status IN ('owned', 'tested') ORDER BY created_at DESC LIMIT 60", [$id])->fetchAll(),
     ]);
@@ -281,6 +310,15 @@ case 'profile':
 case 'avatar':
     $row = q('SELECT avatar FROM profiles WHERE user_id = ?', [(int) arg('id')])->fetch();
     if (!$row || !preg_match('~^data:(image/(?:png|jpeg|webp));base64,([A-Za-z0-9+/=]+)$~', (string) $row['avatar'], $m)) { http_response_code(404); exit; }
+    header('Content-Type: ' . $m[1]);
+    header('X-Content-Type-Options: nosniff');
+    header('Cache-Control: public, max-age=604800');
+    echo base64_decode($m[2]);
+    exit;
+
+case 'banner':
+    $row = q('SELECT banner FROM profiles WHERE user_id = ?', [(int) arg('id')])->fetch();
+    if (!$row || !preg_match('~^data:(image/(?:png|jpeg|webp));base64,([A-Za-z0-9+/=]+)$~', (string) $row['banner'], $m)) { http_response_code(404); exit; }
     header('Content-Type: ' . $m[1]);
     header('X-Content-Type-Options: nosniff');
     header('Cache-Control: public, max-age=604800');
@@ -303,30 +341,49 @@ case 'profile_save':
     $version = (int) ($old['avatar_v'] ?? 0);
     if (array_key_exists('avatar', $b)) {
         $a = (string) $b['avatar'];
-        if ($a === '') {
-            $avatar = null;
-        } else {
-            // Only small PNG / JPEG / WebP images, checked as real images
-            if (!preg_match('~^data:image/(png|jpeg|webp);base64,([A-Za-z0-9+/=]+)$~', $a, $m)) fail('Image refusée : PNG, JPEG ou WebP uniquement.');
-            $bin = base64_decode($m[2], true);
-            if ($bin === false || strlen($bin) > 200000) fail('Image trop lourde (200 Ko au maximum).');
-            $info = @getimagesizefromstring($bin);
-            if (!$info || $info[0] > 1024 || $info[1] > 1024 || !in_array($info['mime'], ['image/png', 'image/jpeg', 'image/webp'], true)) fail('Image illisible ou trop grande.');
-            $avatar = 'data:' . $info['mime'] . ';base64,' . base64_encode($bin);
-        }
+        $avatar = $a === '' ? null : clean_image($a, 200000, 1024, 1024);
         $version++;
+    }
+    $banner = $old['banner'] ?? null;
+    $banner_v = (int) ($old['banner_v'] ?? 0);
+    if (array_key_exists('banner', $b)) {
+        $a = (string) $b['banner'];
+        $banner = $a === '' ? null : clean_image($a, 450000, 2000, 800);
+        $banner_v++;
+    }
+    // Pilot details: only known values are kept
+    $extra = profile_extra($old);
+    if (is_array($b['extra'] ?? null)) {
+        $e = $b['extra'];
+        $str = fn ($k, $max) => mb_substr(trim(is_scalar($e[$k] ?? '') ? (string) ($e[$k] ?? '') : ''), 0, $max);
+        $list = fn ($k, $allowed) => array_values(array_intersect($allowed, is_array($e[$k] ?? null) ? $e[$k] : []));
+        $year = (int) ($e['pilot_since'] ?? 0);
+        $extra = array_filter([
+            'pilot_since' => $year >= 1990 && $year <= (int) date('Y') ? $year : null,
+            'level' => in_array($str('level', 20), LEVELS, true) ? $str('level', 20) : null,
+            'styles' => $list('styles', FLYING), 'sizes' => $list('sizes', SIZES),
+            'video' => in_array($str('video', 30), VIDEO, true) ? $str('video', 30) : null,
+            'radio' => $str('radio', 60), 'goggles' => $str('goggles', 60), 'drones' => $str('drones', 400),
+            'tiktok' => clean_url($str('tiktok', 200), 'tiktok.com'), 'twitch' => clean_url($str('twitch', 200), 'twitch.tv'),
+            'discord' => preg_replace('/[<>"\'\s]/', '', $str('discord', 40)),
+            'banner_preset' => in_array($str('banner_preset', 12), BANNERS, true) ? $str('banner_preset', 12) : null,
+        ], fn ($v) => $v !== null && $v !== '' && $v !== []);
+        // The first style chosen is the main one (shown under the name)
+        $flying = $extra['styles'][0] ?? '';
+        $b['flying'] = $flying;
     }
     // Only the fields sent are changed; the others keep their saved value
     $keep = fn (string $k, $new, string $col = '') => array_key_exists($k, $b) ? $new : ($old[$col ?: $k] ?? null);
     $vals = [$keep('bio', arg('bio', 280)), $keep('location', arg('location', 60)), $keep('website', clean_url(arg('website', 200))),
         $keep('youtube', clean_url(arg('youtube', 200), 'youtube.com')), $keep('instagram', clean_url(arg('instagram', 200), 'instagram.com')),
         $keep('color', $color ?: null), $avatar, $version, $keep('setup', json_encode($setup)), $keep('flying', $flying ?: null),
-        $keep('is_public', arg('is_public') === '0' ? 0 : 1) ?? 1, $keep('show_likes', arg('show_likes') === '0' ? 0 : 1) ?? 1, now()];
+        $keep('is_public', arg('is_public') === '0' ? 0 : 1) ?? 1, $keep('show_likes', arg('show_likes') === '0' ? 0 : 1) ?? 1, now(),
+        $banner, $banner_v, $extra ? json_encode($extra, JSON_UNESCAPED_UNICODE) : null];
     if ($old) {
-        q('UPDATE profiles SET bio = ?, location = ?, website = ?, youtube = ?, instagram = ?, color = ?, avatar = ?, avatar_v = ?, setup = ?, flying = ?, is_public = ?, show_likes = ?, updated_at = ? WHERE user_id = ?',
+        q('UPDATE profiles SET bio = ?, location = ?, website = ?, youtube = ?, instagram = ?, color = ?, avatar = ?, avatar_v = ?, setup = ?, flying = ?, is_public = ?, show_likes = ?, updated_at = ?, banner = ?, banner_v = ?, extra = ? WHERE user_id = ?',
             array_merge($vals, [$u['id']]));
     } else {
-        q('INSERT INTO profiles (bio, location, website, youtube, instagram, color, avatar, avatar_v, setup, flying, is_public, show_likes, updated_at, user_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+        q('INSERT INTO profiles (bio, location, website, youtube, instagram, color, avatar, avatar_v, setup, flying, is_public, show_likes, updated_at, banner, banner_v, extra, user_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
             array_merge($vals, [$u['id']]));
     }
     out(['user' => me_payload(current_user()), 'message' => 'Profil enregistré.']);

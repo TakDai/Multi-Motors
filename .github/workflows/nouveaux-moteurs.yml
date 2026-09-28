@@ -70,6 +70,7 @@ jobs:
       - name: Miniatures et fil d'actualité
         run: |
           python tools/thumbs.py || true
+          python tools/ranking.py || true
           python tools/logos.py || true
           python tools/actus.py || true
 

@@ -26,7 +26,7 @@
   const brandLogo = (upper) => (LOGOS[upper] ? asset(LOGOS[upper]) : logoSrc({ MARQUE: upper }));
   // Extension points used by community.js (accounts, likes, prices, news…)
   const hooks = (window.MM_HOOKS = window.MM_HOOKS || {});
-  const state = { motors: [], thumbs: {}, videos: {}, photos: {}, tab: "populaire", sort: "", q: "", shown: PAGE, f: {}, adv: {}, logos: {}, bench: {}, fab: {}, revealed: false };
+  const state = { motors: [], thumbs: {}, videos: {}, photos: {}, tab: "populaire", sort: "", q: "", shown: PAGE, f: {}, adv: {}, logos: {}, bench: {}, fab: {}, rank: {}, revealed: false };
 
   // --- CSV -----------------------------------------------------------------
   function parseCSV(text) {
@@ -166,13 +166,26 @@
     return `<span class="vals kv-list">${vs.slice(0, max).map((x) => `<a class="val kv-link" href="#m/${encodeURIComponent(x.REF)}" title="Voir la version KV${esc(fmt(x.KV))}">${esc(fmt(x.KV))}</a>`).join("")}${more > 0 ? `<span class="val kv-more">+${more}</span>` : ""}</span>`;
   };
 
+  // Why the card is placed there, on the tab being shown (no tag once a sort is chosen)
+  const MONTHS = ["janv.", "févr.", "mars", "avr.", "mai", "juin", "juil.", "août", "sept.", "oct.", "nov.", "déc."];
+  function rankTag(m) {
+    if (state.sort || state.q) return "";
+    const r = rank(m);
+    if (state.tab === "bestseller" && r.bs >= 20)
+      return `<span class="rank-tag" title="Classement des ventes de ${r.shops} boutique${r.shops > 1 ? "s" : ""}">Top ventes · ${r.shops} boutique${r.shops > 1 ? "s" : ""}</span>`;
+    if (state.tab === "nouveautes" && r.new) {
+      const [y, mo] = r.new.split("-");
+      return `<span class="rank-tag" title="${r.sale ? "Première mise en vente trouvée en boutique" : "Arrivée dans le catalogue"}">${r.sale ? "En vente depuis" : "Ajouté en"} ${MONTHS[+mo - 1]} ${y}</span>`;
+    }
+    return "";
+  }
   function row(g, i) {
     // g: the versions of one model that match the search, the best placed first
     const list = Array.isArray(g) ? g : [g], m = list[0];
     const href = `#m/${encodeURIComponent(m.REF)}`;
     const w = spread(list, (x) => x.POIDS, "GR");
     return `<article class="row" style="--i:${i % PAGE}">
-      <div class="row-id">${brandMark(m)}<a class="name" href="${href}">${esc(m.NOM || m.REF)}</a>${hooks.rowExtra ? hooks.rowExtra(m) : ""}</div>
+      <div class="row-id">${brandMark(m)}<a class="name" href="${href}">${esc(m.NOM || m.REF)}</a>${rankTag(m)}${hooks.rowExtra ? hooks.rowExtra(m) : ""}</div>
       <a class="row-img" href="${href}" tabindex="-1" aria-hidden="true">${photo(list.find((x) => state.thumbs[x.REF] || safeUrl(x.IMG)) || m)}</a>
       <div class="specs">
         ${pr("Classe", val(m.CLASSE))}${pr("Poids", val(w))}${pr("Configuration", val(m.CONFIG))}${pr(list.length > 1 ? `${list.length} KV` : "KV", kvLinks(list))}
@@ -490,6 +503,8 @@
     });
   }
 
+  const rank = (m) => state.rank[famKey(m)] || state.rank[famKey(m).toUpperCase()] || {};
+  const popularity = (m) => (rank(m).pop || 0) + 5 * (hooks.likes?.(m) || 0);
   function sorted(list) {
     const by = {
       "kv-asc": (a, b) => (num(a.KV) ?? 1e9) - (num(b.KV) ?? 1e9),
@@ -497,10 +512,12 @@
       "poids-asc": (a, b) => (num(a.POIDS) ?? 1e9) - (num(b.POIDS) ?? 1e9),
       "classe": (a, b) => (a.CLASSE || "9999").localeCompare(b.CLASSE || "9999") || (num(a.KV) ?? 0) - (num(b.KV) ?? 0),
       "marque": (a, b) => a.MARQUE.localeCompare(b.MARQUE) || (a.NOM || "").localeCompare(b.NOM || ""),
-      // No sales data yet: "Best-seller" and "Populaire" both show the most complete sheets first
-      "populaire": (a, b) => completeness(b) - completeness(a) || (num(a.ID) ?? 0) - (num(b.ID) ?? 0),
-      "bestseller": (a, b) => (hooks.likes?.(b) || 0) - (hooks.likes?.(a) || 0) || completeness(b) - completeness(a),
-      "nouveautes": (a, b) => (num(b.ID) ?? 0) - (num(a.ID) ?? 0),
+      // Ranks computed from the shops by tools/ranking.py (site/data/classement.json):
+      // popularity (YouTube views, shops, sales) plus the members' likes, sales order of the shops,
+      // date of the first sale; the most complete sheets first among equals
+      "populaire": (a, b) => popularity(b) - popularity(a) || completeness(b) - completeness(a) || (num(a.ID) ?? 0) - (num(b.ID) ?? 0),
+      "bestseller": (a, b) => (rank(b).bs || 0) - (rank(a).bs || 0) || popularity(b) - popularity(a) || completeness(b) - completeness(a),
+      "nouveautes": (a, b) => (rank(b).new || "").localeCompare(rank(a).new || "") || popularity(b) - popularity(a) || (num(b.ID) ?? 0) - (num(a.ID) ?? 0),
     }[state.sort || state.tab];
     return list.slice().sort(by);
   }
@@ -1222,9 +1239,10 @@
     // community.js is loaded after this file: wait until every script has run
     if (document.readyState === "loading") await new Promise((r) => document.addEventListener("DOMContentLoaded", r));
     try {
-      [state.motors, state.thumbs, state.videos, state.photos, state.logos, state.bench, state.fab] = await Promise.all([
+      [state.motors, state.thumbs, state.videos, state.photos, state.logos, state.bench, state.fab, state.rank] = await Promise.all([
         loadCSV().then(parseCSV), loadJSON("thumbs", window.MM_THUMBS), loadJSON("videos", window.MM_VIDEOS), loadJSON("photos", window.MM_PHOTOS),
         loadJSON("logos", window.MM_LOGOS), loadJSON("bench", window.MM_BENCH), loadJSON("fabricant", window.MM_FAB),
+        loadJSON("classement", window.MM_RANK),
       ]);
     } catch (err) {
       $("empty").textContent = "Le catalogue n'a pas pu être chargé. Réessayez dans quelques minutes.";

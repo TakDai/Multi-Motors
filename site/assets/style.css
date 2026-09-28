@@ -1481,3 +1481,82 @@ html, body { overflow-x: hidden; }
 .acct-menu .acct-verify { display: grid; gap: 2px; text-align: left; color: #b42318; }
 .acct-menu .acct-verify small { font-weight: 500; font-size: 11px; letter-spacing: .02em; text-transform: none; color: rgba(0, 0, 0, .6); }
 .cat-stats .stat small { margin-top: 3px; font-size: 10px; font-weight: 400; letter-spacing: .04em; opacity: .6; text-align: center; }
+
+/* Why a card is placed there on the Best-seller / Nouveauté tabs */
+.rank-tag { margin-top: -12px; padding: 3px 10px; border-radius: 999px; background: #f2f2f2; color: #555; font-size: 12px; font-weight: 600; white-space: nowrap; }
+
+/* ---------- Profil : en-tête, bannières, éditeur ---------- */
+/* The photo overlaps the banner; the name and details stay below it (they used to run over its edge) */
+.pf-id { align-items: flex-start; margin-top: 0; padding-top: 14px; }
+.pf-id > .av-xl { margin-top: -70px; }
+.pf-name { padding-top: 2px; }
+.pf-edit { margin: 4px 0 0 auto; }
+.pf-level { display: inline-flex; align-items: center; gap: 4px; margin-left: 6px; padding: 3px 10px 3px 8px; border-radius: 10px; background: color-mix(in srgb, var(--pf) 14%, #fff); color: color-mix(in srgb, var(--pf) 80%, #000); font: 700 10px var(--font); font-style: normal; letter-spacing: .1em; text-transform: uppercase; vertical-align: 6px; }
+.pf-level svg { width: 12px; height: 12px; fill: currentColor; stroke: none; }
+.pf-banner { height: 190px; background-size: cover; background-position: center; }
+.bn-image { background-color: #eee; }
+.bn-couleur { background-image: radial-gradient(circle at 20% 30%, rgba(255, 255, 255, .35), transparent 60%), linear-gradient(120deg, var(--pf), color-mix(in srgb, var(--pf) 60%, #000)); }
+.bn-coucher { background-image: radial-gradient(circle at 70% 115%, #ffd166 0 16%, transparent 17%), linear-gradient(180deg, #2b1055 0%, color-mix(in srgb, var(--pf) 70%, #ff5e62) 55%, #ff9966 100%); }
+.bn-ocean { background-image: radial-gradient(120% 60% at 50% 115%, rgba(255, 255, 255, .45), transparent 60%), linear-gradient(160deg, #0f2027, color-mix(in srgb, var(--pf) 35%, #2c5364) 55%, #43cea2); }
+.bn-foret { background-image: linear-gradient(170deg, transparent 58%, rgba(0, 0, 0, .25) 58% 70%, transparent 70%), linear-gradient(190deg, transparent 64%, rgba(0, 0, 0, .3) 64%), linear-gradient(180deg, #a8e063, color-mix(in srgb, var(--pf) 25%, #134e5e)); }
+.bn-nuit { background-color: #0b1026; background-image: radial-gradient(1.5px 1.5px at 20% 30%, #fff, transparent), radial-gradient(1px 1px at 70% 20%, #fff, transparent), radial-gradient(1.5px 1.5px at 45% 65%, #fff, transparent), radial-gradient(1px 1px at 85% 55%, #fff, transparent), radial-gradient(1px 1px at 10% 80%, #fff, transparent), radial-gradient(1.5px 1.5px at 60% 85%, #fff, transparent), radial-gradient(circle at 80% 20%, color-mix(in srgb, var(--pf) 45%, transparent), transparent 55%), linear-gradient(180deg, #0b1026, #2b3a67); background-size: 180px 120px, 220px 140px, 160px 110px, 240px 150px, 200px 130px, 260px 170px, 100% 100%, 100% 100%; }
+.bn-carbone { background-color: #1b1b1b; background-image: linear-gradient(45deg, rgba(255, 255, 255, .06) 25%, transparent 25% 75%, rgba(255, 255, 255, .06) 75%), linear-gradient(45deg, rgba(255, 255, 255, .06) 25%, transparent 25% 75%, rgba(255, 255, 255, .06) 75%), linear-gradient(120deg, transparent 40%, color-mix(in srgb, var(--pf) 55%, transparent)); background-size: 12px 12px, 12px 12px, 100% 100%; background-position: 0 0, 6px 6px, 0 0; }
+.bn-circuit { background-color: color-mix(in srgb, var(--pf) 75%, #000); background-image: linear-gradient(rgba(255, 255, 255, .09) 1px, transparent 1px), linear-gradient(90deg, rgba(255, 255, 255, .09) 1px, transparent 1px), radial-gradient(circle at 30% 40%, rgba(255, 255, 255, .25), transparent 45%); background-size: 26px 26px, 26px 26px, 100% 100%; }
+.bn-aurore { background-image: radial-gradient(60% 90% at 25% 10%, rgba(67, 233, 123, .8), transparent 60%), radial-gradient(50% 80% at 75% 0%, color-mix(in srgb, var(--pf) 80%, transparent), transparent 65%), linear-gradient(180deg, #06122b, #101d44); }
+
+.pf-dls { display: flex; flex-direction: column; gap: 12px; margin: 0; }
+.pf-dl { display: grid; grid-template-columns: 96px minmax(0, 1fr); gap: 10px; align-items: baseline; }
+.pf-dl dt { font: 700 11px var(--font); letter-spacing: .08em; text-transform: uppercase; color: rgba(0, 0, 0, .5); }
+.pf-dl dd { margin: 0; font: 400 14px/1.5 var(--font); overflow-wrap: anywhere; }
+.pf-dl dd small { color: rgba(0, 0, 0, .5); }
+.pf-tags { display: flex; flex-wrap: wrap; gap: 5px; }
+.pf-tags span { padding: 3px 10px; border-radius: 10px; background: #f1f1f1; font: 700 11px var(--font); }
+button.pf-link { padding: 0; border: 0; background: none; cursor: pointer; text-align: left; }
+.pf-stats { grid-template-columns: repeat(4, 1fr); }
+
+.pf-form-profile { gap: 18px; }
+.pf-sec { display: flex; flex-direction: column; gap: 14px; margin: 0; }
+.pf-sec .pf-h { margin: 0; }
+.pf-sec .pf-label { margin: 0; }
+.pf-preview { position: relative; }
+.pf-preview .pf-head { margin: 0; }
+.pf-preview-tag { position: absolute; z-index: 2; top: 12px; right: 12px; padding: 4px 10px; border-radius: 10px; background: rgba(0, 0, 0, .55); color: #fff; font: 700 10px var(--font); letter-spacing: .14em; text-transform: uppercase; }
+.pf-banners { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; }
+.pf-bn { position: relative; height: 62px; border: 0; border-radius: 12px; cursor: pointer; background-size: cover; box-shadow: 0 0 0 1.5px rgba(0, 0, 0, .12); transition: transform .15s, box-shadow .15s; }
+.pf-bn span { position: absolute; left: 8px; bottom: 6px; color: #fff; font: 700 10px var(--font); letter-spacing: .06em; text-shadow: 0 1px 3px rgba(0, 0, 0, .6); }
+.pf-bn:hover { transform: translateY(-2px); }
+.pf-bn[aria-pressed="true"] { box-shadow: 0 0 0 3px #fff, 0 0 0 5px #111; }
+.pf-bn.bn-nuit { background-size: 90px 60px, 110px 70px, 80px 55px, 120px 75px, 100px 65px, 130px 85px, 100% 100%, 100% 100%; }
+.pf-btns { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.pf-btns .pf-file { margin: 0; }
+.pf-pick { display: flex; flex-wrap: wrap; gap: 6px; }
+.pf-pick button { padding: 7px 13px; border: 1.5px solid rgba(0, 0, 0, .15); border-radius: 18px; background: #fff; cursor: pointer; font: 700 12px var(--font); transition: background-color .15s, border-color .15s, color .15s; }
+.pf-pick button:hover { border-color: #111; }
+.pf-pick button[aria-pressed="true"] { background: #111; border-color: #111; color: #fff; }
+.pf-sticky { position: sticky; bottom: 12px; z-index: 5; }
+.pf-sticky .btn-red { box-shadow: 0 10px 24px rgba(0, 0, 0, .18); }
+.pf-setup-edit .pf-setup-chips { margin: 0; }
+
+/* Framing window (photo and banner) */
+dialog.crop-modal { width: min(640px, calc(100vw - 32px)); }
+.crop { display: flex; flex-direction: column; gap: 14px; }
+.crop-title { margin: 0; font: 700 18px var(--font); letter-spacing: .08em; text-transform: uppercase; }
+.crop-stage { position: relative; width: 100%; overflow: hidden; border-radius: 12px; background: #e9e9e9 repeating-conic-gradient(#ddd 0 25%, #f4f4f4 0 50%) 0 0 / 20px 20px; cursor: grab; touch-action: none; user-select: none; }
+.crop-stage.dragging { cursor: grabbing; }
+.crop-stage img { position: absolute; left: 50%; top: 50%; max-width: none; transform-origin: center; opacity: 0; pointer-events: none; }
+.crop-stage.ready img { opacity: 1; }
+.crop-stage.round::after { content: ""; position: absolute; inset: 0; border-radius: 50%; box-shadow: 0 0 0 999px rgba(0, 0, 0, .45); pointer-events: none; }
+.crop-stage:not(.round)::after { content: ""; position: absolute; inset: 0; border: 2px solid rgba(255, 255, 255, .8); border-radius: 12px; pointer-events: none; }
+.crop-zoom { display: flex; align-items: center; gap: 10px; font: 700 16px var(--font); }
+.crop-zoom input { flex: 1; accent-color: #111; }
+.crop-actions { display: flex; justify-content: flex-end; gap: 10px; flex-wrap: wrap; }
+
+@media (max-width: 600px) {
+  .pf-banner { height: 120px; }
+  .pf-id > .av-xl { margin-top: -54px; }
+  .pf-edit { margin-left: 0; }
+  .pf-banners { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .pf-stats { grid-template-columns: repeat(2, 1fr); row-gap: 14px; }
+  .pf-dl { grid-template-columns: 1fr; gap: 4px; }
+}
+.pf-av-edit .pf-label { margin: 14px 0 8px; }
