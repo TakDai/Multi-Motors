@@ -26,7 +26,7 @@
   const brandLogo = (upper) => (LOGOS[upper] ? asset(LOGOS[upper]) : logoSrc({ MARQUE: upper }));
   // Extension points used by community.js (accounts, likes, prices, news…)
   const hooks = (window.MM_HOOKS = window.MM_HOOKS || {});
-  const state = { motors: [], thumbs: {}, videos: {}, photos: {}, tab: "populaire", sort: "", q: "", shown: PAGE, f: {}, adv: {}, logos: {}, bench: {}, fab: {}, rank: {}, revealed: false };
+  const state = { motors: [], thumbs: {}, videos: {}, photos: {}, tab: "populaire", sort: "", q: "", shown: PAGE, f: {}, adv: {}, logos: {}, bench: {}, fab: {}, rank: {}, crop: {}, revealed: false };
 
   // --- CSV -----------------------------------------------------------------
   function parseCSV(text) {
@@ -948,8 +948,29 @@
       seen.add(k);
       urls.push(u);
     }
-    return urls.map(media).filter((u) => !window.MM_MEDIA || /^data:/.test(u));
+    return urls.filter((u) => !window.MM_MEDIA || /^data:/.test(media(u)));
   }
+  // Shop photos framed on the motor (tools/photos_frame.py): the frame takes the shape of the
+  // motor's box, and the photo is moved and enlarged inside it so only that box shows
+  function framedImg(url, attrs) {
+    const b = state.crop[url] || [0, 0, 1000, 1000];
+    const [x0, y0, x1, y1] = b.map((v) => v / 1000);
+    return `<span class="g-frame" style="--x0:${x0};--y0:${y0};--bw:${x1 - x0};--bh:${y1 - y0}"><img src="${esc(media(url))}" data-o="${esc(url)}" ${attrs} onload="galleryFit(this)"></span>`;
+  }
+  window.galleryFit = (img) => {
+    const f = img.parentElement, st = f.style;
+    const bw = parseFloat(st.getPropertyValue("--bw")), bh = parseFloat(st.getPropertyValue("--bh"));
+    st.setProperty("--a", ((bw * img.naturalWidth) / (bh * img.naturalHeight || 1)).toFixed(4));
+    f.classList.add("ready");
+    if (img.closest(".g-th")) window.galleryCheck(img);
+  };
+  // Show another photo in the big frame (thumbnail click, arrows)
+  const galleryShow = (gal, url) => {
+    const main = gal.querySelector(".g-main"), old = main.querySelector(".g-frame");
+    const tmp = document.createElement("span");
+    tmp.innerHTML = framedImg(url, `alt="${esc(old?.querySelector("img")?.alt || "")}" class="is-photo swap"`);
+    if (old) old.replaceWith(tmp.firstElementChild); else main.prepend(tmp.firstElementChild);
+  };
   // Pictures that are not a photo of the motor (banners, tall posters) are left out of the gallery
   window.galleryDrop = (img) => {
     const gal = img.closest("[data-gallery]"), btn = img.closest(".g-th");
@@ -957,7 +978,7 @@
     const wasCurrent = btn.getAttribute("aria-current") === "true";
     btn.remove();
     const thumbs = [...gal.querySelectorAll(".g-th")];
-    if (wasCurrent && thumbs[0]) { thumbs[0].setAttribute("aria-current", "true"); gal.querySelector(".g-main img").src = thumbs[0].querySelector("img").src; }
+    if (wasCurrent && thumbs[0]) { thumbs[0].setAttribute("aria-current", "true"); galleryShow(gal, thumbs[0].querySelector("img").dataset.o); }
     const i = Math.max(0, thumbs.findIndex((b) => b.getAttribute("aria-current") === "true"));
     const c = gal.querySelector(".g-count"); if (c) c.textContent = `${i + 1} / ${thumbs.length}`;
     if (thumbs.length < 2) gal.querySelectorAll(".g-nav, .g-thumbs").forEach((e) => e.remove());
@@ -974,10 +995,10 @@
     if (!list.length) return `<section class="card">${secH("photos", "Photos")}<p class="note">Pas encore de photo pour ce moteur.</p>${more}</section>`;
     return `<section class="card">${secH("photos", "Photos", `${list.length} photo${list.length > 1 ? "s" : ""}`)}<div class="gallery" data-gallery>
         <div class="g-stage">${list.length > 1 ? `<button class="g-nav prev" type="button" aria-label="Photo précédente">‹</button>` : ""}
-        <div class="g-main"><img src="${esc(list[0])}" alt="${esc(`${m.MARQUE} ${m.NOM}`)}" class="is-photo" onerror="this.closest('[data-gallery]').querySelector('.g-th[aria-current=true]')?.remove();this.remove()">
+        <div class="g-main">${framedImg(list[0], `alt="${esc(`${m.MARQUE} ${m.NOM}`)}" class="is-photo" onerror="this.closest('[data-gallery]').querySelector('.g-th[aria-current=true]')?.remove();this.parentElement.remove()"`)}
           <span class="g-count">1 / ${list.length}</span></div>
         ${list.length > 1 ? `<button class="g-nav next" type="button" aria-label="Photo suivante">›</button>` : ""}</div>
-        ${list.length > 1 ? `<div class="g-thumbs">${list.map((u, i) => `<button type="button" class="g-th" data-i="${i}" aria-label="Photo ${i + 1}" aria-current="${i === 0}"><img src="${esc(u)}" alt="" loading="lazy" onload="galleryCheck(this)" onerror="galleryDrop(this)"></button>`).join("")}</div>` : ""}
+        ${list.length > 1 ? `<div class="g-thumbs">${list.map((u, i) => `<button type="button" class="g-th" data-i="${i}" aria-label="Photo ${i + 1}" aria-current="${i === 0}">${framedImg(u, `alt="" loading="lazy" onerror="galleryDrop(this)"`)}</button>`).join("")}</div>` : ""}
       </div>${more}</section>`;
   }
 
@@ -1239,6 +1260,8 @@
     // community.js is loaded after this file: wait until every script has run
     if (document.readyState === "loading") await new Promise((r) => document.addEventListener("DOMContentLoaded", r));
     try {
+      // Photo framing only serves the Photos tab: loaded afterwards, without delaying the page
+      setTimeout(() => loadJSON("cadrage", window.MM_CROP).then((c) => (state.crop = c)), 0);
       [state.motors, state.thumbs, state.videos, state.photos, state.logos, state.bench, state.fab, state.rank] = await Promise.all([
         loadCSV().then(parseCSV), loadJSON("thumbs", window.MM_THUMBS), loadJSON("videos", window.MM_VIDEOS), loadJSON("photos", window.MM_PHOTOS),
         loadJSON("logos", window.MM_LOGOS), loadJSON("bench", window.MM_BENCH), loadJSON("fabricant", window.MM_FAB),
@@ -1340,9 +1363,7 @@
         else if (ev.target.closest(".next")) i = (i + 1) % thumbs.length;
         else if (ev.target.closest(".prev")) i = (i - 1 + thumbs.length) % thumbs.length;
         else return;
-        const img = gal.querySelector(".g-main img");
-        img.classList.remove("swap"); void img.offsetWidth; img.classList.add("swap");
-        img.src = thumbs[i].querySelector("img").src;
+        galleryShow(gal, thumbs[i].querySelector("img").dataset.o);
         thumbs.forEach((b, j) => b.setAttribute("aria-current", String(j === i)));
         gal.querySelector(".g-count").textContent = `${i + 1} / ${thumbs.length}`;
         return;

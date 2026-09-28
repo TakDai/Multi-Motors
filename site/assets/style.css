@@ -1573,3 +1573,15 @@ dialog.crop-modal { width: min(640px, calc(100vw - 32px)); }
 .o-more span { margin-right: 4px; }
 .o-more a { padding: 5px 11px; border: 1.5px solid rgba(0, 0, 0, .12); border-radius: 14px; color: var(--ink); font: 700 12px var(--font); text-decoration: none; transition: border-color .15s; }
 .o-more a:hover { border-color: #111; }
+
+/* Photos tab: each photo framed on the motor (site/data/cadrage.json). The frame has the shape of
+   the motor's box and fits the stage; the photo is enlarged and moved inside so only the box shows */
+.g-main { container-type: size; }
+.g-frame { position: relative; display: block; overflow: hidden; aspect-ratio: var(--a, 1.333); width: min(88cqw, calc(88cqh * var(--a, 1.333))); opacity: 0; transition: opacity .2s, transform .3s ease; transform-origin: var(--zx, 50%) var(--zy, 50%); }
+.g-frame.ready { opacity: 1; }
+.g-frame img, .g-main .g-frame img { position: absolute; max-width: none; max-height: none; height: auto; width: calc(100% / var(--bw)); left: calc(-100% * var(--x0) / var(--bw)); top: calc(-100% * var(--y0) / var(--bh)); object-fit: fill; transform: none; }
+.g-main:hover .g-frame { transform: scale(1.8); }
+.g-main:hover img { transform: none; }
+.g-frame:has(img.swap) { animation: pop .35s ease-out; }
+.g-th { display: grid; place-items: center; container-type: size; }
+.g-th .g-frame { width: min(100cqw, calc(100cqh * var(--a, 1))); }
