@@ -134,6 +134,8 @@ case 'register':
     if (!valid_email($email)) fail('Adresse email invalide.');
     if (mb_strlen($name) < 2) fail('Choisissez un pseudo d\'au moins 2 caractères.');
     if (strlen($pass) < 8) fail('Le mot de passe doit faire au moins 8 caractères.');
+    if (arg('accept') !== '1') fail('Acceptez les conditions d\'utilisation et la politique de confidentialité pour créer un compte.');
+    purge_unverified();
     if (q('SELECT id FROM users WHERE email = ?', [$email])->fetch()) fail('Un compte existe déjà avec cette adresse.');
     $tok = token();
     $role = $email === mb_strtolower((string) cfg('admin_email', '')) ? 'admin' : 'user';
@@ -472,6 +474,29 @@ case 'account_update':
     }
     out(['user' => me_payload(current_user()), 'message' => $msg ? implode(' ', $msg) : 'Rien à modifier.']);
 
+case 'my_data':
+    // Everything the site keeps about the member, as a JSON file (right of access and portability)
+    $u = current_user();
+    if (!$u) fail('Connectez-vous pour faire cela.', 401);
+    $id = (int) $u['id'];
+    $acc = q('SELECT id, email, name, role, verified, created_at FROM users WHERE id = ?', [$id])->fetch();
+    $prof = profile_row($id);
+    unset($prof['user_id']);
+    $prof['extra'] = profile_extra($prof);
+    $data = [
+        'site' => 'https://multi-motors.fr', 'exporte_le' => gmdate('c'), 'compte' => $acc, 'profil' => $prof ?: null,
+        'jaime' => q('SELECT ref, created_at FROM likes WHERE user_id = ?', [$id])->fetchAll(),
+        'mes_moteurs' => q('SELECT ref, status, note, created_at FROM garage WHERE user_id = ?', [$id])->fetchAll(),
+        'historique' => q('SELECT ref, at FROM history WHERE user_id = ?', [$id])->fetchAll(),
+        'avis' => q('SELECT ref, body, rating, pros, cons, status, created_at FROM comments WHERE user_id = ?', [$id])->fetchAll(),
+        'corrections_proposees' => q('SELECT ref, field, old_value, new_value, source, note, status, created_at FROM suggestions WHERE user_id = ?', [$id])->fetchAll(),
+    ];
+    header('Content-Type: application/json; charset=utf-8');
+    header('Content-Disposition: attachment; filename="multi-motors-mes-donnees.json"');
+    header('Cache-Control: no-store');
+    echo json_encode($data, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+    exit;
+
 case 'account_delete':
     if (!$post) fail('POST attendu.', 405);
     $u = current_user();
@@ -484,7 +509,10 @@ case 'account_delete':
     q('DELETE FROM profiles WHERE user_id = ?', [$u['id']]);
     q('DELETE FROM garage WHERE user_id = ?', [$u['id']]);
     q('DELETE FROM history WHERE user_id = ?', [$u['id']]);
-    q("UPDATE comments SET status = 'deleted' WHERE user_id = ?", [$u['id']]);
+    q('DELETE FROM comments WHERE user_id = ?', [$u['id']]);
+    // Corrections already reviewed stay in the catalogue's history, without any link to the account
+    q("DELETE FROM suggestions WHERE user_id = ? AND status = 'pending'", [$u['id']]);
+    q('UPDATE suggestions SET user_id = 0, note = NULL WHERE user_id = ?', [$u['id']]);
     q('DELETE FROM users WHERE id = ?', [$u['id']]);
     start_session();
     $_SESSION = [];

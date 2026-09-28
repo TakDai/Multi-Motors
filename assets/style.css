@@ -1587,3 +1587,8 @@ dialog.crop-modal { width: min(640px, calc(100vw - 32px)); }
 .foot-links a { color: rgba(0, 0, 0, .65); text-decoration: none; }
 .foot-links a:hover { color: #111; text-decoration: underline; }
 .foot p + p { margin-top: 10px; }
+.foot-legal a { color: rgba(0, 0, 0, .55); }
+.m-accept { text-transform: none !important; letter-spacing: 0 !important; color: rgba(0, 0, 0, .7) !important; flex-direction: row !important; align-items: flex-start; gap: 10px !important; font-weight: 400 !important; font-size: 13px !important; line-height: 1.45; }
+.m-accept input { width: 18px; height: 18px; margin-top: 1px; flex: none; accent-color: #111; }
+.m-accept a, .m-legal a { color: #c62828; }
+.m-legal { margin: -4px 0 10px; font: 400 12px/1.45 var(--font); color: rgba(0, 0, 0, .55); text-align: center; }

@@ -206,11 +206,12 @@
     modal(`
       <h2 class="m-title">${tab === "register" ? "Créer un compte" : tab === "forgot" ? "Mot de passe oublié" : "Connexion"}</h2>
       ${DEMO ? `<p class="demo-note">Aperçu : comptes de démonstration, rien n'est enregistré. Le premier compte créé est administrateur.</p>` : ""}
-      ${tab !== "forgot" ? google : ""}
+      ${tab !== "forgot" ? google : ""}${tab !== "forgot" && C.googleId ? `<p class="m-legal">Avec Google, vous acceptez les <a href="cgu.html" target="_blank">conditions d'utilisation</a> et la <a href="confidentialite.html" target="_blank">politique de confidentialité</a>.</p>` : ""}
       <form class="m-form" data-auth="${tab}">
         ${tab === "register" ? `<label>Pseudo<input name="name" required minlength="2" maxlength="40" autocomplete="nickname"></label>` : ""}
         <label>Email<input name="email" type="email" required autocomplete="email"></label>
         ${tab !== "forgot" ? `<label>Mot de passe<input name="password" type="password" required minlength="8" autocomplete="${tab === "register" ? "new-password" : "current-password"}"></label>` : ""}
+        ${tab === "register" ? `<label class="m-accept"><input type="checkbox" name="accept" value="1" required><span>J'accepte les <a href="cgu.html" target="_blank">conditions d'utilisation</a> et la <a href="confidentialite.html" target="_blank">politique de confidentialité</a>.</span></label>` : ""}
         <p class="m-error" role="alert" hidden></p>
         <button class="btn-red" type="submit">${tab === "register" ? "Créer mon compte" : tab === "forgot" ? "Envoyer le lien" : "Se connecter"}</button>
       </form>
@@ -847,6 +848,11 @@
         <p class="m-error" role="alert" hidden></p>
         <div class="pf-actions"><button class="btn-red" type="submit">Enregistrer</button></div>
       </form>
+      <section class="card pf-form" data-pf="export" ${P.tab === "compte" ? "" : "hidden"}>
+        <h3 class="pf-h">Mes données</h3>
+        <p class="pf-hint">Téléchargez tout ce que Multi-Motors garde sur vous (compte, profil, j'aime, moteurs, historique, avis, corrections) dans un fichier. Voir la <a href="confidentialite.html">politique de confidentialité</a>.</p>
+        <div class="pf-actions"><a class="ghost-btn" href="api/index.php?action=my_data" download>Télécharger mes données</a></div>
+      </section>
       <form class="card pf-form pf-danger" data-pf="supprimer" ${P.tab === "compte" ? "" : "hidden"}>
         <h3 class="pf-h">Supprimer mon compte</h3>
         <p class="pf-hint">Vos « j'aime », votre profil et vos commentaires sont supprimés. Les corrections déjà validées restent dans le catalogue, sans votre nom. C'est définitif.</p>
@@ -1058,7 +1064,7 @@
     if (pt) {
       P.tab = pt.dataset.pfTab;
       document.querySelectorAll("[data-pf-tab]").forEach((b) => b.setAttribute("aria-selected", String(b === pt)));
-      document.querySelectorAll("[data-pf]").forEach((f) => (f.hidden = !(f.dataset.pf === P.tab || (P.tab === "compte" && f.dataset.pf === "supprimer"))));
+      document.querySelectorAll("[data-pf]").forEach((f) => (f.hidden = !(f.dataset.pf === P.tab || (P.tab === "compte" && ["supprimer", "export"].includes(f.dataset.pf)))));
       return;
     }
     const pc = t.closest("[data-pf-color]");
