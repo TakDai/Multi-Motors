@@ -166,6 +166,10 @@
     return `<span class="vals kv-list">${vs.slice(0, max).map((x) => `<a class="val kv-link" href="#m/${encodeURIComponent(x.REF)}" title="Voir la version KV${esc(fmt(x.KV))}">${esc(fmt(x.KV))}</a>`).join("")}${more > 0 ? `<span class="val kv-more">+${more}</span>` : ""}</span>`;
   };
 
+  // Freshly released by its maker: first sale found in a shop less than 90 days ago (tools/ranking.py)
+  const FRESH_DAYS = 90;
+  const isFresh = (m) => { const r = rank(m); return !!(r.sale && r.new && Date.now() - new Date(r.new) < FRESH_DAYS * 864e5); };
+  const freshTag = (m) => (isFresh(m) ? `<span class="fresh-tag" title="Sorti il y a moins de 3 mois (première mise en vente : ${esc(new Date(rank(m).new).toLocaleDateString("fr-FR", { day: "numeric", month: "long", year: "numeric" }))})">Nouveauté</span>` : "");
   // Why the card is placed there, on the tab being shown (no tag once a sort is chosen)
   const MONTHS = ["janv.", "févr.", "mars", "avr.", "mai", "juin", "juil.", "août", "sept.", "oct.", "nov.", "déc."];
   function rankTag(m) {
@@ -185,7 +189,7 @@
     const href = `#m/${encodeURIComponent(m.REF)}`;
     const w = spread(list, (x) => x.POIDS, "GR");
     return `<article class="row" style="--i:${i % PAGE}">
-      <div class="row-id">${brandMark(m)}<a class="name" href="${href}">${esc(m.NOM || m.REF)}</a>${rankTag(m)}${hooks.rowExtra ? hooks.rowExtra(m) : ""}</div>
+      <div class="row-id">${brandMark(m)}${list.some(isFresh) ? `<span class="fresh-badge">Nouveauté</span>` : ""}<a class="name" href="${href}">${esc(m.NOM || m.REF)}</a>${rankTag(m)}${hooks.rowExtra ? hooks.rowExtra(m) : ""}</div>
       <a class="row-img" href="${href}" tabindex="-1" aria-hidden="true">${photo(list.find((x) => state.thumbs[x.REF] || safeUrl(x.IMG)) || m)}</a>
       <div class="specs">
         ${pr("Classe", val(m.CLASSE))}${pr("Poids", val(w))}${pr("Configuration", val(m.CONFIG))}${pr(list.length > 1 ? `${list.length} KV` : "KV", kvLinks(list))}
@@ -1063,7 +1067,7 @@
     document.title = `${m.MARQUE} ${m.NOM} — Multi-Motors`;
     const dims = has(m["D MOTEUR"]) && has(m["H MOTEUR"]) ? `${fmt(m["D MOTEUR"])}X${fmt(m["H MOTEUR"])}` : "";
     $("detail").innerHTML = `
-      <div class="d-top">${brandMark(m, true)}<h1>${esc(m.NOM)}</h1></div>
+      <div class="d-top">${brandMark(m, true)}<h1>${esc(m.NOM)}</h1>${freshTag(m)}</div>
       <div class="d-hero">
         <div class="d-side d-left">
           ${dSpec("Classe", e(m.CLASSE), "classe")}${dSpec("KV", kvs ? `<span class="kvs">${kvs}</span>` : "", "kv")}${dSpec("Shaft", e(shaft(m)), "shaft")}
@@ -1396,7 +1400,7 @@
   }
 
   Object.assign(window.MM = window.MM || {}, {
-    state, esc, has, fmt, num, safeUrl, photo, brandMark, asset, info, famKey, renderList, route,
+    state, esc, has, fmt, num, safeUrl, photo, brandMark, asset, info, famKey, renderList, route, isFresh, freshTag,
     rerender: () => $("detail").dataset.ref && renderDetail($("detail").dataset.ref, $("detail").dataset.panel || "dimension"),
   });
 
