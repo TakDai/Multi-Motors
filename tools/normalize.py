@@ -104,6 +104,29 @@ RULES = {"L CABLE": cable_length, "TYPE CABLE": awg, "HELICE": prop, "ENTRAXE FI
          "RESISTANCE": resistance, "LIPO": lipo, "VIS HEL": thread}
 
 
+def class_from_name(r):
+    """Class that contradicts the model name ("2306 JOHNNYFPV" classed 2206, "FLAT RATS 1507"
+    classed 2407): the size written in the name wins. Only when the name holds a single
+    size (4 digits, not the KV) and it differs from the class."""
+    name, cls, kv = r.get("NOM") or "", (r.get("CLASSE") or "").replace(",", "."), (r.get("KV") or "").split(".")[0]
+    if not name or not re.fullmatch(r"0?\d{3,5}(\.\d+)?", cls):
+        return 0
+    sizes = {a + (("." + b) if b else "") for a, b in re.findall(r"(?<![\d.,])(\d{4})(?:[.,](\d))?(?![\d])(?!\s*kv)", name, re.I)}
+    sizes = {x for x in sizes if x.split(".")[0] != kv and 5 <= int(x[:2]) <= 99 and int(x[2:4]) >= 1}  # "1500" is a range name, not 15 x 00
+    if len(sizes) != 1:
+        return 0
+    size = sizes.pop()
+    if cls == size:
+        return 0
+    if cls.lstrip("0").split(".")[0] == size.lstrip("0").split(".")[0]:
+        if "." in size and cls == size.split(".")[0]:
+            r["CLASSE"] = size  # "2207" -> "2207.5" when the name says so
+            return 1
+        return 0
+    r["CLASSE"] = size
+    return 1
+
+
 def stator(r):
     """Stator size from the class (2306.5 -> 23 x 6.5): fixes ",5" and "07" left by the sheet."""
     m = re.fullmatch(r"(\d{2})(\d{2}(?:[.,]\d+)?)", (r.get("CLASSE") or "").strip())
@@ -128,8 +151,9 @@ def main():
         reader = csv.DictReader(fh)
         cols, rows = list(reader.fieldnames), list(reader)
     changed = {c: 0 for c in RULES}
-    changed["STATOR"] = 0
+    changed["CLASSE"] = changed["STATOR"] = 0
     for r in rows:
+        changed["CLASSE"] += class_from_name(r)
         changed["STATOR"] += stator(r)
         for c, rule in RULES.items():
             v = r.get(c, "")
