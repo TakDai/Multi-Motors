@@ -184,6 +184,39 @@ def misread(rows):
     return drop
 
 
+def kv_as_size(rows):
+    """Old misreads: the KV taken for the size ("TBS-3600-3600") and written at the end of the name
+    ("PODRACER 1505 3600"). The KV leaves the name, the size comes back from the name."""
+    n = 0
+    for r in rows:
+        kv = _num(r["KV"])
+        if not kv or kv < 1000:
+            continue
+        k = f"{kv:g}"
+        if re.search(rf"\s{re.escape(k)}$", r["NOM"]) and r["NOM"][: -len(k)].strip():
+            r["NOM"] = r["NOM"][: -len(k)].strip()
+            n += 1
+        if _num(r["CLASSE"]) == kv:
+            size = re.search(r"(?<![\d.])(\d{4}(?:[.,]\d)?)(?![\d])", r["NOM"])
+            r["CLASSE"] = size.group(1).replace(",", ".") if size and _num(size.group(1)) != kv else ""
+            n += 1
+    return n
+
+
+def duplicates(rows):
+    """Same brand, model, KV and size twice: the row with the most filled fields is kept."""
+    best = {}
+    for r in rows:
+        k = (key(r["MARQUE"]), key(r["NOM"]), _num(r["KV"]), (r["CLASSE"] or "").replace(",", "."))
+        if not k[2]:
+            continue
+        filled = sum(1 for v in r.values() if v)
+        if k not in best or filled > best[k][0]:
+            best[k] = (filled, r["REF"])
+    keep = {ref for _, ref in best.values()}
+    return {r["REF"] for r in rows if _num(r["KV"]) and r["REF"] not in keep}
+
+
 def heavy(rows):
     """Weights more than three times the median of their stator size (multirotor sizes known from 8 motors)."""
     by = {}
@@ -205,12 +238,14 @@ def main():
     with CAT.open(encoding="utf-8") as fh:
         reader = csv.DictReader(fh)
         cols, rows = list(reader.fieldnames), list(reader)
-    drop = misread(rows)
+    fixed_kv = kv_as_size(rows)
+    drop = misread(rows) | duplicates(rows)
     rows = [r for r in rows if r["REF"] not in drop]
     changed = {c: 0 for c in RULES}
     changed["CLASSE"] = changed["STATOR"] = changed["IMG"] = 0
     changed["POIDS aberrant"] = heavy(rows)
-    changed["lignes mal lues retirées"] = len(drop)
+    changed["lignes mal lues ou en double retirées"] = len(drop)
+    changed["KV pris pour la taille"] = fixed_kv
     rejected = rejected_photos()
     for r in rows:
         if r.get("IMG") in rejected:

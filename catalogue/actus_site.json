@@ -1,20 +1,26 @@
 [
-  {
-    "type": "site",
-    "date": "2026-09-25",
-    "title": "Le catalogue Multi-Motors ouvre avec 2 912 moteurs",
-    "body": "Le tableau communautaire est importé et nettoyé : 2 912 moteurs de 69 marques. Les fiches sont complétées chaque jour à partir des pages des fabricants et des boutiques, avec photos, vidéos de review et prix indicatifs."
-  },
-  {
-    "type": "site",
-    "date": "2026-09-26",
-    "title": "13 593 moteurs, comparateur de prix et galeries photos",
-    "body": "Le tableau complet et les moteurs vendus par une quinzaine de boutiques rejoignent le catalogue : 13 593 moteurs de 215 marques. Nouveautés : comparateur de prix (TTC et HT), plusieurs photos par moteur, vidéos de review, moteurs similaires, filtres avancés, logos des marques, et un espace membre avec avis (qualités et défauts), historique et « Mes moteurs »."
-  },
-  {
-    "type": "site",
-    "date": "2026-09-27",
-    "title": "Fiches techniques des fabricants et bancs d'essai",
-    "body": "Les pages officielles T-Motor sont lues chaque jour : 101 modèles avec leur fiche technique complète, 92 tableaux d'essai (poussée, courant, rendement) et leurs plans cotés en images ; 91 versions manquantes ajoutées et 1 547 caractéristiques complétées. Chaque moteur renvoie vers le site de son fabricant quand il est connu (420 modèles), sinon vers la boutique. Les versions KV d'un même modèle sont regroupées dans les résultats."
-  }
+ {
+  "type": "site",
+  "date": "2026-09-25",
+  "title": "Le catalogue Multi-Motors ouvre avec 2 912 moteurs",
+  "body": "Le tableau communautaire est importé et nettoyé : 2 912 moteurs de 69 marques. Les fiches sont complétées chaque jour à partir des pages des fabricants et des boutiques, avec photos, vidéos de review et prix indicatifs."
+ },
+ {
+  "type": "site",
+  "date": "2026-09-26",
+  "title": "13 593 moteurs, comparateur de prix et galeries photos",
+  "body": "Le tableau complet et les moteurs vendus par une quinzaine de boutiques rejoignent le catalogue : 13 593 moteurs de 215 marques. Nouveautés : comparateur de prix (TTC et HT), plusieurs photos par moteur, vidéos de review, moteurs similaires, filtres avancés, logos des marques, et un espace membre avec avis (qualités et défauts), historique et « Mes moteurs »."
+ },
+ {
+  "type": "site",
+  "date": "2026-09-27",
+  "title": "Fiches techniques des fabricants et bancs d'essai",
+  "body": "Les pages officielles T-Motor sont lues chaque jour : 101 modèles avec leur fiche technique complète, 92 tableaux d'essai (poussée, courant, rendement) et leurs plans cotés en images ; 91 versions manquantes ajoutées et 1 547 caractéristiques complétées. Chaque moteur renvoie vers le site de son fabricant quand il est connu (420 modèles), sinon vers la boutique. Les versions KV d'un même modèle sont regroupées dans les résultats."
+ },
+ {
+  "type": "site",
+  "date": "2026-09-28",
+  "title": "Boutiques françaises, vrai classement des ventes et profils de pilote",
+  "body": "Les prix viennent maintenant de 21 boutiques, dont Drone-FPV-Racer, Studiosport, Drone Doctors, FPV Fly et FPV World en France : 1 054 moteurs ont un prix (2 284 offres, vérifiées une à une), 213 avec une offre en France, et les boutiques de votre pays s'affichent en premier. Les onglets Populaire, Nouveauté et Best-seller suivent les ventes réelles des boutiques, leur date de mise en vente et les vues des tests YouTube ; un badge « Nouveauté » signale les moteurs sortis depuis moins de 3 mois. Les photos sont cadrées sur le moteur, les liens morts réparés et les fiches mal lues corrigées. Les profils gagnent une bannière, le cadrage des images et des infos de pilote (niveau, matériel, drones). Le catalogue compte 4 235 moteurs identifiés, 2 404 modèles de 94 marques."
+ }
 ]
