@@ -101,6 +101,12 @@ function login_as(int $id): void {
     start_session();
     session_regenerate_id(true);
     $_SESSION['uid'] = $id;
+    // The account of admin_email (api/config.php) becomes administrator when it signs in,
+    // once its address is confirmed (so an existing account can be promoted from the configuration)
+    $admin = mb_strtolower(trim((string) cfg('admin_email', '')));
+    if ($admin !== '') {
+        q("UPDATE users SET role = 'admin' WHERE id = ? AND LOWER(email) = ? AND verified = 1 AND role <> 'admin'", [$id, $admin]);
+    }
 }
 
 // Simple throttle: at most $max events of $kind per key in $minutes
