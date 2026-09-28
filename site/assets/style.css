@@ -1583,3 +1583,7 @@ dialog.crop-modal { width: min(640px, calc(100vw - 32px)); }
 .g-frame:has(img.swap) { animation: pop .35s ease-out; }
 .g-th { display: grid; place-items: center; container-type: size; }
 .g-th .g-frame { width: min(100cqw, calc(100cqh * var(--a, 1))); }
+.foot-links { display: flex; flex-wrap: wrap; justify-content: center; gap: 6px 14px; max-width: 900px; margin: 14px auto; }
+.foot-links a { color: rgba(0, 0, 0, .65); text-decoration: none; }
+.foot-links a:hover { color: #111; text-decoration: underline; }
+.foot p + p { margin-top: 10px; }

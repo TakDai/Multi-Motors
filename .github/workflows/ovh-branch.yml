@@ -10,7 +10,7 @@ on:
     types: [completed]
   push:
     branches: [Moteurs]
-    paths: ["site/**", "catalogue/moteurs.csv", ".github/workflows/ovh-branch.yml"]
+    paths: ["site/**", "catalogue/moteurs.csv", "tools/seo_pages.py", ".github/workflows/ovh-branch.yml"]
   workflow_dispatch: {}
 
 permissions:
@@ -39,6 +39,9 @@ jobs:
           printf 'api/config.php\n' > build/.gitignore
           printf 'Site Multi-Motors prêt à servir, généré automatiquement depuis la branche %s (%s).\nNe pas modifier ici : les changements sont écrasés à chaque mise à jour.\n' \
             "${{ github.event.repository.default_branch }}" "$(git rev-parse --short HEAD)" > build/LISEZMOI.txt
+
+      - name: Pages pour Google (une par modèle, marque, classe et taille) et sitemap
+        run: python3 tools/seo_pages.py build
 
       - name: Pousser sur la branche ovh
         # Historique conservé (pas de push forcé) : OVH met à jour son dossier par un simple "pull"
