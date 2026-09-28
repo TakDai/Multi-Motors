@@ -99,11 +99,12 @@
         const u = D.users.find((x) => x.id === +q.id);
         if (!u) throw new Error("Ce membre n'existe pas ou plus.");
         const p = D.profiles[u.id] || {}, mine = !!me && me.id === u.id;
-        const base = { id: u.id, name: u.name, role: u.role, since: u.since, mine, color: p.color || "", avatar: p.avatar || "" };
+        const base = { id: u.id, name: u.name, role: u.role, since: u.since, mine, color: p.color || "", avatar: p.avatar || "", banner: p.banner || "", banner_preset: (p.extra || {}).banner_preset || "" };
         if (p.is_public === false && !mine && !(me && me.role !== "user")) return { ...base, private: true };
         return {
           ...base, bio: p.bio || "", location: p.location || "", website: p.website || "", youtube: p.youtube || "", instagram: p.instagram || "",
           flying: p.flying || "", setup: p.setup || [], is_public: p.is_public !== false, show_likes: p.show_likes !== false,
+          extra: Object.fromEntries(Object.entries(p.extra || {}).filter(([k]) => k !== "banner_preset")),
           stats: { comments: D.comments.filter((c) => c.user_id === u.id && c.status === "visible").length, approved: D.sugg.filter((x) => x.user_id === u.id && x.status === "approved").length,
             suggestions: D.sugg.filter((x) => x.user_id === u.id).length, likes: Object.values(D.likes).filter((st) => st.has(u.id)).length },
           comments: D.comments.filter((c) => c.user_id === u.id && c.status === "visible").slice(-10).reverse(),
@@ -120,6 +121,12 @@
         Object.assign(p, { bio: (d.bio || "").slice(0, 280), location: (d.location || "").slice(0, 60), website: url(d.website), youtube: url(d.youtube, "youtube.com"),
           instagram: url(d.instagram, "instagram.com"), color: d.color || "", flying: d.flying || "", setup: d.setup || [], is_public: d.is_public !== "0", show_likes: d.show_likes !== "0" });
         if ("avatar" in d) p.avatar = d.avatar || "";
+        if ("banner" in d) p.banner = d.banner || "";
+        if (d.extra) {
+          const e = d.extra;
+          p.extra = { ...e, tiktok: url(e.tiktok, "tiktok.com"), twitch: url(e.twitch, "twitch.tv") };
+          p.flying = (e.styles || [])[0] || "";
+        }
         return { user: pub(me), message: "Profil enregistré." };
       }
       case "account_update": {
@@ -300,19 +307,57 @@
     loadSocial(m.REF);
   };
 
+  // Where the visitor lives: chosen in the price block, else the region of the browser language,
+  // else its time zone; the shops of that country come first, then Europe, then the rest of the world
+  const COUNTRIES = { FR: "France", BE: "Belgique", CH: "Suisse", LU: "Luxembourg", CA: "Canada", GB: "Royaume-Uni", DE: "Allemagne", ES: "Espagne", IT: "Italie", US: "États-Unis" };
+  const EUROPE = new Set(["FR", "BE", "CH", "LU", "DE", "ES", "IT", "NL", "PT", "AT", "IE", "GB"]);
+  // Offers collected before the shop country was saved
+  const SHOP_COUNTRY = { "Drone-FPV-Racer": "FR", Studiosport: "FR", "Drone Doctors": "FR", "FPV Fly": "FR", "FPV World": "FR", "Unmanned Tech": "GB", RCDrone: "CN", "HGLRC (officiel)": "CN", "Team BlackSheep": "HK" };
+  const flag = (cc) => /^[A-Z]{2}$/.test(cc || "") ? String.fromCodePoint(...[...cc].map((c) => 0x1f1a5 + c.charCodeAt(0))) : "";
+  let chosenCountry = "";
+  function userCountry() {
+    if (chosenCountry) return chosenCountry;
+    try { const c = localStorage.getItem("mm-country"); if (COUNTRIES[c]) return c; } catch (e) { /* storage blocked */ }
+    for (const l of navigator.languages || [navigator.language || ""]) { const r = (l.split("-")[1] || "").toUpperCase(); if (COUNTRIES[r]) return r; }
+    const tz = Intl.DateTimeFormat().resolvedOptions().timeZone || "";
+    const byTz = { "Europe/Paris": "FR", "Europe/Brussels": "BE", "Europe/Zurich": "CH", "Europe/Luxembourg": "LU", "Europe/London": "GB", "Europe/Berlin": "DE", "Europe/Madrid": "ES", "Europe/Rome": "IT" };
+    if (byTz[tz]) return byTz[tz];
+    if (/^America\/(Toronto|Montreal|Vancouver)/.test(tz)) return "CA";
+    if (/^America\//.test(tz)) return "US";
+    return "FR";
+  }
+  const zoneOf = (cc, me) => (cc === me ? 0 : EUROPE.has(cc) && EUROPE.has(me) ? 1 : 2);
+  const IN = { CA: "Au", GB: "Au", LU: "Au", US: "Aux" };
+  const ZONE_LABEL = (me) => [`${IN[me] || "En"} ${COUNTRIES[me]}`, "En Europe", "Reste du monde"];
+  // Shops that do not let robots read their prices: a search link for the motor
+  const SEARCH_LINKS = [
+    ["La Caméra Embarquée", "FR", (q) => `https://www.lacameraembarquee.fr/recherche?controller=search&s=${encodeURIComponent(q)}`],
+    ["GetFPV", "US", (q) => `https://www.getfpv.com/catalogsearch/result/?q=${encodeURIComponent(q)}`],
+    ["Banggood", "CN", (q) => `https://www.banggood.com/search/${encodeURIComponent(q.replace(/\s+/g, "-"))}.html`],
+    ["AliExpress", "CN", (q) => `https://fr.aliexpress.com/w/wholesale-${encodeURIComponent(q.replace(/\s+/g, "-"))}.html`],
+  ];
+
   function pricesBlock(m) {
-    const p = C.prices[m.REF];
+    const p = C.prices[m.REF], me = userCountry();
+    const q = `${m.MARQUE} ${m.NOM || ""} ${m.KV ? m.KV + "KV" : ""}`.replace(/\s+/g, " ").trim();
+    const links = SEARCH_LINKS.slice().sort((a, b) => zoneOf(a[1], me) - zoneOf(b[1], me))
+      .map(([n, cc, url]) => `<a href="${esc(url(q))}" target="_blank" rel="noopener nofollow">${flag(cc)} ${esc(n)}</a>`).join("");
+    const picker = `<label class="o-country">Livraison en <select data-country>${Object.entries(COUNTRIES).map(([k, v]) => `<option value="${k}"${k === me ? " selected" : ""}>${flag(k)} ${esc(v)}</option>`).join("")}</select></label>`;
+    const more = `<p class="o-more"><span>Chercher aussi sur</span>${links}</p>`;
     if (!p || !p.offers?.length) {
-      return `${head("price", "Comparateur de prix")}<p class="note">Aucune offre relevée pour ce moteur pour l'instant.</p>`;
+      return `${head("price", "Comparateur de prix")}<p class="note">Aucune offre relevée pour ce moteur pour l'instant.</p>${more}`;
     }
-    const offers = p.offers.map((o) => ({ ...o, ttc: ttc(o) })).sort((a, b) => (!a.stock - !b.stock) || a.ttc - b.ttc);
+    const offers = p.offers.map((o) => { const cc = o.country || SHOP_COUNTRY[o.shop] || "US"; return { ...o, cc, zone: zoneOf(cc, me), ttc: ttc(o) }; })
+      .sort((a, b) => a.zone - b.zone || (!a.stock - !b.stock) || a.ttc - b.ttc);
     const best = Math.min(...offers.map((o) => o.ttc)), mid = ttcOf(p);
+    const labels = ZONE_LABEL(me);
     return `${head("price", "Comparateur de prix", `${offers.length} boutique${offers.length > 1 ? "s" : ""}`)}
       <div class="price-head"><div class="price-big">${priceTag(mid, "big")}<small>prix indicatif par moteur</small></div>
         <p>Médiane de ${offers.length} offre${offers.length > 1 ? "s" : ""} relevée${offers.length > 1 ? "s" : ""} le ${new Date(p.date).toLocaleDateString("fr-FR")}, convertie${offers.length > 1 ? "s" : ""} en euros au taux BCE du jour. Boutiques hors Europe : TVA de 20 % ajoutée ; frais de port et de douane non compris.</p></div>
-      <div class="offers">${offers.map((o) => `
+      <div class="o-bar">${picker}<small>Les boutiques de votre pays s'affichent en premier.</small></div>
+      <div class="offers">${offers.map((o, i) => `${i === 0 || offers[i - 1].zone !== o.zone ? `<p class="o-zone">${esc(labels[o.zone])}</p>` : ""}
         <a class="offer ${o.ttc === best ? "best" : ""} ${o.stock ? "" : "oos"}" href="${esc(o.url)}" target="_blank" rel="noopener">
-          <span class="o-shop">${esc(o.shop)}${o.ttc === best ? `<em>Meilleur prix</em>` : ""}</span>
+          <span class="o-shop"><i class="o-flag" title="${esc(COUNTRIES[o.cc] || o.cc)}">${flag(o.cc)}</i>${esc(o.shop)}${o.ttc === best ? `<em>Meilleur prix</em>` : ""}</span>
           <span class="o-price">${priceTag(o.ttc)}<small class="o-orig">${(() => {
             const sym = o.cur === "USD" ? "$" : o.cur === "GBP" ? "£" : "€";
             const f = (v) => `${v.toLocaleString("fr-FR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ${sym}`;
@@ -320,7 +365,7 @@
           })()}</small></span>
           <span class="o-stock">${o.stock ? "En stock" : "Rupture"}</span>
           <span class="o-go">Voir l'offre →</span>
-        </a>`).join("")}</div>`;
+        </a>`).join("")}</div>${more}`;
   }
 
   async function loadSocial(ref) {
@@ -562,11 +607,20 @@
   // ---------------------------------------------------------------- profiles
   const COLORS = ["#111111", "#ff5757", "#ff9f1c", "#2ec4b6", "#3a86ff", "#8338ec", "#06a77d", "#e63973"];
   const FLYING = ["Racing", "Freestyle", "Long Range", "Cinematic", "Cinewhoop", "Toothpick", "Whoop", "Aile volante", "Avion", "Hélicoptère"];
+  const LEVELS = ["Débutant", "Intermédiaire", "Confirmé", "Expert", "Pro"];
+  const SIZES = ["Whoop", "2″", "2,5″", "3″", "3,5″", "4″", "5″", "6″", "7″", "8″ et +"];
+  const VIDEO = ["DJI O4", "DJI O3", "DJI Vista / Air Unit", "Walksnail", "HDZero", "Analogique"];
+  // Banners without a picture: drawn in CSS from the member's colour (.bn-* in style.css)
+  const BANNERS = [["couleur", "Couleur"], ["coucher", "Coucher de soleil"], ["ocean", "Océan"], ["foret", "Forêt"],
+    ["nuit", "Nuit étoilée"], ["carbone", "Carbone"], ["circuit", "Circuit"], ["aurore", "Aurore"]];
+  const autoColor = (name) => COLORS[[...(name || "?")].reduce((a, c) => a + c.charCodeAt(0), 0) % COLORS.length];
+  // Our own picture addresses only: served by the API, or a picture being edited
+  const imgSrc = (v, action) => v && (new RegExp(`^api/index\\.php\\?action=${action}&id=\\d+&v=\\d+$`).test(v) || /^data:image\/(png|jpeg|webp);base64,/.test(v)) ? v : "";
   // Photo, or initials on the member's colour (a colour derived from the name when none was chosen)
   function avatar(u, size = "md") {
     const name = (u && u.name) || "?";
-    const color = (u && u.color) || COLORS[[...name].reduce((a, c) => a + c.charCodeAt(0), 0) % COLORS.length];
-    const src = u && u.avatar && (/^api\/index\.php\?action=avatar&id=\d+&v=\d+$/.test(u.avatar) || /^data:image\/(png|jpeg|webp);base64,/.test(u.avatar)) ? u.avatar : "";
+    const color = (u && u.color) || autoColor(name);
+    const src = imgSrc(u && u.avatar, "avatar");
     const ini = name.split(/[\s._-]+/).filter(Boolean).slice(0, 2).map((w) => w[0]).join("").toUpperCase();
     return src ? `<span class="av av-${size}"><img src="${esc(src)}" alt=""></span>`
       : `<span class="av av-${size}" style="--av:${esc(color)}" aria-hidden="true">${esc(ini)}</span>`;
@@ -576,17 +630,23 @@
     web: '<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3c3 3.5 3 14.5 0 18M12 3c-3 3.5-3 14.5 0 18"/></svg>',
     yt: '<svg viewBox="0 0 24 24"><rect x="2.5" y="5.5" width="19" height="13" rx="4"/><path d="M10 9.5v5l4.5-2.5z" fill="currentColor"/></svg>',
     ig: '<svg viewBox="0 0 24 24"><rect x="3.5" y="3.5" width="17" height="17" rx="5"/><circle cx="12" cy="12" r="4"/><circle cx="17.2" cy="6.8" r=".8" fill="currentColor"/></svg>',
+    tt: '<svg viewBox="0 0 24 24"><path d="M14 3v11.5a3.5 3.5 0 1 1-3.5-3.5M14 3c.5 2.6 2.2 4.3 5 4.6"/></svg>',
+    tw: '<svg viewBox="0 0 24 24"><path d="M5 3.5h15v10l-4 4h-4l-3 3v-3H5z"/><path d="M11 8v4M15.5 8v4"/></svg>',
+    dc: '<svg viewBox="0 0 24 24"><path d="M7 7.5c3-1.3 7-1.3 10 0l1.5 9c-1.6 1.2-3.2 1.8-4.5 2l-1-2c-1.2.3-2.8.3-4 0l-1 2c-1.3-.2-2.9-.8-4.5-2z"/><circle cx="9.5" cy="12.5" r="1" fill="currentColor"/><circle cx="14.5" cy="12.5" r="1" fill="currentColor"/></svg>',
     cal: '<svg viewBox="0 0 24 24"><rect x="3.5" y="5" width="17" height="15" rx="2"/><path d="M3.5 10h17M8 3v4M16 3v4"/></svg>',
     fly: '<svg viewBox="0 0 24 24"><circle cx="6" cy="6" r="2.5"/><circle cx="18" cy="6" r="2.5"/><circle cx="6" cy="18" r="2.5"/><circle cx="18" cy="18" r="2.5"/><path d="M8 8l8 8M16 8l-8 8"/></svg>',
+    lvl: '<svg viewBox="0 0 24 24"><path d="M12 3l2.6 5.6 6 .7-4.5 4.1 1.2 6L12 16.4 6.7 19.4l1.2-6L3.4 9.3l6-.7z"/></svg>',
   };
   // Badges earned from what the member did on the site
   function badges(p) {
-    const b = [], s = p.stats || {};
+    const b = [], s = p.stats || {}, e = p.extra || {};
     if (p.role === "admin") b.push(["Administrateur", "gold"]); else if (p.role === "moderator") b.push(["Modérateur", "gold"]);
     if (s.approved >= 10) b.push(["Expert catalogue", "gold"]); else if (s.approved >= 1) b.push(["Contributeur", "blue"]);
     if (s.comments >= 10) b.push(["Pilote bavard", "green"]); else if (s.comments >= 1) b.push(["A donné son avis", "green"]);
     if ((p.setup || []).length) b.push(["Setup partagé", "purple"]);
+    if ((p.garage || []).length >= 10) b.push(["Hangar bien rempli", "purple"]);
     if (s.likes >= 20) b.push(["Collectionneur", "red"]);
+    if (e.pilot_since && new Date().getFullYear() - e.pilot_since >= 5) b.push(["Vétéran du FPV", "gold"]);
     const days = p.since ? (Date.now() - new Date(p.since.replace(" ", "T") + "Z")) / 864e5 : 0;
     if (days > 365) b.push(["Membre depuis plus d'un an", "grey"]);
     return b;
@@ -598,6 +658,28 @@
     return `<a class="pm-card" href="#m/${encodeURIComponent(m.REF)}"><span class="pm-img">${MM().photo(m)}</span>
       <span class="pm-brand">${MM().brandMark(m)}</span><b>${esc(m.NOM || m.REF)}</b><small>${[m.CLASSE, m.KV ? `${m.KV} KV` : ""].filter(Boolean).map(esc).join(" · ")}</small></a>`;
   };
+  const yearsSince = (y) => { const n = new Date().getFullYear() - y; return n < 1 ? "cette année" : `${n} an${n > 1 ? "s" : ""}`; };
+
+  // Banner, photo, name and main details: the public page and the live preview of the editor
+  function profileHead(p, preview = false) {
+    const color = p.color || autoColor(p.name), e = p.extra || {};
+    const since = p.since ? new Date(p.since.replace(" ", "T") + "Z").toLocaleDateString("fr-FR", { month: "long", year: "numeric" }) : "";
+    const img = imgSrc(p.banner, "banner");
+    const preset = BANNERS.some(([k]) => k === p.banner_preset) ? p.banner_preset : "couleur";
+    const styles = (e.styles && e.styles.length ? e.styles : [p.flying]).filter(Boolean);
+    return `
+      <header class="pf-head" style="--pf:${esc(color)}">
+        <div class="pf-banner ${img ? "bn-image" : `bn-${preset}`}"${img ? ` style="background-image:url('${esc(img)}')"` : ""}></div>
+        <div class="pf-id">
+          ${avatar(p, "xl")}
+          <div class="pf-name">
+            <h1>${esc(p.name)}</h1>${p.role && p.role !== "user" ? `<em class="pf-role">${ROLE_LABEL[p.role]}</em>` : ""}${e.level ? `<em class="pf-level">${PICON.lvl}${esc(e.level)}</em>` : ""}
+            <p class="pf-meta">${since ? `<span>${PICON.cal}Membre depuis ${esc(since)}</span>` : ""}${p.location ? `<span>${PICON.pin}${esc(p.location)}</span>` : ""}${styles.length ? `<span>${PICON.fly}${esc(styles.join(" · "))}</span>` : ""}${e.pilot_since ? `<span>${PICON.lvl}Pilote depuis ${esc(e.pilot_since)}</span>` : ""}</p>
+          </div>
+          ${p.mine && !preview ? `<a class="btn-dark pf-edit" href="#profil">Modifier mon profil</a>` : ""}
+        </div>
+      </header>`;
+  }
 
   async function renderProfile(id) {
     const v = $("view-profile");
@@ -607,30 +689,32 @@
     let p;
     try { p = await get("profile", { id }); } catch (e) { v.innerHTML = `<div class="pf-wrap"><p class="note">${esc(e.message)}</p><p><a class="ghost-btn" href="#">Retour au catalogue</a></p></div>`; return; }
     document.title = `${p.name} — Multi-Motors`;
-    const color = p.color || COLORS[[...p.name].reduce((a, c) => a + c.charCodeAt(0), 0) % COLORS.length];
-    const since = p.since ? new Date(p.since.replace(" ", "T") + "Z").toLocaleDateString("fr-FR", { month: "long", year: "numeric" }) : "";
-    const link = (url, icon, label) => url ? `<a href="${esc(url)}" target="_blank" rel="noopener nofollow ugc" class="pf-link">${PICON[icon]}<span>${esc(label)}</span></a>` : "";
-    const head = `
-      <header class="pf-head" style="--pf:${esc(color)}">
-        <div class="pf-banner"></div>
-        <div class="pf-id">
-          ${avatar(p, "xl")}
-          <div class="pf-name"><h1>${esc(p.name)}</h1>${p.role !== "user" ? `<em class="pf-role">${ROLE_LABEL[p.role]}</em>` : ""}
-            <p class="pf-meta">${since ? `<span>${PICON.cal}Membre depuis ${esc(since)}</span>` : ""}${p.location ? `<span>${PICON.pin}${esc(p.location)}</span>` : ""}${p.flying ? `<span>${PICON.fly}${esc(p.flying)}</span>` : ""}</p></div>
-          ${p.mine ? `<a class="btn-dark pf-edit" href="#profil">Modifier mon profil</a>` : ""}
-        </div>
-      </header>`;
+    const head = profileHead(p);
     if (p.private) { v.innerHTML = `<div class="pf-wrap">${head}<section class="card"><p class="note">Ce profil est privé.</p></section></div>`; return; }
-    const s = p.stats || {};
+    const s = p.stats || {}, e = p.extra || {};
+    const link = (url, icon, label) => url ? `<a href="${esc(url)}" target="_blank" rel="noopener nofollow ugc" class="pf-link">${PICON[icon]}<span>${esc(label)}</span></a>` : "";
+    const short = (url) => url.replace(/^https?:\/\/(www\.)?/, "").replace(/\/$/, "");
+    const links = link(p.website, "web", short(p.website || "")) + link(p.youtube, "yt", "YouTube") + link(p.instagram, "ig", "Instagram")
+      + link(e.tiktok, "tt", "TikTok") + link(e.twitch, "tw", "Twitch")
+      + (e.discord ? `<button type="button" class="pf-link" data-copy="${esc(e.discord)}" title="Copier le pseudo Discord">${PICON.dc}<span>${esc(e.discord)}</span></button>` : "");
+    const chips = (list) => `<div class="pf-tags">${list.map((x) => `<span>${esc(x)}</span>`).join("")}</div>`;
+    const row = (label, value) => value ? `<div class="pf-dl"><dt>${label}</dt><dd>${value}</dd></div>` : "";
+    const pilot = row("Niveau", esc(e.level || "")) + row("Pilote depuis", e.pilot_since ? `${esc(e.pilot_since)} <small>(${yearsSince(e.pilot_since)})</small>` : "")
+      + row("Styles", (e.styles || []).length ? chips(e.styles) : "") + row("Tailles", (e.sizes || []).length ? chips(e.sizes) : "");
+    const gear = row("Vidéo", esc(e.video || "")) + row("Radio", esc(e.radio || "")) + row("Lunettes", esc(e.goggles || ""))
+      + row("Mes drones", e.drones ? esc(e.drones).replace(/\n/g, "<br>") : "");
     v.innerHTML = `<div class="pf-wrap">${head}
       <div class="pf-grid">
         <aside class="pf-side">
           <section class="card pf-about">
             ${p.bio ? `<p class="pf-bio">${esc(p.bio).replace(/\n/g, "<br>")}</p>` : `<p class="note">${p.mine ? "Ajoutez une courte présentation depuis « Modifier mon profil »." : "Pas encore de présentation."}</p>`}
-            <div class="pf-links">${link(p.website, "web", p.website.replace(/^https?:\/\/(www\.)?/, "").replace(/\/$/, ""))}${link(p.youtube, "yt", "YouTube")}${link(p.instagram, "ig", "Instagram")}</div>
+            ${links ? `<div class="pf-links">${links}</div>` : ""}
           </section>
+          ${pilot ? `<section class="card"><h3 class="pf-h">Pilote</h3><dl class="pf-dls">${pilot}</dl></section>` : ""}
+          ${gear ? `<section class="card"><h3 class="pf-h">Matériel</h3><dl class="pf-dls">${gear}</dl></section>` : ""}
           <section class="card pf-stats">
             <div><b>${s.comments || 0}</b><span>avis</span></div>
+            <div><b>${(p.garage || []).length}</b><span>moteurs</span></div>
             <div><b>${s.approved || 0}</b><span>corrections validées</span></div>
             <div><b>${s.likes || 0}</b><span>j'aime</span></div>
           </section>
@@ -650,7 +734,8 @@
   }
 
   // Edit page: profile, account and privacy
-  const P = { tab: "profil", setup: [], avatar: undefined, color: "" };
+  // avatar / banner: undefined = unchanged, "" = removed, data URL = new picture; avSrc / bnSrc: the original to frame again
+  const P = { tab: "profil", setup: [], avatar: undefined, banner: undefined, color: "", preset: "couleur", styles: [], sizes: [], avSrc: "", bnSrc: "" };
   async function renderProfileEdit(tab) {
     const v = $("view-profile");
     v.hidden = false;
@@ -658,42 +743,95 @@
     if (tab) P.tab = tab;
     let p = {};
     try { p = await get("profile", { id: C.user.id }); } catch (e) { /* profile not created yet */ }
-    P.setup = [...(p.setup || [])]; P.avatar = undefined; P.color = p.color || "";
+    const e = p.extra || {};
+    Object.assign(P, { setup: [...(p.setup || [])], avatar: undefined, banner: undefined, color: p.color || "", preset: p.banner_preset || "couleur",
+      styles: [...(e.styles || (p.flying ? [p.flying] : []))], sizes: [...(e.sizes || [])], avSrc: "", bnSrc: "" });
     const tabs = [["profil", "Profil"], ["compte", "Compte"], ["confidentialite", "Confidentialité"]];
     const sel = (a, b) => (a === b ? " selected" : "");
+    const multi = (name, list, on) => `<div class="pf-pick" data-pf-multi="${name}">${list.map((x) => `<button type="button" data-pf-opt="${esc(x)}" aria-pressed="${on.includes(x)}">${esc(x)}</button>`).join("")}</div>`;
+    const year = new Date().getFullYear();
     v.innerHTML = `<div class="pf-wrap pf-editor">
       <div class="pf-edit-top"><h1>Mon profil</h1><a class="ghost-btn" href="#u/${C.user.id}">Voir mon profil public →</a></div>
       <div class="pf-tabs" role="tablist">${tabs.map(([k, l]) => `<button type="button" role="tab" data-pf-tab="${k}" aria-selected="${P.tab === k}">${l}</button>`).join("")}</div>
 
-      <form class="card pf-form" data-pf="profil" ${P.tab === "profil" ? "" : "hidden"}>
-        <div class="pf-av-edit">
-          <span id="pf-av-prev">${avatar({ ...C.user, color: P.color, avatar: C.user.avatar }, "xl")}</span>
-          <div>
-            <p class="pf-label">Photo de profil</p>
-            <label class="btn-dark pf-file">Choisir une image<input type="file" id="pf-file" accept="image/png,image/jpeg,image/webp" hidden></label>
-            <button type="button" class="ghost-btn" data-pf-noavatar>Retirer la photo</button>
-            <p class="pf-hint">PNG, JPEG ou WebP. Recadrée en carré et réduite automatiquement.</p>
-            <p class="pf-label">Couleur</p>
-            <div class="pf-colors">${COLORS.map((c) => `<button type="button" class="pf-color" data-pf-color="${c}" style="--c:${c}" aria-label="Couleur ${c}" aria-pressed="${P.color === c}"></button>`).join("")}</div>
+      <form class="pf-form pf-form-profile" data-pf="profil" ${P.tab === "profil" ? "" : "hidden"}>
+        <div class="pf-preview" aria-label="Aperçu de votre profil"><span class="pf-preview-tag">Aperçu</span><div id="pf-preview"></div></div>
+
+        <section class="card pf-sec">
+          <h3 class="pf-h">Bannière</h3>
+          <div class="pf-banners">${BANNERS.map(([k, l]) => `<button type="button" class="pf-bn bn-${k}" data-pf-banner="${k}" aria-pressed="false" title="${esc(l)}"><span>${esc(l)}</span></button>`).join("")}</div>
+          <div class="pf-btns">
+            <label class="btn-dark pf-file">Importer une image<input type="file" id="pf-bfile" accept="image/png,image/jpeg,image/webp" hidden></label>
+            <button type="button" class="ghost-btn" data-pf-crop="banner">Recadrer</button>
+            <button type="button" class="ghost-btn" data-pf-nobanner>Retirer l'image</button>
           </div>
-        </div>
-        <label>Présentation <span class="pf-count" data-for="bio">${(p.bio || "").length}/280</span><textarea name="bio" maxlength="280" rows="3" placeholder="Pilote FPV depuis 2019, freestyle et long range…">${esc(p.bio || "")}</textarea></label>
-        <div class="pf-2">
-          <label>Localisation<input name="location" maxlength="60" value="${esc(p.location || "")}" placeholder="Lyon, France"></label>
-          <label>Type de vol préféré<select name="flying"><option value="">—</option>${FLYING.map((f) => `<option${sel(p.flying, f)}>${esc(f)}</option>`).join("")}</select></label>
-        </div>
-        <div class="pf-3">
-          <label>Site web<input name="website" inputmode="url" maxlength="200" value="${esc(p.website || "")}" placeholder="monsite.fr"></label>
-          <label>YouTube<input name="youtube" inputmode="url" maxlength="200" value="${esc(p.youtube || "")}" placeholder="youtube.com/@pseudo"></label>
-          <label>Instagram<input name="instagram" inputmode="url" maxlength="200" value="${esc(p.instagram || "")}" placeholder="instagram.com/pseudo"></label>
-        </div>
-        <div class="pf-setup-edit">
-          <p class="pf-label">Mon setup <small>(8 moteurs au maximum)</small></p>
+          <p class="pf-hint">Une image large (format 3:1), recadrée comme vous le souhaitez. Sans image, le motif choisi prend votre couleur.</p>
+        </section>
+
+        <section class="card pf-sec">
+          <h3 class="pf-h">Photo et couleur</h3>
+          <div class="pf-av-edit">
+            <span id="pf-av-prev"></span>
+            <div>
+              <div class="pf-btns">
+                <label class="btn-dark pf-file">Choisir une photo<input type="file" id="pf-file" accept="image/png,image/jpeg,image/webp" hidden></label>
+                <button type="button" class="ghost-btn" data-pf-crop="avatar">Recadrer</button>
+                <button type="button" class="ghost-btn" data-pf-noavatar>Retirer la photo</button>
+              </div>
+              <p class="pf-hint">PNG, JPEG ou WebP : vous choisissez le cadrage avant d'enregistrer.</p>
+              <p class="pf-label">Couleur du profil</p>
+              <div class="pf-colors">${COLORS.map((c) => `<button type="button" class="pf-color" data-pf-color="${c}" style="--c:${c}" aria-label="Couleur ${c}" aria-pressed="${P.color === c}"></button>`).join("")}</div>
+            </div>
+          </div>
+        </section>
+
+        <section class="card pf-sec">
+          <h3 class="pf-h">À propos</h3>
+          <label>Présentation <span class="pf-count" data-for="bio">${(p.bio || "").length}/280</span><textarea name="bio" maxlength="280" rows="3" placeholder="Pilote FPV depuis 2019, freestyle et long range…">${esc(p.bio || "")}</textarea></label>
+          <div class="pf-3">
+            <label>Localisation<input name="location" maxlength="60" value="${esc(p.location || "")}" placeholder="Lyon, France"></label>
+            <label>Pilote depuis<select name="pilot_since"><option value="">—</option>${Array.from({ length: year - 1999 }, (_, i) => year - i).map((y) => `<option${sel(e.pilot_since, y)}>${y}</option>`).join("")}</select></label>
+            <label>Niveau<select name="level"><option value="">—</option>${LEVELS.map((l) => `<option${sel(e.level, l)}>${esc(l)}</option>`).join("")}</select></label>
+          </div>
+        </section>
+
+        <section class="card pf-sec">
+          <h3 class="pf-h">Pilotage</h3>
+          <p class="pf-label">Types de vol <small>(le premier choisi est affiché sous votre nom)</small></p>
+          ${multi("styles", FLYING, P.styles)}
+          <p class="pf-label">Tailles de drone</p>
+          ${multi("sizes", SIZES, P.sizes)}
+        </section>
+
+        <section class="card pf-sec">
+          <h3 class="pf-h">Matériel</h3>
+          <div class="pf-3">
+            <label>Système vidéo<select name="video"><option value="">—</option>${VIDEO.map((x) => `<option${sel(e.video, x)}>${esc(x)}</option>`).join("")}</select></label>
+            <label>Radio<input name="radio" maxlength="60" value="${esc(e.radio || "")}" placeholder="RadioMaster TX16S"></label>
+            <label>Lunettes<input name="goggles" maxlength="60" value="${esc(e.goggles || "")}" placeholder="DJI Goggles 3"></label>
+          </div>
+          <label>Mes drones <span class="pf-count" data-for="drones">${(e.drones || "").length}/400</span><textarea name="drones" maxlength="400" rows="3" placeholder="Un drone par ligne : châssis, moteurs, hélices…">${esc(e.drones || "")}</textarea></label>
+        </section>
+
+        <section class="card pf-sec">
+          <h3 class="pf-h">Liens</h3>
+          <div class="pf-3">
+            <label>Site web<input name="website" inputmode="url" maxlength="200" value="${esc(p.website || "")}" placeholder="monsite.fr"></label>
+            <label>YouTube<input name="youtube" inputmode="url" maxlength="200" value="${esc(p.youtube || "")}" placeholder="youtube.com/@pseudo"></label>
+            <label>Instagram<input name="instagram" inputmode="url" maxlength="200" value="${esc(p.instagram || "")}" placeholder="instagram.com/pseudo"></label>
+            <label>TikTok<input name="tiktok" inputmode="url" maxlength="200" value="${esc(e.tiktok || "")}" placeholder="tiktok.com/@pseudo"></label>
+            <label>Twitch<input name="twitch" inputmode="url" maxlength="200" value="${esc(e.twitch || "")}" placeholder="twitch.tv/pseudo"></label>
+            <label>Discord<input name="discord" maxlength="40" value="${esc(e.discord || "")}" placeholder="pseudo"></label>
+          </div>
+        </section>
+
+        <section class="card pf-sec pf-setup-edit">
+          <h3 class="pf-h">Mon setup <small>8 moteurs au maximum</small></h3>
           <div class="pf-setup-chips" id="pf-setup"></div>
           <div class="pf-search"><input id="pf-motor-q" type="search" placeholder="Ajouter un moteur : marque, modèle, classe…" autocomplete="off"><div class="pf-results" id="pf-results" hidden></div></div>
-        </div>
+        </section>
         <p class="m-error" role="alert" hidden></p>
-        <div class="pf-actions"><button class="btn-red" type="submit">Enregistrer le profil</button></div>
+        <div class="pf-actions pf-sticky"><button class="btn-red" type="submit">Enregistrer le profil</button></div>
       </form>
 
       <form class="card pf-form" data-pf="compte" ${P.tab === "compte" ? "" : "hidden"} autocomplete="off">
@@ -729,6 +867,7 @@
     </div>`;
     P.profile = p;
     drawSetup();
+    refreshAvatarPreview();
   }
   function drawSetup() {
     const el = $("pf-setup");
@@ -748,27 +887,90 @@
     box.innerHTML = hits.length ? hits.map((m) => `<button type="button" data-pf-add="${esc(m.REF)}">${MM().brandMark(m)}<span>${esc(m.NOM || m.REF)}${m.KV ? ` · ${esc(m.KV)} KV` : ""}</span></button>`).join("") : `<p class="pf-hint">Aucun moteur trouvé.</p>`;
     box.hidden = false;
   }
-  // Square crop, 256 px, WebP (JPEG where WebP is not supported)
-  function readAvatar(file) {
-    return new Promise((resolve, reject) => {
-      if (!/^image\/(png|jpeg|webp)$/.test(file.type)) return reject(new Error("Image refusée : PNG, JPEG ou WebP uniquement."));
-      const img = new Image(), url = URL.createObjectURL(file);
-      img.onload = () => {
-        const side = Math.min(img.width, img.height), c = document.createElement("canvas");
-        c.width = c.height = 256;
-        c.getContext("2d").drawImage(img, (img.width - side) / 2, (img.height - side) / 2, side, side, 0, 0, 256, 256);
-        URL.revokeObjectURL(url);
-        let d = c.toDataURL("image/webp", 0.85);
-        if (!d.startsWith("data:image/webp")) d = c.toDataURL("image/jpeg", 0.85);
-        resolve(d);
+  // The picture chosen by the member, framed by hand: drag to move, wheel / slider to zoom.
+  // Resolves with the framed picture (WebP, or JPEG on a white background where WebP can't be made), null if cancelled.
+  function cropImage(src, { ratio, w, h, round, maxBytes }) {
+    return new Promise((resolve) => {
+      const d = modal(`<div class="crop">
+        <h2 class="crop-title">${round ? "Cadrer la photo" : "Cadrer la bannière"}</h2>
+        <div class="crop-stage${round ? " round" : ""}" style="aspect-ratio:${ratio}"><img alt="" draggable="false"></div>
+        <label class="crop-zoom"><span>−</span><input type="range" min="1" max="4" step="0.01" value="1" aria-label="Zoom"><span>+</span></label>
+        <p class="pf-hint">Faites glisser l'image pour choisir la partie visible, zoomez avec le curseur ou la molette.</p>
+        <div class="crop-actions"><button type="button" class="ghost-btn" data-crop="cancel">Annuler</button><button type="button" class="btn-red" data-crop="ok">Valider le cadrage</button></div>
+      </div>`, "crop-modal");
+      const stage = d.querySelector(".crop-stage"), img = stage.querySelector("img"), zoom = d.querySelector("input[type=range]");
+      let nw = 0, nh = 0, base = 1, s = 1, x = 0, y = 0, done = false;
+      const finish = (v) => { if (done) return; done = true; resolve(v); if (d.open) closeModal(); };
+      const place = () => {
+        const W = stage.clientWidth, H = stage.clientHeight, k = base * s;
+        const mx = Math.max(0, (nw * k - W) / 2), my = Math.max(0, (nh * k - H) / 2);
+        x = Math.min(mx, Math.max(-mx, x)); y = Math.min(my, Math.max(-my, y));
+        img.style.transform = `translate(-50%, -50%) translate(${x}px, ${y}px) scale(${k})`;
       };
-      img.onerror = () => reject(new Error("Image illisible."));
-      img.src = url;
+      img.onload = () => { nw = img.naturalWidth; nh = img.naturalHeight; img.style.width = `${nw}px`; base = Math.max(stage.clientWidth / nw, stage.clientHeight / nh); place(); stage.classList.add("ready"); };
+      img.onerror = () => { toast("Image illisible.", "bad"); finish(null); };
+      img.src = src;
+      const zoomTo = (v) => { s = Math.min(4, Math.max(1, v)); zoom.value = s; place(); };
+      zoom.addEventListener("input", () => zoomTo(+zoom.value));
+      stage.addEventListener("wheel", (ev) => { ev.preventDefault(); zoomTo(s * Math.exp(-ev.deltaY * 0.0015)); }, { passive: false });
+      let drag = null;
+      stage.addEventListener("pointerdown", (ev) => { drag = { px: ev.clientX, py: ev.clientY, x, y }; stage.setPointerCapture(ev.pointerId); stage.classList.add("dragging"); });
+      stage.addEventListener("pointermove", (ev) => { if (!drag) return; x = drag.x + ev.clientX - drag.px; y = drag.y + ev.clientY - drag.py; place(); });
+      const up = () => { drag = null; stage.classList.remove("dragging"); };
+      stage.addEventListener("pointerup", up); stage.addEventListener("pointercancel", up);
+      d.addEventListener("close", () => finish(null), { once: true });
+      d.querySelector('[data-crop="cancel"]').addEventListener("click", () => finish(null));
+      d.querySelector('[data-crop="ok"]').addEventListener("click", () => {
+        if (!nw) return;
+        const W = stage.clientWidth, H = stage.clientHeight, k = base * s;
+        const left = W / 2 + x - (nw * k) / 2, top = H / 2 + y - (nh * k) / 2;
+        const c = document.createElement("canvas"); c.width = w; c.height = h;
+        const draw = (white) => { const g = c.getContext("2d"); g.clearRect(0, 0, w, h); if (white) { g.fillStyle = "#fff"; g.fillRect(0, 0, w, h); } g.drawImage(img, -left / k, -top / k, W / k, H / k, 0, 0, w, h); };
+        draw(false);
+        let out = "";
+        for (const q of [0.88, 0.8, 0.7, 0.6, 0.5]) {
+          out = c.toDataURL("image/webp", q);
+          if (!out.startsWith("data:image/webp")) { draw(true); out = c.toDataURL("image/jpeg", q); }
+          if (out.length * 0.75 <= maxBytes) break;
+        }
+        finish(out);
+      });
     });
+  }
+  // A file picked by the member -> framing window -> new picture of the editor
+  async function pickImage(file, kind) {
+    if (!/^image\/(png|jpeg|webp)$/.test(file.type)) return toast("Image refusée : PNG, JPEG ou WebP uniquement.", "bad");
+    const url = URL.createObjectURL(file);
+    const ok = await frameImage(url, kind);
+    if (ok) { if (kind === "avatar") { if (P.avSrc) URL.revokeObjectURL(P.avSrc); P.avSrc = url; } else { if (P.bnSrc) URL.revokeObjectURL(P.bnSrc); P.bnSrc = url; } }
+    else URL.revokeObjectURL(url);
+  }
+  async function frameImage(src, kind) {
+    const out = await cropImage(src, kind === "avatar" ? { ratio: "1 / 1", w: 400, h: 400, round: true, maxBytes: 190000 }
+      : { ratio: "3 / 1", w: 1500, h: 500, round: false, maxBytes: 430000 });
+    if (!out) return false;
+    if (kind === "avatar") P.avatar = out; else P.banner = out;
+    refreshAvatarPreview();
+    return true;
+  }
+  // The data shown by the live preview: what is saved, changed by what is being edited
+  function previewData() {
+    const f = document.querySelector('[data-pf="profil"]'), p = P.profile || {};
+    const val = (n) => (f && f.elements[n] ? f.elements[n].value.trim() : "");
+    return { ...p, name: C.user.name, role: C.user.role, color: P.color, mine: true,
+      avatar: P.avatar === undefined ? C.user.avatar : P.avatar, banner: P.banner === undefined ? p.banner : P.banner, banner_preset: P.preset,
+      location: val("location"), flying: P.styles[0] || "", extra: { level: val("level"), pilot_since: val("pilot_since"), styles: P.styles } };
   }
   const refreshAvatarPreview = () => {
     const prev = $("pf-av-prev");
-    if (prev) prev.innerHTML = avatar({ ...C.user, color: P.color, avatar: P.avatar === undefined ? C.user.avatar : P.avatar }, "xl");
+    if (!prev) return;
+    const d = previewData();
+    prev.innerHTML = avatar(d, "xl");
+    $("pf-preview").innerHTML = profileHead(d, true);
+    document.querySelectorAll("[data-pf-banner]").forEach((b) => { b.style.setProperty("--pf", P.color || autoColor(C.user.name)); b.setAttribute("aria-pressed", String(!imgSrc(d.banner, "banner") && b.dataset.pfBanner === P.preset)); });
+    const hasBanner = !!imgSrc(d.banner, "banner"), hasAv = !!imgSrc(d.avatar, "avatar");
+    document.querySelector('[data-pf-crop="banner"]').hidden = !hasBanner; document.querySelector("[data-pf-nobanner]").hidden = !hasBanner;
+    document.querySelector('[data-pf-crop="avatar"]').hidden = !hasAv; document.querySelector("[data-pf-noavatar]").hidden = !hasAv;
   };
 
   // ---------------------------------------------------------------- routing
@@ -861,7 +1063,25 @@
     }
     const pc = t.closest("[data-pf-color]");
     if (pc) { P.color = pc.dataset.pfColor; document.querySelectorAll("[data-pf-color]").forEach((b) => b.setAttribute("aria-pressed", String(b === pc))); return refreshAvatarPreview(); }
-    if (t.closest("[data-pf-noavatar]")) { P.avatar = ""; return refreshAvatarPreview(); }
+    if (t.closest("[data-pf-noavatar]")) { P.avatar = ""; P.avSrc = ""; return refreshAvatarPreview(); }
+    if (t.closest("[data-pf-nobanner]")) { P.banner = ""; P.bnSrc = ""; return refreshAvatarPreview(); }
+    const pb = t.closest("[data-pf-banner]");
+    if (pb) { P.preset = pb.dataset.pfBanner; if (imgSrc(P.banner === undefined ? P.profile?.banner : P.banner, "banner")) P.banner = ""; return refreshAvatarPreview(); }
+    const pcr = t.closest("[data-pf-crop]");
+    if (pcr) {
+      // Frame again: the original picked in this visit, or else the saved picture
+      const k = pcr.dataset.pfCrop, d = previewData();
+      return frameImage(k === "avatar" ? P.avSrc || d.avatar : P.bnSrc || d.banner, k);
+    }
+    const po = t.closest("[data-pf-opt]");
+    if (po) {
+      const list = P[po.closest("[data-pf-multi]").dataset.pfMulti], v = po.dataset.pfOpt, i = list.indexOf(v);
+      if (i >= 0) list.splice(i, 1); else list.push(v);
+      po.setAttribute("aria-pressed", String(i < 0));
+      return refreshAvatarPreview();
+    }
+    const cp = t.closest("[data-copy]");
+    if (cp) { try { await navigator.clipboard.writeText(cp.dataset.copy); toast("Pseudo Discord copié.", "good"); } catch (e) { toast(cp.dataset.copy); } return; }
     const pa = t.closest("[data-pf-add]");
     if (pa) {
       if (P.setup.length >= 8) return toast("8 moteurs au maximum dans votre setup.", "bad");
@@ -900,7 +1120,8 @@
 
   document.addEventListener("input", (ev) => {
     if (ev.target.id === "pf-motor-q") searchMotors(ev.target.value);
-    if (ev.target.name === "bio" && ev.target.closest("[data-pf]")) document.querySelector('.pf-count[data-for="bio"]').textContent = `${ev.target.value.length}/280`;
+    if (["bio", "drones"].includes(ev.target.name) && ev.target.closest("[data-pf]")) document.querySelector(`.pf-count[data-for="${ev.target.name}"]`).textContent = `${ev.target.value.length}/${ev.target.maxLength}`;
+    if (ev.target.name === "location" && ev.target.closest('[data-pf="profil"]')) refreshAvatarPreview();
   });
   document.addEventListener("change", async (ev) => {
     if (ev.target.matches("[data-gnote]")) {
@@ -908,11 +1129,19 @@
       if (cur) { try { await api("garage_set", { ref: box.dataset.garage, status: cur.dataset.gset, note: ev.target.value }); toast("Note enregistrée.", "good"); } catch (e) { toast(e.message, "bad"); } }
       return;
     }
-    if (ev.target.id === "pf-file" && ev.target.files[0]) {
-      try { P.avatar = await readAvatar(ev.target.files[0]); refreshAvatarPreview(); } catch (e) { toast(e.message, "bad"); }
-      ev.target.value = "";
+    if (ev.target.matches("[data-country]")) {
+      chosenCountry = ev.target.value;
+      try { localStorage.setItem("mm-country", ev.target.value); } catch (e) { /* storage blocked: this page only */ }
+      const box = ev.target.closest("#d-prix"), m = motorBy(decodeURIComponent((location.hash.match(/^#m\/(.+)$/) || [])[1] || ""));
+      if (box && m) { box.innerHTML = pricesBlock(m); box.querySelector("[data-country]")?.focus(); }
       return;
     }
+    if ((ev.target.id === "pf-file" || ev.target.id === "pf-bfile") && ev.target.files[0]) {
+      const file = ev.target.files[0];
+      ev.target.value = "";
+      return pickImage(file, ev.target.id === "pf-file" ? "avatar" : "banner");
+    }
+    if (["level", "pilot_since"].includes(ev.target.name) && ev.target.closest('[data-pf="profil"]')) return refreshAvatarPreview();
     const r = ev.target.closest("[data-role]");
     if (r) { try { await api("user_update", { id: r.closest("tr").dataset.uid, role: r.value }); toast("Rôle modifié.", "good"); } catch (e) { toast(e.message, "bad"); } }
   });
@@ -952,14 +1181,22 @@
           C.user = null; renderAccount(); toast(r.message, "good"); location.hash = "#"; return;
         } else {
           // Profile and privacy are saved together: each form sends the other one's current values
-          const src = f.dataset.pf === "profil" ? d : { bio: p.bio, location: p.location, flying: p.flying, website: p.website, youtube: p.youtube, instagram: p.instagram };
+          const prof = f.dataset.pf === "profil";
+          const src = prof ? { bio: d.bio, location: d.location, website: d.website, youtube: d.youtube, instagram: d.instagram }
+            : { bio: p.bio, location: p.location, flying: p.flying, website: p.website, youtube: p.youtube, instagram: p.instagram };
           const priv = f.dataset.pf === "confidentialite" ? { is_public: f.is_public.checked ? "1" : "0", show_likes: f.show_likes.checked ? "1" : "0" }
             : { is_public: p.is_public === false ? "0" : "1", show_likes: p.show_likes === false ? "0" : "1" };
           const payload = { ...src, ...priv, color: P.color, setup: P.setup };
-          if (P.avatar !== undefined && f.dataset.pf === "profil") payload.avatar = P.avatar;
+          if (prof) {
+            payload.extra = { pilot_since: d.pilot_since, level: d.level, styles: P.styles, sizes: P.sizes, video: d.video, radio: d.radio, goggles: d.goggles,
+              drones: d.drones, tiktok: d.tiktok, twitch: d.twitch, discord: d.discord, banner_preset: P.preset };
+            if (P.avatar !== undefined) payload.avatar = P.avatar;
+            if (P.banner !== undefined) payload.banner = P.banner;
+          }
           r = await api("profile_save", payload);
-          P.profile = { ...p, ...src, is_public: priv.is_public !== "0", show_likes: priv.show_likes !== "0", color: P.color, setup: P.setup };
-          P.avatar = undefined;
+          // Saved values as the server keeps them (links completed, banner address…)
+          try { P.profile = await get("profile", { id: C.user.id }); } catch (e) { P.profile = { ...p, ...src, color: P.color, setup: P.setup }; }
+          P.avatar = undefined; P.banner = undefined;
         }
         if (r.user) { C.user = r.user; renderAccount(); refreshAvatarPreview(); }
         toast(r.message, "good");

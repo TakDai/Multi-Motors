@@ -1,0 +1,48 @@
+/* Pages for search engines (tools/seo_pages.py): model, brand, stator size and drone size pages */
+@font-face { font-family: "Glacial Indifference"; font-weight: 400; font-display: swap; src: url("fonts/glacial-indifference-400.woff2") format("woff2"); }
+@font-face { font-family: "Glacial Indifference"; font-weight: 700; font-display: swap; src: url("fonts/glacial-indifference-700.woff2") format("woff2"); }
+:root { --ink: rgba(0, 0, 0, .8); --red: #ff5757; --font: "Glacial Indifference", "Helvetica Neue", Arial, sans-serif; }
+* { box-sizing: border-box; }
+body { margin: 0; background: #fff; color: var(--ink); font: 400 16px/1.55 var(--font); }
+a { color: inherit; }
+img { max-width: 100%; height: auto; }
+.s-top { display: flex; align-items: center; justify-content: space-between; gap: 12px; max-width: 1100px; margin: 0 auto; padding: 16px; }
+.s-logo { display: inline-flex; align-items: center; gap: 10px; text-decoration: none; font: 700 18px var(--font); letter-spacing: .18em; text-transform: uppercase; color: #111; }
+.s-btn { display: inline-block; padding: 10px 18px; border-radius: 12px; background: #111; color: #fff; font: 700 12px var(--font); letter-spacing: .12em; text-transform: uppercase; text-decoration: none; }
+.s-btn:hover { background: var(--red); }
+.s-btn.big { padding: 14px 22px; background: var(--red); }
+.s-btn.big:hover { background: #111; }
+.s-crumbs { max-width: 1100px; margin: 0 auto; padding: 0 16px; font-size: 13px; color: rgba(0, 0, 0, .55); }
+.s-crumbs a { text-decoration: none; }
+.s-crumbs a:hover { text-decoration: underline; }
+.s-main { max-width: 1100px; margin: 0 auto; padding: 8px 16px 40px; }
+h1 { margin: 10px 0 12px; font: 700 clamp(26px, 4vw, 38px)/1.15 var(--font); letter-spacing: .04em; text-transform: uppercase; color: #111; }
+h2 { margin: 34px 0 14px; font: 700 18px var(--font); letter-spacing: .12em; text-transform: uppercase; color: #111; }
+.s-lead { max-width: 760px; font-size: 17px; }
+.s-kicker { margin: 0; font: 700 13px var(--font); letter-spacing: .08em; text-transform: uppercase; color: rgba(0, 0, 0, .55); }
+.s-kicker a { text-decoration: none; }
+.s-kicker a:hover { color: var(--red); }
+.s-hero { display: grid; grid-template-columns: 260px minmax(0, 1fr); gap: 28px; align-items: center; }
+.s-hero > img { width: 260px; aspect-ratio: 1; object-fit: contain; border-radius: 18px; background: #f6f6f6; }
+.s-price { padding: 12px 16px; border-radius: 12px; background: #fff3f3; }
+.s-price b { color: #c62828; font-size: 20px; }
+.s-table { overflow-x: auto; border: 1.5px solid rgba(0, 0, 0, .12); border-radius: 14px; }
+table { width: 100%; border-collapse: collapse; font-size: 14px; }
+th, td { padding: 10px 12px; text-align: left; white-space: nowrap; border-bottom: 1px solid rgba(0, 0, 0, .07); }
+th { background: #111; color: #fff; font: 700 11px var(--font); letter-spacing: .1em; text-transform: uppercase; }
+tr:last-child td { border-bottom: 0; }
+td a { color: #c62828; font-weight: 700; }
+.s-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); gap: 12px; }
+.s-card { display: flex; flex-direction: column; align-items: center; gap: 4px; padding: 12px; border: 1.5px solid rgba(0, 0, 0, .1); border-radius: 14px; text-align: center; text-decoration: none; transition: border-color .2s, transform .2s; }
+.s-card:hover { border-color: #111; transform: translateY(-2px); }
+.s-card img, .s-noimg { width: 120px; height: 120px; object-fit: contain; border-radius: 10px; background: #f6f6f6; }
+.s-brand { font: 700 11px var(--font); letter-spacing: .1em; text-transform: uppercase; color: rgba(0, 0, 0, .5); }
+.s-card b { font: 700 14px var(--font); letter-spacing: .04em; text-transform: uppercase; color: #111; }
+.s-card small { font-size: 12px; color: rgba(0, 0, 0, .5); }
+.s-tags { display: flex; flex-wrap: wrap; gap: 8px; }
+.s-tags a { padding: 7px 13px; border: 1.5px solid rgba(0, 0, 0, .14); border-radius: 16px; font: 700 13px var(--font); text-decoration: none; }
+.s-tags a:hover { border-color: #111; }
+.s-tags small { color: rgba(0, 0, 0, .45); font-weight: 400; }
+.s-foot { max-width: 1100px; margin: 0 auto; padding: 24px 16px 40px; border-top: 1px solid rgba(0, 0, 0, .1); font-size: 13px; color: rgba(0, 0, 0, .6); }
+@media (max-width: 700px) { .s-hero { grid-template-columns: 1fr; } .s-hero > img { width: 200px; justify-self: center; } }
+@media (max-width: 480px) { .s-logo span { display: none; } .s-btn { padding: 9px 14px; font-size: 11px; } }

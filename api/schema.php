@@ -44,6 +44,10 @@ function install_schema(): void {
     foreach (['rating TINYINT NULL', 'pros TEXT NULL', 'cons TEXT NULL'] as $col) {
         try { db()->exec("ALTER TABLE comments ADD COLUMN $col"); } catch (PDOException $e) { /* already there */ }
     }
+    // Profiles: banner image and the extra pilot details (JSON)
+    foreach (["banner $text NULL", 'banner_v INT NOT NULL DEFAULT 0', 'extra TEXT NULL'] as $col) {
+        try { db()->exec("ALTER TABLE profiles ADD COLUMN $col"); } catch (PDOException $e) { /* already there */ }
+    }
     foreach (['CREATE INDEX idx_comments_ref ON comments (ref)', 'CREATE INDEX idx_sugg_status ON suggestions (status)',
               'CREATE INDEX idx_likes_ref ON likes (ref)', 'CREATE INDEX idx_garage_ref ON garage (ref)', 'CREATE INDEX idx_throttle ON throttle (kind, k)'] as $s) {
         try { db()->exec($s); } catch (PDOException $e) { /* index already there */ }
