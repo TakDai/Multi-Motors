@@ -18,7 +18,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 SITE = "https://multi-motors.fr"
 # Legal pages (pages/*.html): contact address shown to visitors, date of the last change of their text
-CONTACT = "contact@multi-motors.fr"
+CONTACT = "contact@tom-bigot.fr"
 LEGAL_DATE = "28 septembre 2026"
 UNNAMED = re.compile(r"KV · [\d.]+ g$")
 # Drone sizes, from the stator size (first two digits of the class): what people search for
