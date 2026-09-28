@@ -277,7 +277,6 @@ img.is-photo { mix-blend-mode: multiply; }
 @keyframes from-right { from { transform: translateX(105%); } to { transform: none; } }
 @keyframes fade-up { from { opacity: 0; transform: translateY(18px); } to { opacity: 1; transform: none; } }
 @keyframes pop { from { opacity: 0; transform: scale(.92); } to { opacity: 1; transform: none; } }
-@keyframes float { 0%, 100% { transform: translateY(0) rotate(0); } 50% { transform: translateY(-10px) rotate(-1.5deg); } }
 @keyframes nudge { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(6px); } }
 @keyframes spread { from { opacity: 0; letter-spacing: .3em; } to { opacity: 1; letter-spacing: .08em; } }
 
@@ -313,7 +312,7 @@ img.is-photo { mix-blend-mode: multiply; }
 .d-side .d-spec:nth-child(6) { animation-delay: .35s; }
 .d-top h1 { animation: spread .8s cubic-bezier(.2, .7, .2, 1) both; }
 .d-img { animation: pop .7s .15s cubic-bezier(.2, .8, .2, 1) both; }
-.d-img img { animation: float 6s 1s ease-in-out infinite; filter: drop-shadow(0 18px 22px rgba(0, 0, 0, .18)); }
+.d-img img { filter: drop-shadow(0 18px 22px rgba(0, 0, 0, .18)); }
 .d-tab:hover { filter: brightness(1.15); }
 .d-panel > * { animation: fade-up .45s ease-out both; }
 .pv { transition: transform .2s; }
