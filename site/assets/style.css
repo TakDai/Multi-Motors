@@ -292,7 +292,6 @@ img.is-photo { mix-blend-mode: multiply; }
 .side .field:nth-child(5) { animation-delay: .43s; }
 .side .field:nth-child(6) { animation-delay: .5s; }
 .hero-img { animation: pop .8s .3s cubic-bezier(.2, .8, .2, 1) both; }
-.hero-img img { animation: float 6s 1.1s ease-in-out infinite; }
 .chevron svg { animation: nudge 1.8s ease-in-out infinite; }
 .tag { transition: transform .2s; }
 .field:focus-within .tag { transform: scale(1.04); }
