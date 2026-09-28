@@ -1,0 +1,67 @@
+# Photos à ne jamais montrer (vérifiées à l'œil) : emballages, hélices seules, logos,
+# condensateurs, châssis, hélicoptère, bannières, images de remplacement « pas de photo ».
+# Une URL par ligne, un commentaire après # facultatif. Lu par tools/thumbs.py et tools/photos_dedupe.py.
+https://www.racedayquads.com/cdn/shop/files/newbeedrone-newbeedrone-0703-16420kv-brushless-motors-silver-edition-set-of-4-drone-motors-30962959057009.jpg?v=1737038760&width=1200  # miniature de NEWB-0703-16420
+https://cdn.getfpv.com/media/catalog/product/cache/1/image/9df78eab33525d08d6e5fb8d27136e95/3/b/3b-2206.jpg  # miniature de 3BHO-2206-1800
+https://ae01.alicdn.com/kf/H678947c7dea24bc2aed3ec444835d8f6k/3Bhobby-B-65-2306-5-1900KV-6S-Moteur-Brushless-Pour-200-250mm-5-Pouces-FPV-Racing.jpg_q50.jpg  # miniature de 3BHO-2306,5-1900
+https://cdn.getfpv.com/media/catalog/product/cache/1/image/9df78eab33525d08d6e5fb8d27136e95/3/b/3b-2408-popo-main_2.jpg  # miniature de 3BHO-2408-1900
+https://cdn.shopify.com/s/files/1/0371/2814/2907/products/img_62960_1__56011.1487813449.1280.1280.jpgc-2.jpg?v=1785364597  # miniature de EMAX-1104-5250
+https://cdn.shopify.com/s/files/1/1840/1085/files/gt2215.jpg  # miniature de EMAX-2215-905
+https://www.flashhobby.com/upload/488/2020121716355912217.png  # miniature de FLAS-2830-750
+https://cdn.shopify.com/s/files/1/2778/6650/products/3800-2_25f4d1c3-8196-4a1c-aa88-7f77a7186068.jpg  # miniature de XNOV-1404-2700
+https://cdn.shopify.com/s/files/1/1285/4651/files/webleedfpv-webleedfpv-0702-40-000kv-skrrrt-micro-motors-w-knurled-shaft-design-set-of-4-motors-motors-31587489316977.jpg  # miniature de WEBL-0702-X
+https://cdn.shopify.com/s/files/1/2778/6650/products/18061600kv.jpg  # miniature de IFLI-1806-1600
+https://cdn.shopify.com/s/files/1/1126/9610/files/NewBeeDrone-Flow-2808-1300KV-Motor-NewBeeDrone-53042918.jpg  # miniature de NEWB-2808-1300
+https://cdn.shopify.com/s/files/1/0914/9972/5181/files/Brotherhobby-F1503-7.webp  # miniature de BROT-1503-3850
+https://www.drone-fpv-racer.com/33877-large_default_2x/t-motor-f1103ii-8000kv.jpg  # miniature de TMOT-1103-8000-2
+https://www.drone-fpv-racer.com/66067-large_default_2x/moteur-hercules-0805-16000kv-4pcs-hisingy.jpg  # miniature de HISI-0805-16000
+https://store.tmotor.com/images/202608/source_img/u15xxl-260820-white-common-4.jpg  # miniature de TMOT-U15XXL-29
+https://store.tmotor.com/images/202608/source_img/u15xl-260820-white-common-4.jpg  # miniature de TMOT-U15XL-38
+https://store.tmotor.com/images/202608/source_img/u15l-260820-white-common-4.jpg  # miniature de TMOT-U15L-43
+https://cdn.shopify.com/s/files/1/0914/9972/5181/files/Brotherhobby-F1503-1.webp  # galerie BrotherHobby|F1503 W/ FOLDING PROPELLER
+https://cdn.shopify.com/s/files/1/0914/9972/5181/files/Brotherhobby-F1503-10.webp  # galerie BrotherHobby|F1503 W/ FOLDING PROPELLER
+https://cdn.shopify.com/s/files/1/0914/9972/5181/files/Brotherhobby-F1503-4.webp  # galerie BrotherHobby|F1503 W/ FOLDING PROPELLER
+https://cdn.shopify.com/s/files/1/0914/9972/5181/files/Cine66-Details-10.webp  # galerie T-Motor|CINE66
+https://cdn.shopify.com/s/files/1/0914/9972/5181/files/Cine66-Details-11.webp  # galerie T-Motor|CINE66
+https://cdn.shopify.com/s/files/1/0914/9972/5181/files/Cine66-Details-2.jpg  # galerie T-Motor|CINE66
+https://cdn.shopify.com/s/files/1/0914/9972/5181/files/Cine66-Details-3.jpg  # galerie T-Motor|CINE66
+https://cdn.shopify.com/s/files/1/0914/9972/5181/files/Cine66-Details-4.jpg  # galerie T-Motor|CINE66
+https://cdn.shopify.com/s/files/1/0914/9972/5181/files/0716brushedCorelessMotor.jpg  # galerie TINYWHOOP|0716 CORELESS
+https://cdn.shopify.com/s/files/1/0914/9972/5181/files/BetaFPV-7x16-motor1.jpg  # galerie BetaFPV|7X16MM CORELESS BRUSHED 0716
+https://cdn.shopify.com/s/files/1/0914/9972/5181/files/BetaFPV-7x16-motor2.jpg  # galerie BetaFPV|7X16MM CORELESS BRUSHED 0716
+https://cdn.shopify.com/s/files/1/0914/9972/5181/files/BetaFPV-7x16-motor3.jpg  # galerie BetaFPV|7X16MM CORELESS BRUSHED 0716
+https://cdn.shopify.com/s/files/1/0914/9972/5181/files/BetaFPV-7x16-motor4.jpg  # galerie BetaFPV|7X16MM CORELESS BRUSHED 0716
+https://cdn.shopify.com/s/files/1/1762/4057/products/Panasonic-25V-220UF-Capacitor-2_c3dc4899-beb7-42f6-bf62-0cddfcae52c8.jpg  # galerie iFlight|PANASONIC 25V 220UF CAPACITOR
+https://cdn.shopify.com/s/files/1/1762/4057/products/Panasonic-25V-220UF-Capacitor-3_d864f39f-443c-4bfd-b845-62a3424ffb77.jpg  # galerie iFlight|PANASONIC 25V 220UF CAPACITOR
+https://cdn.shopify.com/s/files/1/1762/4057/products/Panasonic-25V-220UF-Capacitor_9780bf2e-ce13-40f9-85db-f904686abf1e.jpg  # galerie iFlight|PANASONIC 25V 220UF CAPACITOR
+https://cdn.shopify.com/s/files/1/1762/4057/products/Panasonic-35V-680UF-Capacitor_ba7bf37a-35c9-4f44-8e9c-41593a931611.jpg  # galerie iFlight|PANASONIC 35V 680UF CAPACITOR
+https://icbimg.chiccdn.com/eachine/thumb/view//0D/1E/2fbd91fb-dac5-4f49-b95b-f373022c3e0f.jpg  # galerie EACHINE|E160
+https://img.tmotor.com/products/AT1030_1040_1050/images/AT1030.png  # galerie T-Motor|AT1030
+https://img.tmotor.com/products/AT1030_1040_1050/images/AT1040.png  # galerie T-Motor|AT1040
+https://img.tmotor.com/products/AT1030_1040_1050/images/AT1050.png  # galerie T-Motor|AT1050
+https://img.tmotor.com/products/mn-series/images/MN-general_02.webp  # galerie T-Motor|MN1118, T-Motor|MN1123, T-Motor|MN1130, T-Motor|MN13
+https://img.tmotor.com/products/mn-series/images/MN-general_03.webp  # galerie T-Motor|MN1118, T-Motor|MN1123, T-Motor|MN1130, T-Motor|MN13
+https://img.tmotor.com/products/mn-series/images/MN-general_04.webp  # galerie T-Motor|MN1118, T-Motor|MN1123, T-Motor|MN1130, T-Motor|MN13
+https://img.tmotor.com/products/mn-series/images/MN-general_05.webp  # galerie T-Motor|MN1118, T-Motor|MN1123, T-Motor|MN1130, T-Motor|MN13
+https://img.tmotor.com/products/mn-series/images/MN-general_06.webp  # galerie T-Motor|MN1118, T-Motor|MN1123, T-Motor|MN1130, T-Motor|MN13
+https://img.tmotor.com/products/mn-series/images/MN-general_07.webp  # galerie T-Motor|MN1118, T-Motor|MN1123, T-Motor|MN1130, T-Motor|MN13
+https://img.tmotor.com/products/mn-series/images/MN-general_08.webp  # galerie T-Motor|MN1118, T-Motor|MN1123, T-Motor|MN1130, T-Motor|MN13
+https://www.flashhobby.com/upload/488/20210226184805806306.jpg  # galerie FLASHHOBBY|D2830, FLASHHOBBY|D4215
+https://www.flashhobby.com/upload/488/20251226140327319721.jpg  # galerie FLASHHOBBY|BGM2606-90T, FLASHHOBBY|BGM2608-80T, FLASHHOBBY|B
+https://www.flashhobby.com/upload/488/20251226145757992927.jpg  # galerie FLASHHOBBY|BE1806-B, FLASHHOBBY|BX1306
+https://www.flashhobby.com/upload/488/20260114113449133300.jpg  # galerie FLASHHOBBY|A1106, FLASHHOBBY|A1204, FLASHHOBBY|A1207, FLASHH
+https://www.flashhobby.com/upload/488/20260312165047228917.jpg  # galerie FLASHHOBBY|CF2822, FLASHHOBBY|D2225, FLASHHOBBY|D2812, FLASH
+https://www.flashhobby.com/upload/488/fh-4308-micro-servo-469666.jpg  # galerie FLASHHOBBY|D2830
+https://www.flashhobby.com/upload/488/helical-servo-programmer-smart-03-611988.jpg  # galerie FLASHHOBBY|D2830
+https://www.flashhobby.com/upload/488/m45chw-coreless-servo_387710.jpg  # galerie FLASHHOBBY|D2830
+https://www.rctimer.com/u_file/1501/photo/53092c531f.jpg  # galerie RCTIMER|2208, RCTIMER|4215, RCTIMER|5010, RCTIMER|A3530, RCT
+https://www.rctimer.com/u_file/1503/photo/dad12ebaf7.png  # galerie RCTIMER|2208, RCTIMER|4215, RCTIMER|A3530, RCTIMER|A3542, RC
+https://www.rctimer.com/u_file/1511/photo/ffb99a844c.png  # galerie RCTIMER|2208, RCTIMER|4215, RCTIMER|5010, RCTIMER|A3530, RCT
+https://www.rctimer.com/u_file/2009/photo/7ab25b846c.png  # galerie RCTIMER|2208, RCTIMER|4215, RCTIMER|5010, RCTIMER|A3530, RCT
+https://www.rctimer.com/u_file/2009/photo/a9fb304e30.png  # galerie RCTIMER|A3530, RCTIMER|A3542, RCTIMER|BC2830, RCTIMER|BC2836
+https://www.studiosport.fr/upload/image/-image-204489-grande.jpg  # galerie T-Motor|F90
+https://www.studiosport.fr/upload/image/-image-243439-grande.jpg  # galerie RUSH|Reactor Racing 2207,5
+https://www.studiosport.fr/upload/image/4-helices-freestyle-5226---gemfan-p-image-231419-grande.jpg  # galerie RUSH|Reactor Racing 2207,5
+https://www.studiosport.fr/upload/image/a-080-motor-grip-plier-p-image-218657-grande.jpg  # galerie RUSH|Reactor Racing 2207,5
+https://www.studiosport.fr/upload/image/cle-a-cliquets-8mm---flyfishrc-p-image-242630-grande.jpg  # galerie RUSH|Reactor Racing 2207,5
+https://www.studiosport.fr/upload/image/outil-3-en-1-pour-helices---ethix--p-image-232109-grande.jpg  # galerie RUSH|Reactor Racing 2207,5

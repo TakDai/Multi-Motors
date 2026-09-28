@@ -8,3 +8,14 @@ BETA-2306-4600
 FLYW-1002-19800
 BETA-0702-22000
 BETA-0702-28000
+# Pas des moteurs brushless (condensateurs, amortisseurs, moteurs à balais, hélicoptère)
+BITC-X-X
+EACH--
+HISI-8520-X
+IFLI-1000-X
+IFLI-X-X
+IFLI-X-X-2
+IFLI-X-X-3
+TINY-0716-17500
+# Doublon : la boutique écrit 2100Kv pour le Specter 1002 21000KV
+HGLR-1002-2100
