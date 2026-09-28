@@ -1592,3 +1592,17 @@ dialog.crop-modal { width: min(640px, calc(100vw - 32px)); }
 .m-accept input { width: 18px; height: 18px; margin-top: 1px; flex: none; accent-color: #111; }
 .m-accept a, .m-legal a { color: #c62828; }
 .m-legal { margin: -4px 0 10px; font: 400 12px/1.45 var(--font); color: rgba(0, 0, 0, .55); text-align: center; }
+
+/* Freshly released motors (first sale less than 90 days ago) */
+.fresh-badge { margin-bottom: -12px; padding: 4px 11px; border-radius: 999px; background: var(--red); color: #fff; font: 700 11px var(--font); letter-spacing: .12em; text-transform: uppercase; }
+.fresh-tag { display: inline-block; margin: 0 6px; padding: 2px 8px; border-radius: 999px; background: var(--red); color: #fff; font: 700 10px var(--font); letter-spacing: .1em; text-transform: uppercase; vertical-align: 2px; white-space: nowrap; }
+.d-top .fresh-tag { margin-top: 8px; font-size: 11px; padding: 4px 11px; }
+/* News: every motor of the day, on demand */
+.n-all-btn { margin-top: 12px; padding: 9px 16px; border: 1.5px solid #111; border-radius: 12px; background: #fff; cursor: pointer; font: 700 12px var(--font); letter-spacing: .1em; text-transform: uppercase; transition: background-color .2s, color .2s; }
+.n-all-btn:hover, .n-all-btn[aria-expanded="true"] { background: #111; color: #fff; }
+.n-all { margin-top: 12px; max-height: 520px; overflow: auto; border: 1.5px solid rgba(0, 0, 0, .12); border-radius: 12px; }
+.n-table { width: 100%; border-collapse: collapse; font: 400 13px var(--font); }
+.n-table th { position: sticky; top: 0; padding: 9px 12px; background: #111; color: #fff; font: 700 10px var(--font); letter-spacing: .12em; text-transform: uppercase; text-align: left; }
+.n-table td { padding: 8px 12px; border-bottom: 1px solid rgba(0, 0, 0, .07); white-space: nowrap; }
+.n-table td a { color: #111; font-weight: 700; }
+.n-table tr:hover td { background: #fafafa; }

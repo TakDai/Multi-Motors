@@ -502,7 +502,7 @@
     (C.online ? get("news").catch(() => []) : Promise.resolve([])).then((news) => {
       const items = [
         ...news.map((n) => ({ kind: "site", at: n.at, title: n.title, body: n.body, author: n.author })),
-        ...(C.actus || []).map((a) => ({ kind: a.type || "moteurs", at: a.date, title: a.title, body: a.body || "", refs: a.refs || [], count: a.count || (a.refs || []).length, models: a.models, brands: a.newBrands || [], nBrands: a.newBrandsCount || 0 })),
+        ...(C.actus || []).map((a) => ({ kind: a.type || "moteurs", at: a.date, title: a.title, body: a.body || "", refs: a.refs || [], all: a.all || [], count: a.count || (a.refs || []).length, models: a.models, brands: a.newBrands || [], nBrands: a.newBrandsCount || 0 })),
       ].sort((a, b) => String(b.at).localeCompare(String(a.at)));
       v._items = items;
       drawFeed("all");
@@ -539,8 +539,21 @@
         ${i.body ? `<p>${esc(i.body).replace(/\n/g, "<br>")}</p>` : ""}
         ${i.kind === "moteurs" && i.models ? `<p class="n-sum">${nf(i.models)} modèle${i.models > 1 ? "s" : ""}${i.nBrands ? ` · ${nf(i.nBrands)} nouvelle${i.nBrands > 1 ? "s" : ""} marque${i.nBrands > 1 ? "s" : ""}` : ""}</p>` : ""}
         ${i.brands?.length ? `<p class="n-brands">${i.brands.slice(0, 20).map((b) => `<span>${esc(b)}</span>`).join("")}${i.nBrands > 20 ? `<span class="note">et ${nf(i.nBrands - 20)} autres</span>` : ""}</p>` : ""}
-        ${i.refs?.length ? `<div class="n-motors">${i.refs.slice(0, 12).map((r) => { const m = motorBy(r); return m ? `<a class="n-motor" href="#m/${encodeURIComponent(r)}">${MM().photo(m)}<span>${esc(m.MARQUE)} ${esc(m.NOM || "")}<small>${esc(m.CLASSE || "")} · ${esc(m.KV || "")}KV</small></span></a>` : ""; }).join("")}${i.count > 12 ? `<span class="note">et ${nf(i.count - 12)} autres</span>` : ""}</div>` : ""}
+        ${i.refs?.length ? `<div class="n-motors">${i.refs.slice(0, 12).map((r) => { const m = motorBy(r); return m ? `<a class="n-motor" href="#m/${encodeURIComponent(r)}">${MM().photo(m)}<span>${MM().freshTag(m)}${esc(m.MARQUE)} ${esc(m.NOM || "")}<small>${esc(m.CLASSE || "")} · ${esc(m.KV || "")}KV</small></span></a>` : ""; }).join("")}</div>` : ""}
+        ${i.all?.filter(motorBy).length > 1 ? `<button type="button" class="n-all-btn" data-n-all="${esc(i.at)}" aria-expanded="false">Voir les ${nf(i.all.filter(motorBy).length)} moteurs ajoutés</button><div class="n-all" hidden></div>` : ""}
       </article>`).join("") : `<p class="note">Aucune actualité pour l'instant.</p>`;
+  }
+  // Every motor of an announcement, listed on demand (brand, model, class, KV), freshly released ones marked
+  function drawAll(btn) {
+    const box = btn.nextElementSibling, item = ($("view-actus")._items || []).find((x) => x.kind === "moteurs" && String(x.at) === btn.dataset.nAll);
+    const open = btn.getAttribute("aria-expanded") !== "true";
+    btn.setAttribute("aria-expanded", String(open));
+    btn.textContent = open ? "Masquer la liste" : `Voir les ${nf(item.all.filter(motorBy).length)} moteurs ajoutés`;
+    if (open && !box.childElementCount) {
+      box.innerHTML = `<table class="n-table"><thead><tr><th>Marque</th><th>Modèle</th><th>Classe</th><th>KV</th><th>Poids</th></tr></thead><tbody>${item.all.map(motorBy).filter(Boolean).map((m) =>
+        `<tr><td>${esc(m.MARQUE)}</td><td><a href="#m/${encodeURIComponent(m.REF)}">${esc(m.NOM || m.REF)}</a>${MM().freshTag(m)}</td><td>${esc(m.CLASSE || "—")}</td><td>${esc(m.KV || "—")}</td><td>${m.POIDS ? esc(m.POIDS) + " g" : "—"}</td></tr>`).join("")}</tbody></table>`;
+    }
+    box.hidden = !open;
   }
 
   // ----------------------------------------------------------------- admin
@@ -1120,6 +1133,7 @@
     }
     const nd = t.closest("[data-news-del]");
     if (nd) { try { await api("news_delete", { id: nd.dataset.newsDel }); renderAdmin("news"); } catch (e) { toast(e.message, "bad"); } return; }
+    const na = t.closest("[data-n-all]"); if (na) return drawAll(na);
     const af = t.closest("[data-actus]");
     if (af) { document.querySelectorAll("[data-actus]").forEach((b) => b.setAttribute("aria-selected", String(b === af))); drawFeed(af.dataset.actus); }
   });
