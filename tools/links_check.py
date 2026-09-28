@@ -34,7 +34,7 @@ DATA = ROOT / "site" / "data"
 UA = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124 Safari/537.36",
       "Accept-Language": "fr-FR,fr;q=0.9,en;q=0.8"}
 RECHECK = 7  # days
-per_host = defaultdict(lambda: threading.Semaphore(2))  # two requests at a time per site, shops rate-limit
+per_host = defaultdict(lambda: threading.Semaphore(4))  # four requests at a time per site, shops rate-limit
 
 
 def check(url):
@@ -43,7 +43,7 @@ def check(url):
     with per_host[host]:
         for attempt in range(2):
             try:
-                r = requests.get(url, headers=UA, timeout=20, stream=True, allow_redirects=True)
+                r = requests.get(url, headers=UA, timeout=12, stream=True, allow_redirects=True)
                 r.close()
                 if r.status_code in (404, 410):
                     return "dead"
@@ -91,9 +91,13 @@ def main():
     todo_u = sorted(u for u in urls if not fresh(u))
     todo_v = sorted(v for v in vids if not fresh("yt:" + v))
     print(f"{len(urls)} liens et {len(vids)} vidéos ; à vérifier : {len(todo_u)} liens, {len(todo_v)} vidéos", flush=True)
-    with ThreadPoolExecutor(16) as ex:
-        for u, s in zip(todo_u, ex.map(check, todo_u)):
+    with ThreadPoolExecutor(24) as ex:
+        # Saved as it goes: a long check that is stopped keeps what it found
+        for i, (u, s) in enumerate(zip(todo_u, ex.map(check, todo_u)), 1):
             cache[u] = {"s": s, "d": today.isoformat()}
+            if i % 200 == 0:
+                CACHE.write_text(json.dumps(cache, separators=(",", ":")))
+                print(f"  {i}/{len(todo_u)} liens", flush=True)
         for v, s in zip(todo_v, ex.map(video_alive, todo_v)):
             cache["yt:" + v] = {"s": s, "d": today.isoformat()}
     dead = lambda k: (cache.get(k) or {}).get("s") == "dead"
