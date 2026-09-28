@@ -17,6 +17,9 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
 SITE = "https://multi-motors.fr"
+# Legal pages (pages/*.html): contact address shown to visitors, date of the last change of their text
+CONTACT = "contact@tom-bigot.fr"
+LEGAL_DATE = "28 septembre 2026"
 UNNAMED = re.compile(r"KV · [\d.]+ g$")
 # Drone sizes, from the stator size (first two digits of the class): what people search for
 SIZES = [
@@ -88,7 +91,8 @@ def page(path, title, desc, body, crumbs, ld=None):
 {body}
 </main>
 <footer class="s-foot"><p><b>Multi-Motors</b> : le catalogue des moteurs brushless pour drones FPV — fiches techniques, KV, poids, fixation, bancs d'essai, photos, vidéos et comparateur de prix, mis à jour chaque jour.</p>
-<p><a href="/moteurs-brushless.html">Tous les moteurs brushless FPV</a> · {" · ".join(f'<a href="/taille/{s[0]}.html">{e(s[2].split(":")[0])}</a>' for s in SIZES)}</p></footer>
+<p><a href="/moteurs-brushless.html">Tous les moteurs brushless FPV</a> · {" · ".join(f'<a href="/taille/{s[0]}.html">{e(s[2].split(":")[0])}</a>' for s in SIZES)}</p>
+<p class="s-legal"><a href="/mentions-legales.html">Mentions légales</a> · <a href="/confidentialite.html">Confidentialité et cookies</a> · <a href="/cgu.html">Conditions d'utilisation</a> · <a href="mailto:{CONTACT}">Contact</a></p></footer>
 </body>
 </html>
 """
@@ -232,6 +236,15 @@ def main(out):
                               f"Catalogue de {len(fams)} moteurs brushless pour drone FPV : course, freestyle, long range, whoop. Comparez KV, poids, classes, marques et prix.",
                               body, [("Moteurs brushless", "/" + p)]), encoding="utf-8")
     urls.append((p, "0.9"))
+
+    # Legal pages: text written in pages/, same layout as the other pages
+    for f in sorted((ROOT / "pages").glob("*.html")):
+        src = f.read_text(encoding="utf-8").replace("{{CONTACT}}", CONTACT).replace("{{DATE}}", LEGAL_DATE)
+        title = re.search(r"<!-- title: (.*?) -->", src).group(1)
+        desc = re.search(r"<!-- description: (.*?) -->", src).group(1)
+        body = re.sub(r"<!--.*?-->\n?", "", src, flags=re.S)
+        (out / f.name).write_text(page(f.name, title, desc, f'<div class="s-legal-page">{body}</div>', [(title.split(" |")[0], "/" + f.name)]), encoding="utf-8")
+        urls.append((f.name, "0.3"))
 
     today = date.today().isoformat()
     (out / "sitemap.xml").write_text('<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n'

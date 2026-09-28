@@ -46,3 +46,9 @@ td a { color: #c62828; font-weight: 700; }
 .s-foot { max-width: 1100px; margin: 0 auto; padding: 24px 16px 40px; border-top: 1px solid rgba(0, 0, 0, .1); font-size: 13px; color: rgba(0, 0, 0, .6); }
 @media (max-width: 700px) { .s-hero { grid-template-columns: 1fr; } .s-hero > img { width: 200px; justify-self: center; } }
 @media (max-width: 480px) { .s-logo span { display: none; } .s-btn { padding: 9px 14px; font-size: 11px; } }
+.s-legal a { color: rgba(0, 0, 0, .6); }
+.s-legal-page { max-width: 820px; }
+.s-legal-page ul { padding-left: 20px; }
+.s-legal-page li { margin: 6px 0; }
+.s-legal-page td { white-space: normal; vertical-align: top; min-width: 140px; }
+.s-legal-page a { color: #c62828; }

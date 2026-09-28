@@ -115,6 +115,18 @@ function throttle(string $kind, string $key, int $max, int $minutes): void {
     $n = (int) q('SELECT COUNT(*) FROM throttle WHERE kind = ? AND k = ? AND at > ?', [$kind, $key, $since])->fetchColumn();
     if ($n >= $max) fail('Trop de tentatives, réessayez dans quelques minutes.', 429);
     q('INSERT INTO throttle (kind, k, at) VALUES (?, ?, ?)', [$kind, $key, now()]);
+    // Addresses kept for the anti-abuse check only: nothing older than a day (privacy policy)
+    q('DELETE FROM throttle WHERE at < ?', [gmdate('Y-m-d H:i:s', time() - 86400)]);
+}
+
+// Accounts whose address was never confirmed are deleted after 30 days (privacy policy)
+function purge_unverified(): void {
+    $old = gmdate('Y-m-d H:i:s', time() - 30 * 86400);
+    foreach (q('SELECT id FROM users WHERE verified = 0 AND created_at < ?', [$old])->fetchAll() as $u) {
+        foreach (['likes', 'profiles', 'garage', 'history', 'comments'] as $t) q("DELETE FROM $t WHERE user_id = ?", [$u['id']]);
+        q("DELETE FROM suggestions WHERE user_id = ? AND status = 'pending'", [$u['id']]);
+        q('DELETE FROM users WHERE id = ?', [$u['id']]);
+    }
 }
 
 function client_ip(): string { return $_SERVER['REMOTE_ADDR'] ?? '0.0.0.0'; }
