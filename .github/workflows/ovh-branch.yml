@@ -10,7 +10,7 @@ on:
     types: [completed]
   push:
     branches: [Moteurs]
-    paths: ["site/**", "catalogue/moteurs.csv", "tools/seo_pages.py", ".github/workflows/ovh-branch.yml"]
+    paths: ["site/**", "pages/**", "catalogue/moteurs.csv", "tools/seo_pages.py", ".github/workflows/ovh-branch.yml"]
   workflow_dispatch: {}
 
 permissions:
