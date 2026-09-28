@@ -13,6 +13,9 @@ value. Anything not recognised is left as it is.
 - LIPO         -> "4S-6S"
 - VIS HEL      -> "M5" (thread sizes in capitals)
 - D / H STATOR -> taken from the class (2306.5 -> 23 and 6.5)
+- POIDS        -> emptied when three times the usual weight of the stator size (a pack, a box, "100%")
+- misread rows -> removed: a KV read as the size (REF "TMOT-2020-2020" next to the real
+                  "TMOT-2207.5-2020"), an EMAX part number read as the model ("EMX-MT-0409 GT2215")
 
 Usage: python tools/normalize.py
 """
@@ -154,12 +157,60 @@ def stator(r):
     return n
 
 
+def _num(v):
+    try:
+        return float(str(v).replace(",", "."))
+    except ValueError:
+        return None
+
+
+def key(s):
+    return re.sub(r"[^a-z0-9]", "", str(s).lower())
+
+
+def misread(rows):
+    """Rows born from a misread shop title, when the catalogue has the right one (or will re-add it)."""
+    kvs = {}
+    for r in rows:
+        kvs.setdefault((key(r["MARQUE"]), key(r["NOM"]), _num(r["KV"])), []).append(r)
+    drop = set()
+    for r in rows:
+        kv, cls = _num(r["KV"]), _num(r["CLASSE"])
+        same = kvs[(key(r["MARQUE"]), key(r["NOM"]), kv)]
+        if kv and cls == kv and any(o is not r and _num(o["CLASSE"]) != kv for o in same):
+            drop.add(r["REF"])
+        if re.match(r"EMX[-=\s]?MT", r["NOM"], re.I):
+            drop.add(r["REF"])
+    return drop
+
+
+def heavy(rows):
+    """Weights more than three times the median of their stator size (multirotor sizes known from 8 motors)."""
+    by = {}
+    for r in rows:
+        if _num(r["POIDS"]) and r["CLASSE"]:
+            by.setdefault(r["CLASSE"].replace(",", ".")[:4], []).append(_num(r["POIDS"]))
+    # Only multirotor sizes (stator up to 24 mm): above, the airplane "can size" naming mixes up the medians
+    med = {c: sorted(w)[len(w) // 2] for c, w in by.items() if len(w) >= 8 and c[:2].isdigit() and int(c[:2]) <= 24}
+    n = 0
+    for r in rows:
+        m = med.get((r["CLASSE"] or "").replace(",", ".")[:4])
+        if m and (_num(r["POIDS"]) or 0) > 3 * m:
+            r["POIDS"] = ""
+            n += 1
+    return n
+
+
 def main():
     with CAT.open(encoding="utf-8") as fh:
         reader = csv.DictReader(fh)
         cols, rows = list(reader.fieldnames), list(reader)
+    drop = misread(rows)
+    rows = [r for r in rows if r["REF"] not in drop]
     changed = {c: 0 for c in RULES}
     changed["CLASSE"] = changed["STATOR"] = changed["IMG"] = 0
+    changed["POIDS aberrant"] = heavy(rows)
+    changed["lignes mal lues retirées"] = len(drop)
     rejected = rejected_photos()
     for r in rows:
         if r.get("IMG") in rejected:

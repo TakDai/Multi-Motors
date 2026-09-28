@@ -167,7 +167,30 @@ def plausible(m, col, v):
         return False
     if col == "POIDS" and x is not None and ds and not (0.2 * ds <= x <= ds ** 2):
         return False
+    # A weight three times the usual weight of this stator size is a pack, a box or a misread ("100%")
+    if col == "POIDS" and x is not None:
+        med = class_weights().get((m.get("CLASSE") or "").replace(",", ".")[:4])
+        if med and x > 3 * med:
+            return False
     return True
+
+
+_WEIGHTS = None
+
+
+def class_weights():
+    """Median weight of each stator size in the catalogue (sizes known from at least 8 motors)."""
+    global _WEIGHTS
+    if _WEIGHTS is None:
+        by = {}
+        with (Path(__file__).resolve().parent.parent / "catalogue" / "moteurs.csv").open(encoding="utf-8") as f:
+            for r in csv.DictReader(f):
+                w = n_(r.get("POIDS"))
+                if w and r.get("CLASSE"):
+                    by.setdefault(r["CLASSE"].replace(",", ".")[:4], []).append(w)
+        # Multirotor sizes only (stator up to 24 mm), like tools/normalize.py
+        _WEIGHTS = {c: sorted(ws)[len(ws) // 2] for c, ws in by.items() if len(ws) >= 8 and c[:2].isdigit() and int(c[:2]) <= 24}
+    return _WEIGHTS
 
 
 def n_(v):
