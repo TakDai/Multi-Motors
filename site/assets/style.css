@@ -1560,3 +1560,16 @@ dialog.crop-modal { width: min(640px, calc(100vw - 32px)); }
   .pf-dl { grid-template-columns: 1fr; gap: 4px; }
 }
 .pf-av-edit .pf-label { margin: 14px 0 8px; }
+
+/* Price comparator: delivery country, shops grouped by where they ship from, search links */
+.o-bar { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 14px; margin: 4px 0 12px; }
+.o-bar small { font: 400 12px var(--font); color: rgba(0, 0, 0, .5); }
+.o-country { display: inline-flex; align-items: center; gap: 8px; font: 700 12px var(--font); letter-spacing: .04em; }
+.o-country select { padding: 6px 10px; border: 1.5px solid rgba(0, 0, 0, .15); border-radius: 10px; background: #fff; font: 700 12px var(--font); cursor: pointer; }
+.o-zone { margin: 14px 0 6px; font: 700 11px var(--font); letter-spacing: .12em; text-transform: uppercase; color: rgba(0, 0, 0, .5); }
+.o-zone:first-child { margin-top: 0; }
+.o-flag { margin-right: 6px; font-style: normal; }
+.o-more { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 8px; margin: 16px 0 0; font: 400 12px var(--font); color: rgba(0, 0, 0, .55); }
+.o-more span { margin-right: 4px; }
+.o-more a { padding: 5px 11px; border: 1.5px solid rgba(0, 0, 0, .12); border-radius: 14px; color: var(--ink); font: 700 12px var(--font); text-decoration: none; transition: border-color .15s; }
+.o-more a:hover { border-color: #111; }

@@ -7,10 +7,10 @@ to euros with the ECB rate of the day and divides pack prices (4 pack, set
 of 4…) per motor. The photos of the matching products are kept too.
 
 Result: site/data/prix.json
-  {REF: {"offers": [{shop, url, price, cur, eur, stock, pack}], "eur": median, "date": "YYYY-MM-DD"}}
+  {REF: {"offers": [{shop, url, price, cur, eur, stock, pack, country}], "eur": median, "date": "YYYY-MM-DD"}}
 and site/data/photos.json {"MARQUE|NOM": [url, ...]} (up to 10 photos per family)
 
-Usage: python tools/prices.py [--limit N] [--brand EMAX] [--refresh] [--priced] [--workers 6]
+Usage: python tools/prices.py [--limit N] [--brand EMAX] [--refresh] [--priced] [--sold] [--workers 6]
 """
 import argparse, csv, json, re, statistics, sys, threading, time
 from concurrent.futures import ThreadPoolExecutor
@@ -32,8 +32,8 @@ ACCESSORY = re.compile(r"\b(props?|propellers?|frames?|esc|bell|replacement|scre
 PACK = re.compile(r"(\d)\s*(?:pcs|pc|pack|x|pi[eè]ces?)\b|set of (\d)|lot de (\d)|\((\d) ?pcs?\)|(\d)[- ]pack", re.I)
 # A motor name generated from KV and weight (rows of the sheet without a model name) is not searchable
 UNNAMED = re.compile(r"KV · [\d.]+ g$")
-# Bumped when the matching changes: older prices are searched again first (3: variant of the right KV)
-VERSION = 3
+# Bumped when the matching changes: older prices are searched again first (3: variant of the right KV, 4: French shops and shop country)
+VERSION = 4
 
 
 def ecb_rates():
@@ -105,12 +105,15 @@ def offers_for(brand, name, members, rates):
                 pick = [v for v in pick if v["price"] > 0]
                 if not pick:
                     continue
-                v = min(pick, key=lambda v: v["price"])
-                pack = pack_size(p["title"] + " " + v["title"])
+                # Price of one motor: the pack size of the variant ("1PCS", "4 pack") wins over the
+                # title, which often lists every choice ("1 / 2 / 4 pcs"); the cheapest motor is kept
+                per_motor = lambda v: v["price"] / (pack_size(v["title"]) if PACK.search(v["title"]) else pack_size(p["title"]))
+                v = min(pick, key=per_motor)
+                pack = pack_size(v["title"]) if PACK.search(v["title"]) else pack_size(p["title"])
                 eur = round(v["price"] / rates.get(shop.cur, 1) / pack, 2) if shop.cur != "EUR" else round(v["price"] / pack, 2)
                 link = f"{url}?variant={v['id']}" if v.get("id") and len(variants) > 1 else url
                 found[ref].append({"shop": shop.name, "url": link, "price": v["price"], "cur": shop.cur,
-                                   "eur": eur, "stock": v["stock"], "pack": pack})
+                                   "eur": eur, "stock": v["stock"], "pack": pack, "country": getattr(shop, "country", "US")})
                 got_one = True
             # Photos of a product that is really this motor (right KV, or the family has one KV)
             if got_one or not kvs:
@@ -125,6 +128,7 @@ def main():
     ap.add_argument("--brand", default="")
     ap.add_argument("--refresh", action="store_true", help="search again families already priced")
     ap.add_argument("--priced", action="store_true", help="search again only the families that already have a price")
+    ap.add_argument("--sold", action="store_true", help="only the models sold in a shop (priced, or found by tools/ranking.py)")
     ap.add_argument("--workers", type=int, default=6)
     args = ap.parse_args()
     with CAT.open(encoding="utf-8") as f:
@@ -138,6 +142,9 @@ def main():
     todo = [k for k in fams if not args.brand or k[0].lower() == args.brand.lower()]
     if args.priced:
         todo = [k for k in todo if any((data.get(m["REF"]) or {}).get("offers") for m in fams[k])]
+    if args.sold:
+        ranks = json.loads((ROOT / "site" / "data" / "classement.json").read_text()) if (ROOT / "site" / "data" / "classement.json").exists() else {}
+        todo = [k for k in todo if any((data.get(m["REF"]) or {}).get("offers") for m in fams[k]) or (ranks.get(f"{k[0]}|{k[1]}") or {}).get("shops")]
     # Families never searched first, then the oldest prices: a daily run with --limit keeps every price fresh
     age = lambda k: min((data.get(m["REF"], {}).get("date", "") if m["REF"] in done else "") for m in fams[k])
     todo.sort(key=age)
@@ -163,8 +170,17 @@ def main():
             return
         with lock:
             for ref, offers in found.items():
-                # Bundles / kits sold under the same name are far above the motor price
-                if offers:
+                # One offer per shop: the cheapest (in stock first)
+                best = {}
+                for o in sorted(offers, key=lambda o: (not o["stock"], o["eur"])):
+                    best.setdefault(o["shop"], o)
+                offers[:] = list(best.values())
+                # Bundles / kits sold under the same name are far above the usual price, a wrong
+                # match far below it: both are left out (compared with the median, not the lowest)
+                if len(offers) >= 3:
+                    mid = statistics.median(o["eur"] for o in offers)
+                    offers[:] = [o for o in offers if mid / 2.5 <= o["eur"] <= mid * 2.2]
+                elif offers:
                     low = min(o["eur"] for o in offers)
                     offers[:] = [o for o in offers if o["eur"] <= low * 2.2]
                 offers.sort(key=lambda o: (not o["stock"], o["eur"]))

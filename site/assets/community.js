@@ -307,19 +307,57 @@
     loadSocial(m.REF);
   };
 
+  // Where the visitor lives: chosen in the price block, else the region of the browser language,
+  // else its time zone; the shops of that country come first, then Europe, then the rest of the world
+  const COUNTRIES = { FR: "France", BE: "Belgique", CH: "Suisse", LU: "Luxembourg", CA: "Canada", GB: "Royaume-Uni", DE: "Allemagne", ES: "Espagne", IT: "Italie", US: "États-Unis" };
+  const EUROPE = new Set(["FR", "BE", "CH", "LU", "DE", "ES", "IT", "NL", "PT", "AT", "IE", "GB"]);
+  // Offers collected before the shop country was saved
+  const SHOP_COUNTRY = { "Drone-FPV-Racer": "FR", Studiosport: "FR", "Drone Doctors": "FR", "FPV Fly": "FR", "FPV World": "FR", "Unmanned Tech": "GB", RCDrone: "CN", "HGLRC (officiel)": "CN", "Team BlackSheep": "HK" };
+  const flag = (cc) => /^[A-Z]{2}$/.test(cc || "") ? String.fromCodePoint(...[...cc].map((c) => 0x1f1a5 + c.charCodeAt(0))) : "";
+  let chosenCountry = "";
+  function userCountry() {
+    if (chosenCountry) return chosenCountry;
+    try { const c = localStorage.getItem("mm-country"); if (COUNTRIES[c]) return c; } catch (e) { /* storage blocked */ }
+    for (const l of navigator.languages || [navigator.language || ""]) { const r = (l.split("-")[1] || "").toUpperCase(); if (COUNTRIES[r]) return r; }
+    const tz = Intl.DateTimeFormat().resolvedOptions().timeZone || "";
+    const byTz = { "Europe/Paris": "FR", "Europe/Brussels": "BE", "Europe/Zurich": "CH", "Europe/Luxembourg": "LU", "Europe/London": "GB", "Europe/Berlin": "DE", "Europe/Madrid": "ES", "Europe/Rome": "IT" };
+    if (byTz[tz]) return byTz[tz];
+    if (/^America\/(Toronto|Montreal|Vancouver)/.test(tz)) return "CA";
+    if (/^America\//.test(tz)) return "US";
+    return "FR";
+  }
+  const zoneOf = (cc, me) => (cc === me ? 0 : EUROPE.has(cc) && EUROPE.has(me) ? 1 : 2);
+  const IN = { CA: "Au", GB: "Au", LU: "Au", US: "Aux" };
+  const ZONE_LABEL = (me) => [`${IN[me] || "En"} ${COUNTRIES[me]}`, "En Europe", "Reste du monde"];
+  // Shops that do not let robots read their prices: a search link for the motor
+  const SEARCH_LINKS = [
+    ["La Caméra Embarquée", "FR", (q) => `https://www.lacameraembarquee.fr/recherche?controller=search&s=${encodeURIComponent(q)}`],
+    ["GetFPV", "US", (q) => `https://www.getfpv.com/catalogsearch/result/?q=${encodeURIComponent(q)}`],
+    ["Banggood", "CN", (q) => `https://www.banggood.com/search/${encodeURIComponent(q.replace(/\s+/g, "-"))}.html`],
+    ["AliExpress", "CN", (q) => `https://fr.aliexpress.com/w/wholesale-${encodeURIComponent(q.replace(/\s+/g, "-"))}.html`],
+  ];
+
   function pricesBlock(m) {
-    const p = C.prices[m.REF];
+    const p = C.prices[m.REF], me = userCountry();
+    const q = `${m.MARQUE} ${m.NOM || ""} ${m.KV ? m.KV + "KV" : ""}`.replace(/\s+/g, " ").trim();
+    const links = SEARCH_LINKS.slice().sort((a, b) => zoneOf(a[1], me) - zoneOf(b[1], me))
+      .map(([n, cc, url]) => `<a href="${esc(url(q))}" target="_blank" rel="noopener nofollow">${flag(cc)} ${esc(n)}</a>`).join("");
+    const picker = `<label class="o-country">Livraison en <select data-country>${Object.entries(COUNTRIES).map(([k, v]) => `<option value="${k}"${k === me ? " selected" : ""}>${flag(k)} ${esc(v)}</option>`).join("")}</select></label>`;
+    const more = `<p class="o-more"><span>Chercher aussi sur</span>${links}</p>`;
     if (!p || !p.offers?.length) {
-      return `${head("price", "Comparateur de prix")}<p class="note">Aucune offre relevée pour ce moteur pour l'instant.</p>`;
+      return `${head("price", "Comparateur de prix")}<p class="note">Aucune offre relevée pour ce moteur pour l'instant.</p>${more}`;
     }
-    const offers = p.offers.map((o) => ({ ...o, ttc: ttc(o) })).sort((a, b) => (!a.stock - !b.stock) || a.ttc - b.ttc);
+    const offers = p.offers.map((o) => { const cc = o.country || SHOP_COUNTRY[o.shop] || "US"; return { ...o, cc, zone: zoneOf(cc, me), ttc: ttc(o) }; })
+      .sort((a, b) => a.zone - b.zone || (!a.stock - !b.stock) || a.ttc - b.ttc);
     const best = Math.min(...offers.map((o) => o.ttc)), mid = ttcOf(p);
+    const labels = ZONE_LABEL(me);
     return `${head("price", "Comparateur de prix", `${offers.length} boutique${offers.length > 1 ? "s" : ""}`)}
       <div class="price-head"><div class="price-big">${priceTag(mid, "big")}<small>prix indicatif par moteur</small></div>
         <p>Médiane de ${offers.length} offre${offers.length > 1 ? "s" : ""} relevée${offers.length > 1 ? "s" : ""} le ${new Date(p.date).toLocaleDateString("fr-FR")}, convertie${offers.length > 1 ? "s" : ""} en euros au taux BCE du jour. Boutiques hors Europe : TVA de 20 % ajoutée ; frais de port et de douane non compris.</p></div>
-      <div class="offers">${offers.map((o) => `
+      <div class="o-bar">${picker}<small>Les boutiques de votre pays s'affichent en premier.</small></div>
+      <div class="offers">${offers.map((o, i) => `${i === 0 || offers[i - 1].zone !== o.zone ? `<p class="o-zone">${esc(labels[o.zone])}</p>` : ""}
         <a class="offer ${o.ttc === best ? "best" : ""} ${o.stock ? "" : "oos"}" href="${esc(o.url)}" target="_blank" rel="noopener">
-          <span class="o-shop">${esc(o.shop)}${o.ttc === best ? `<em>Meilleur prix</em>` : ""}</span>
+          <span class="o-shop"><i class="o-flag" title="${esc(COUNTRIES[o.cc] || o.cc)}">${flag(o.cc)}</i>${esc(o.shop)}${o.ttc === best ? `<em>Meilleur prix</em>` : ""}</span>
           <span class="o-price">${priceTag(o.ttc)}<small class="o-orig">${(() => {
             const sym = o.cur === "USD" ? "$" : o.cur === "GBP" ? "£" : "€";
             const f = (v) => `${v.toLocaleString("fr-FR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ${sym}`;
@@ -327,7 +365,7 @@
           })()}</small></span>
           <span class="o-stock">${o.stock ? "En stock" : "Rupture"}</span>
           <span class="o-go">Voir l'offre →</span>
-        </a>`).join("")}</div>`;
+        </a>`).join("")}</div>${more}`;
   }
 
   async function loadSocial(ref) {
@@ -1089,6 +1127,13 @@
     if (ev.target.matches("[data-gnote]")) {
       const box = ev.target.closest("[data-garage]"), cur = box.querySelector("[data-gset][aria-pressed=true]");
       if (cur) { try { await api("garage_set", { ref: box.dataset.garage, status: cur.dataset.gset, note: ev.target.value }); toast("Note enregistrée.", "good"); } catch (e) { toast(e.message, "bad"); } }
+      return;
+    }
+    if (ev.target.matches("[data-country]")) {
+      chosenCountry = ev.target.value;
+      try { localStorage.setItem("mm-country", ev.target.value); } catch (e) { /* storage blocked: this page only */ }
+      const box = ev.target.closest("#d-prix"), m = motorBy(decodeURIComponent((location.hash.match(/^#m\/(.+)$/) || [])[1] || ""));
+      if (box && m) { box.innerHTML = pricesBlock(m); box.querySelector("[data-country]")?.focus(); }
       return;
     }
     if ((ev.target.id === "pf-file" || ev.target.id === "pf-bfile") && ev.target.files[0]) {
