@@ -173,27 +173,16 @@ class ManufacturerScraper(BaseScraper):
     source_name = "manufacturer"
 
     # Known manufacturer product pages
+    # (iFlight, GEPRC, Flywoo and BrotherHobby refuse robots or no longer answer: left out)
     MANUFACTURER_URLS = {
         "T-Motor": [
-            "https://www.tmotor.com/category/Multirotor-Motor.html",
+            "https://store.tmotor.com/",
         ],
         "BetaFPV": [
             "https://betafpv.com/collections/brushless-motors",
         ],
         "Emax": [
-            "https://emax-usa.com/collections/motors",
-        ],
-        "iFlight": [
-            "https://www.iflight-rc.com/index.php?route=product/category&path=25_56",
-        ],
-        "GepRC": [
-            "https://geprc.com/category/motors/",
-        ],
-        "Flywoo": [
-            "https://flywoo.net/collections/motors",
-        ],
-        "BrotherHobby": [
-            "https://www.brotherhobbystore.com/motor-c0001",
+            "https://shop.emax-usa.com/collections/brushless-motors",
         ],
     }
 

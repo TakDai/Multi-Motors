@@ -13,6 +13,9 @@ value. Anything not recognised is left as it is.
 - LIPO         -> "4S-6S"
 - VIS HEL      -> "M5" (thread sizes in capitals)
 - D / H STATOR -> taken from the class (2306.5 -> 23 and 6.5)
+- POIDS        -> emptied when three times the usual weight of the stator size (a pack, a box, "100%")
+- misread rows -> removed: a KV read as the size (REF "TMOT-2020-2020" next to the real
+                  "TMOT-2207.5-2020"), an EMAX part number read as the model ("EMX-MT-0409 GT2215")
 
 Usage: python tools/normalize.py
 """
@@ -154,12 +157,95 @@ def stator(r):
     return n
 
 
+def _num(v):
+    try:
+        return float(str(v).replace(",", "."))
+    except ValueError:
+        return None
+
+
+def key(s):
+    return re.sub(r"[^a-z0-9]", "", str(s).lower())
+
+
+def misread(rows):
+    """Rows born from a misread shop title, when the catalogue has the right one (or will re-add it)."""
+    kvs = {}
+    for r in rows:
+        kvs.setdefault((key(r["MARQUE"]), key(r["NOM"]), _num(r["KV"])), []).append(r)
+    drop = set()
+    for r in rows:
+        kv, cls = _num(r["KV"]), _num(r["CLASSE"])
+        same = kvs[(key(r["MARQUE"]), key(r["NOM"]), kv)]
+        if kv and cls == kv and any(o is not r and _num(o["CLASSE"]) != kv for o in same):
+            drop.add(r["REF"])
+        if re.match(r"EMX[-=\s]?MT", r["NOM"], re.I):
+            drop.add(r["REF"])
+    return drop
+
+
+def kv_as_size(rows):
+    """Old misreads: the KV taken for the size ("TBS-3600-3600") and written at the end of the name
+    ("PODRACER 1505 3600"). The KV leaves the name, the size comes back from the name."""
+    n = 0
+    for r in rows:
+        kv = _num(r["KV"])
+        if not kv or kv < 1000:
+            continue
+        k = f"{kv:g}"
+        if re.search(rf"\s{re.escape(k)}$", r["NOM"]) and r["NOM"][: -len(k)].strip():
+            r["NOM"] = r["NOM"][: -len(k)].strip()
+            n += 1
+        if _num(r["CLASSE"]) == kv:
+            size = re.search(r"(?<![\d.])(\d{4}(?:[.,]\d)?)(?![\d])", r["NOM"])
+            r["CLASSE"] = size.group(1).replace(",", ".") if size and _num(size.group(1)) != kv else ""
+            n += 1
+    return n
+
+
+def duplicates(rows):
+    """Same brand, model, KV and size twice: the row with the most filled fields is kept."""
+    best = {}
+    for r in rows:
+        k = (key(r["MARQUE"]), key(r["NOM"]), _num(r["KV"]), (r["CLASSE"] or "").replace(",", "."))
+        if not k[2]:
+            continue
+        filled = sum(1 for v in r.values() if v)
+        if k not in best or filled > best[k][0]:
+            best[k] = (filled, r["REF"])
+    keep = {ref for _, ref in best.values()}
+    return {r["REF"] for r in rows if _num(r["KV"]) and r["REF"] not in keep}
+
+
+def heavy(rows):
+    """Weights more than three times the median of their stator size (multirotor sizes known from 8 motors)."""
+    by = {}
+    for r in rows:
+        if _num(r["POIDS"]) and r["CLASSE"]:
+            by.setdefault(r["CLASSE"].replace(",", ".")[:4], []).append(_num(r["POIDS"]))
+    # Only multirotor sizes (stator up to 24 mm): above, the airplane "can size" naming mixes up the medians
+    med = {c: sorted(w)[len(w) // 2] for c, w in by.items() if len(w) >= 8 and c[:2].isdigit() and int(c[:2]) <= 24}
+    n = 0
+    for r in rows:
+        m = med.get((r["CLASSE"] or "").replace(",", ".")[:4])
+        if m and (_num(r["POIDS"]) or 0) > 3 * m:
+            r["POIDS"] = ""
+            n += 1
+    return n
+
+
 def main():
     with CAT.open(encoding="utf-8") as fh:
         reader = csv.DictReader(fh)
         cols, rows = list(reader.fieldnames), list(reader)
+    fixed_kv = kv_as_size(rows)
+    drop = misread(rows) | duplicates(rows)
+    rows = [r for r in rows if r["REF"] not in drop]
     changed = {c: 0 for c in RULES}
     changed["CLASSE"] = changed["STATOR"] = changed["IMG"] = 0
+    changed["POIDS aberrant"] = heavy(rows)
+    changed["lignes mal lues ou en double retirées"] = len(drop)
+    changed["KV pris pour la taille"] = fixed_kv
     rejected = rejected_photos()
     for r in rows:
         if r.get("IMG") in rejected:

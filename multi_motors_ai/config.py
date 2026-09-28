@@ -127,13 +127,8 @@ STATOR_SIZES = [
     "2807", "2808", "3110", "3115",
 ]
 
-# Source websites for scraping
+# Source websites for scraping (GetFPV and iFlight refuse robots / no longer answer: left out)
 SCRAPE_SOURCES = {
-    "getfpv": {
-        "base_url": "https://www.getfpv.com",
-        "search_url": "https://www.getfpv.com/catalogsearch/result/?q={query}",
-        "category": "motors",
-    },
     "racedayquads": {
         "base_url": "https://www.racedayquads.com",
         "search_url": "https://www.racedayquads.com/search?type=product&q={query}",
@@ -147,11 +142,6 @@ SCRAPE_SOURCES = {
     "betafpv": {
         "base_url": "https://betafpv.com",
         "search_url": "https://betafpv.com/search?q={query}",
-        "category": "motors",
-    },
-    "iflight": {
-        "base_url": "https://www.iflight-rc.com",
-        "search_url": "https://www.iflight-rc.com/index.php?route=product/search&search={query}",
         "category": "motors",
     },
 }

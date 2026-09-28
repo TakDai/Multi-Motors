@@ -82,7 +82,9 @@ def main():
         brands = sorted(name for d, name in brand_first.values() if d == day)
         items.append({"type": "moteurs", "date": day, "count": n, "models": models,
                       "title": f"{n:,} nouveau{'x' if n > 1 else ''} moteur{'s' if n > 1 else ''} au catalogue".replace(",", " "),
-                      "newBrands": brands[:40], "newBrandsCount": len(brands), "refs": show[:24]})
+                      "newBrands": brands[:40], "newBrandsCount": len(brands), "refs": show[:24],
+                      # Every motor of the day, for the "see them all" list (brand, model, KV order)
+                      "all": sorted(refs, key=lambda r: (by_ref[r]["MARQUE"].lower(), by_ref[r]["NOM"].lower(), float(by_ref[r]["KV"] or 0) if re.fullmatch(r"\d+(\.\d+)?", by_ref[r]["KV"] or "") else 0))[:600]})
     items.sort(key=lambda i: (i["date"], i["type"] == "site"), reverse=True)
     OUT.parent.mkdir(parents=True, exist_ok=True)
     OUT.write_text(json.dumps(items[:100], ensure_ascii=False, separators=(",", ":")), encoding="utf-8")

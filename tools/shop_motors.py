@@ -2,7 +2,7 @@
 """Add to the catalogue the motors sold by the shops that it does not list yet.
 
 Reads the whole motor category of each shop (Shopify collections, Drone-FPV-Racer,
-Studiosport), recognises brand, model, stator class and KV in each product, and:
+Studiosport, Drone Doctors, FPV Fly, Team BlackSheep), recognises brand, model, stator class and KV in each product, and:
 - skips it when the catalogue already has this brand + model + KV;
 - adds the missing KV to a model the catalogue knows;
 - adds the model otherwise.
@@ -29,7 +29,11 @@ COLLECTIONS = {
     "rotorriot.com": "drone-motors", "www.speedyfpv.com": "brushless-motors", "www.fpvfaster.com": "motor",
     "www.unmannedtechshop.co.uk": "motors", "shop.emax-usa.com": "brushless-motors", "rushfpv.net": "motor",
     "betafpv.com": "motors", "www.hglrc.com": "motors", "www.diatone.us": "motor", "sunnyskyusa.com": "multirotor-motors",
+    "wrekd.com": "all-motors",  # rcdrone.top: prices only, its titles pile up keywords (unusable model names)
 }
+# Shops read through their adapter (tools/shops.py): whole motor category, matched here
+CATEGORY_SHOPS = ("Drone-FPV-Racer", "Studiosport", "Drone Doctors", "FPV Fly", "Team BlackSheep")
+EXCLUDED = ROOT / "catalogue" / "exclus.txt"
 # Not a motor on its own, even in a motor category
 NOT_MOTOR = re.compile(r"\b(bells?|screws?|shafts?|bearings?|props?|propellers?|frames?|esc|stack|mount|mounts|guards?|"
                        r"covers?|protectors?|wires?|cables?|tools?|magnets?|stator only|replacement|spare|kit|bnf|pnp|rtf|"
@@ -42,7 +46,7 @@ NOISE = re.compile(r"\b(brushless|fpv|drone|racing|race|freestyle|cinematic|cine
 NOT_BRANDS = {"editionyukisavage", "unite", "camerabutter", "fpvstorerc", "fpvelite", "hqprop", "sequre", "quadifier", "hypetrain"}
 # Accessories whose title mentions the motor they fit ("bearing for 22xx motors")
 ACCESSORY = re.compile(r"\b(roulements?|bearings?|plugs?|screws?|vis|magnets?|aimants?|stators? only|connecteurs?|connectors?|"
-                       r"guards?|tubes?|protections?|covers?|brushed|coreless|[àa] balais|capacitors?|condensateurs?|dampers?|amortisseurs?|dc)\b", re.I)  # not brushless motors
+                       r"guards?|tubes?|protections?|covers?|brushed|coreless|[àa] balais|capacitors?|condensateurs?|dampers?|amortisseurs?|dc|rechange|spare bell)\b", re.I)  # not brushless motors
 # Words that only mean "accessory" when the title gives no KV ("spare part motor 16000KV" is a motor)
 MAYBE_ACCESSORY = re.compile(r"\b(replacement|spare|kit|bells?|cloches?|shafts?)\b", re.I)
 COLORS = r"(black|white|red|blue|green|orange|gold|golden|silver|grey|gray|purple|pink|yellow|rainbow|royal|gunmetal|titanium|" \
@@ -75,7 +79,7 @@ def shopify_products(host, handle):
 def other_products():
     out = []
     for a in ADAPTERS:
-        if a.name in ("Drone-FPV-Racer", "Studiosport"):
+        if a.name in CATEGORY_SHOPS:
             for it in a.search(""):
                 out.append({"title": it["title"], "vendor": "", "body": "", "url": it["url"], "kvs": [],
                             "images": it.get("images", []), "shop": a.host, "adapter": a, "item": it})
@@ -116,15 +120,18 @@ def model_of(title, brand, from_adapter=False):
             and not re.fullmatch(rf"\s*({COLORS}\s*)+", x, re.I)
             and not re.fullmatch(r"\s*(" + NOISE.pattern.strip("\\b()") + r"|\s)+\s*", x, re.I)]
     t = " ".join(keep or parts[:1])
-    t = re.sub(r"\b\d{3,5}\s*kv(?![a-z\d])|\bkv\s*\d{3,5}\b", " ", t, flags=re.I)
+    t = re.sub(r"\b\d{3,5}(?:\s*/\s*\d{3,5})*\s*kv(?![a-z\d])|\bkv\s*\d{3,5}\b", " ", t, flags=re.I)
+    t = re.sub(r"\b(?:c?cw\s+)?(?:or|ou)\s+c?cw\b", " ", t, flags=re.I)  # "CW or CCW"
     t = re.sub(r"(?<![\w.])\d{1,2}\s*(?:[-~]|to)?\s*\d{0,2}\s*s\b(?:\s*lipo)?", " ", t, flags=re.I)
     t = re.sub(r"\b\d+(?:\.\d+)?\s*mm\s*shaft\b|\bw/\s*m\d\s*shaft\b|\b[\d.]+(?:\s*-\s*[\d.]+)?\s*(?:inch(?:es)?|\")(?=\s|$)", " ", t, flags=re.I)
     t = re.sub(r"\b\d\s*(?:x|pcs?|pack|p)\b|\bx\s*\d\b|\bset of \d\b|\blot de \d\b|\b\d-pack\b|\bspare parts?\b|\bcombo\b|\bpairs?\b|"
                r"\bpower system\b|\b(?:2x\s*)?c?cw\b", " ", t, flags=re.I)
-    for w in re.split(r"[\s-]+", brand) + [brand] + [a for a, b in ALIASES.items() if b == brand]:
-        t = re.sub(rf"\b{re.escape(w)}\b", " ", t, flags=re.I)
+    t = re.sub(r"\bEMX[-=\s]*MT[-\s]*\d+[-\s]*", " ", t, flags=re.I)  # EMAX part numbers ("EMX-MT-0409 GT2215")
+    # Longest spellings first: "Axis Flying" goes as a whole before "Axis" alone
+    for w in sorted(re.split(r"[\s-]+", brand) + [brand] + [a for a, b in ALIASES.items() if b == brand], key=len, reverse=True):
+        t = re.sub(rf"\b{re.escape(w)}s?\b", " ", t, flags=re.I)
     # Brand written with spaces or hyphens (Flash Hobby, T-Motor) and shop house marks
-    t = re.sub(r"\b" + r"[\s-]?".join(map(re.escape, key(brand))) + r"\b", " ", t, flags=re.I)
+    t = re.sub(r"\b" + r"[\s-]?".join(map(re.escape, key(brand))) + r"s?\b", " ", t, flags=re.I)
     t = re.sub(r"\b(rdq|rotor riot|pyrodrone|newbeedrone|speedyfpv|fpvfaster|moteur|moteurs)\b", " ", t, flags=re.I)
     t = re.sub(r"\b(fixed wing|long shaft|power|\d+(?:-\d+)?\s*cc|mobula\d*|tinyhawk\s*\w*|kit(?: de \d+)?|by|hobby|"
                r"(?:to|for) .*drones?|lig?h?tweight)\b", " ", t, flags=re.I)
@@ -154,6 +161,8 @@ def main():
     for r in rows:
         known.setdefault(key(r["MARQUE"]), []).append(r)
     refs = {r["REF"] for r in rows}
+    # References that must never come back (not motors, duplicates): catalogue/exclus.txt
+    excluded = {l.strip() for l in EXCLUDED.read_text(encoding="utf-8").splitlines() if l.strip() and not l.startswith("#")} if EXCLUDED.exists() else set()
 
     products = [p for h, c in COLLECTIONS.items() for p in shopify_products(h, c)] + other_products()
     print(f"{len(products)} produits lus", flush=True)
@@ -172,7 +181,9 @@ def main():
             skipped["marque inconnue"] += 1
             continue
         model = model_of(title, brand, bool(p.get("adapter")))
-        cls = re.search(r"(?<![\d.])(\d{4}(?:[.,]\d)?)(?![\d])", title)
+        # Size of the stator: 4 digits that are neither a KV ("2480KV", "KV2480", "1700/2400KV") nor a part number
+        clean = re.sub(r"\bEMX[-=\s]*MT[-\s]*\d+|\bkv\s*\d{3,5}\b|\b\d{3,5}(?:\s*/\s*\d{3,5})*\s*kv", " ", title, flags=re.I)
+        cls = re.search(r"(?<![\d.])(\d{4}(?:[.,]\d)?)(?![\d])", clean)
         cls = cls.group(1).replace(",", ".") if cls else ""
         # The stator size is part of the name: two sizes of a range are two models
         if cls and cls not in model.replace(",", "."):
@@ -202,6 +213,8 @@ def main():
         specs = parse(body, title) if body else {}
         for kv in missing:
             ref = f"{key(brand)[:4].upper()}-{cls or 'X'}-{kv or 'X'}"
+            if ref in excluded:
+                continue
             base, i = ref, 2
             while ref in refs:
                 ref, i = f"{base}-{i}", i + 1

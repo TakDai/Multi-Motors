@@ -143,6 +143,8 @@ def main(out):
     (out / "classe").mkdir(exist_ok=True)
     (out / "taille").mkdir(exist_ok=True)
 
+    class_pages = {c for c, ks in classes.items() if len(ks) >= 2}  # a stator size page exists from 2 models
+
     # One page per model
     for k, m in fams.items():
         b, n = k
@@ -168,7 +170,7 @@ def main(out):
                 + (", vidéos de test" if vids else "") + " sur Multi-Motors.")
         body = f"""<article class="s-model">
 <div class="s-hero">{f'<img src="/{e(img)}" alt="Moteur brushless {e(b)} {e(n)}" width="260" height="260">' if img else ""}
-<div><p class="s-kicker"><a href="/marque/{slug(b)}.html">{e(b)}</a>{f' · <a href="/classe/{slug(cls[:4])}.html">Classe {e(cls)}</a>' if cls else ""}{f' · <a href="/taille/{sz[0]}.html">{e(sz[2].split(":")[0])}</a>' if sz else ""}</p>
+<div><p class="s-kicker"><a href="/marque/{slug(b)}.html">{e(b)}</a>{(f' · <a href="/classe/{slug(cls.replace(",", ".")[:4])}.html">Classe {e(cls)}</a>' if cls.replace(",", ".")[:4] in class_pages else f" · Classe {e(cls)}") if cls else ""}{f' · <a href="/taille/{sz[0]}.html">{e(sz[2].split(":")[0])}</a>' if sz else ""}</p>
 <h1>Moteur {e(b)} {e(n)}</h1>
 <p class="s-lead">Moteur brushless{f" de classe {e(cls)}" if cls else ""} pour drone FPV{f", disponible en {len(kvs)} versions ({e(', '.join(kvs[:-1]))} et {e(kvs[-1])} KV)" if len(kvs) > 1 else (f", {e(kvs[0])} KV" if kvs else "")}{f", poids {e(weight)} g" if weight else ""}.{f" Utilisation : {e(first['UTILISATION'])}." if first.get("UTILISATION") else ""}</p>
 {f'<p class="s-price">À partir de <b>{low:.2f} €</b> par moteur{f" (jusqu&#39;à {high:.2f} €)" if high and high > low else ""} chez {len(shops)} boutique{"s" if len(shops) > 1 else ""} : {e(", ".join(shops))}.</p>' if low else ""}
