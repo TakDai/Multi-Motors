@@ -8,11 +8,15 @@ version); photos whose fingerprints differ by at most MAX_DIST bits are the same
 picture and only the first one is kept. The family's thumbnails
 (site/data/thumbs.json) count as already shown.
 
+Photos that can no longer be shown are removed too: gone from the shop (HTTP 4xx,
+e.g. a CDN that refuses hot-linking), too small to be a photo (under 150 px: flags,
+logos, "checkout" buttons), or listed in catalogue/photos_rejetees.txt (checked by eye).
+
 Fingerprints are cached in catalogue/photos_hash.json so a photo is downloaded once.
 
 Usage: python tools/photos_dedupe.py
 """
-import csv, io, json
+import csv, io, json, re
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 import requests
@@ -23,7 +27,10 @@ CAT = ROOT / "catalogue" / "moteurs.csv"
 PHOTOS = ROOT / "site" / "data" / "photos.json"
 THUMBS = ROOT / "site" / "data" / "thumbs.json"
 CACHE = ROOT / "catalogue" / "photos_hash.json"
+REJECTED = ROOT / "catalogue" / "photos_rejetees.txt"
 MAX_DIST = 3
+MIN_SIDE = 150
+GONE, SMALL = "gone", "small"  # cache values for photos that can't be shown
 UA = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124 Safari/537.36"}
 
 
@@ -52,11 +59,15 @@ def fingerprint(url):
     try:
         if url.startswith("http"):
             r = requests.get(url, headers=UA, timeout=25)
+            if 400 <= r.status_code < 500:
+                return url, GONE
             if not r.ok:
                 return url, None
             img = Image.open(io.BytesIO(r.content))
         else:
             img = Image.open(ROOT / "site" / url)
+        if min(img.size) < MIN_SIDE:
+            return url, SMALL
         return url, dhash(flatten(img))
     except Exception:  # unreachable or not an image
         return url, None
@@ -76,18 +87,24 @@ def main():
             fam_refs.setdefault(f"{r['MARQUE']}|{r['NOM']}", []).append(r["REF"])
 
     todo = {u for k, v in photos.items() for u in (v or [])} | {thumbs[r] for k in photos for r in fam_refs.get(k, []) if r in thumbs}
-    todo = [u for u in todo if u not in cache]
+    todo = [u for u in todo if cache.get(u) is None]  # new, or unreachable last time
     with ThreadPoolExecutor(16) as ex:
         for url, h in ex.map(fingerprint, todo):
             cache[url] = h
 
-    removed = 0
+    rejected = set()
+    if REJECTED.exists():
+        rejected = {re.split(r"\s+#", l)[0].strip() for l in REJECTED.read_text(encoding="utf-8").splitlines()}
+    removed = dropped = 0
     for key, urls in photos.items():
         seen = [cache.get(thumbs[r]) for r in fam_refs.get(key, []) if r in thumbs]
-        seen = [h for h in seen if h]
+        seen = [h for h in seen if h and h not in (GONE, SMALL)]
         kept = []
         for u in urls or []:
             h = cache.get(u)
+            if u in rejected or h in (GONE, SMALL):
+                dropped += 1
+                continue
             if h and any(dist(h, s) <= MAX_DIST for s in seen):
                 removed += 1
                 continue
@@ -97,7 +114,7 @@ def main():
         photos[key] = kept
     PHOTOS.write_text(json.dumps(photos, ensure_ascii=False, separators=(",", ":")))
     CACHE.write_text(json.dumps(cache, separators=(",", ":")))
-    print(f"{removed} photos en double retirées, {sum(len(v) for v in photos.values())} photos gardées "
+    print(f"{removed} photos en double et {dropped} photos inutilisables retirées, {sum(len(v) for v in photos.values())} photos gardées "
           f"pour {sum(1 for v in photos.values() if v)} modèles")
 
 

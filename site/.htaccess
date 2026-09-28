@@ -20,7 +20,7 @@ AddType image/webp .webp
 
 # Compression des textes
 <IfModule mod_deflate.c>
-  AddOutputFilterByType DEFLATE text/html text/css text/csv text/plain application/javascript application/json image/svg+xml
+  AddOutputFilterByType DEFLATE text/html text/css text/csv text/plain text/xml application/xml application/javascript application/json image/svg+xml
 </IfModule>
 
 # Cache : images et polices longtemps, pages et données à revalider (mises à jour chaque jour)

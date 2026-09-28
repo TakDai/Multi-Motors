@@ -127,6 +127,14 @@ def class_from_name(r):
     return 1
 
 
+def rejected_photos():
+    """Photos checked by eye as not showing the motor (catalogue/photos_rejetees.txt)."""
+    p = ROOT / "catalogue" / "photos_rejetees.txt"
+    if not p.exists():
+        return set()
+    return {re.split(r"\s+#", l)[0].strip() for l in p.read_text(encoding="utf-8").splitlines() if l.startswith("http")}
+
+
 def stator(r):
     """Stator size from the class (2306.5 -> 23 x 6.5): fixes ",5" and "07" left by the sheet."""
     m = re.fullmatch(r"(\d{2})(\d{2}(?:[.,]\d+)?)", (r.get("CLASSE") or "").strip())
@@ -151,8 +159,12 @@ def main():
         reader = csv.DictReader(fh)
         cols, rows = list(reader.fieldnames), list(reader)
     changed = {c: 0 for c in RULES}
-    changed["CLASSE"] = changed["STATOR"] = 0
+    changed["CLASSE"] = changed["STATOR"] = changed["IMG"] = 0
+    rejected = rejected_photos()
     for r in rows:
+        if r.get("IMG") in rejected:
+            r["IMG"] = ""
+            changed["IMG"] += 1
         changed["CLASSE"] += class_from_name(r)
         changed["STATOR"] += stator(r)
         for c, rule in RULES.items():

@@ -65,11 +65,13 @@ jobs:
           python tools/photos.py || true
           python tools/photos_sites.py || true
           python tools/photos_dedupe.py || true
+          python tools/photos_frame.py || true
           python tools/bench.py || true
 
       - name: Miniatures et fil d'actualité
         run: |
           python tools/thumbs.py || true
+          python tools/ranking.py || true
           python tools/logos.py || true
           python tools/actus.py || true
 
