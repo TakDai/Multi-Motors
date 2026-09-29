@@ -159,14 +159,28 @@
     setTimeout(() => t.classList.add("out"), 3600);
     setTimeout(() => t.remove(), 4100);
   }
+  // The login window opens as a plain dialog with its own backdrop: a modal dialog sits in the
+  // browser's top layer, above the fill-in menus of password managers (Bitwarden, 1Password…),
+  // which then cannot be seen or clicked
   function modal(html, cls = "") {
-    const d = $("modal");
+    const d = $("modal"), plain = /\bm-auth\b/.test(cls);
+    if (d.open && d.matches(":modal") === plain) d.close();
     d.className = cls;
     d.innerHTML = `<button class="m-close" type="button" aria-label="Fermer">×</button>${html}`;
-    if (!d.open) d.showModal();
+    if (!d.open) {
+      if (plain) {
+        d.show();
+        if (!$("m-backdrop")) document.body.insertAdjacentHTML("beforeend", `<div id="m-backdrop" class="m-backdrop"></div>`);
+        (d.querySelector("input:not([type=hidden])") || d).focus();
+      } else d.showModal();
+    }
     return d;
   }
   const closeModal = () => $("modal").open && $("modal").close();
+  // Backdrop of the plain login window: removed when it closes; a click on it or Escape closes it
+  $("modal").addEventListener("close", () => $("m-backdrop")?.remove());
+  document.addEventListener("click", (ev) => { if (ev.target.id === "m-backdrop") closeModal(); });
+  document.addEventListener("keydown", (ev) => { if (ev.key === "Escape" && $("modal").open && !$("modal").matches(":modal")) closeModal(); });
   const when = (at) => {
     const d = new Date((at || "").replace(" ", "T") + "Z");
     return isNaN(d) ? "" : d.toLocaleDateString("fr-FR", { day: "numeric", month: "long", year: "numeric" });
@@ -209,8 +223,8 @@
       ${tab !== "forgot" ? google : ""}${tab !== "forgot" && C.googleId ? `<p class="m-legal">Avec Google, vous acceptez les <a href="cgu.html" target="_blank">conditions d'utilisation</a> et la <a href="confidentialite.html" target="_blank">politique de confidentialité</a>.</p>` : ""}
       <form class="m-form" data-auth="${tab}">
         ${tab === "register" ? `<label>Pseudo<input name="name" required minlength="2" maxlength="40" autocomplete="nickname"></label>` : ""}
-        <label>Email<input name="email" type="email" required autocomplete="email"></label>
-        ${tab !== "forgot" ? `<label>Mot de passe<input name="password" type="password" required minlength="8" autocomplete="${tab === "register" ? "new-password" : "current-password"}"></label>` : ""}
+        <label>Email<input name="email" id="auth-email" type="email" required autocomplete="${tab === "register" ? "email" : "username"}" autocapitalize="off" spellcheck="false"></label>
+        ${tab !== "forgot" ? `<label>Mot de passe<input name="password" id="auth-password" type="password" required minlength="8" autocomplete="${tab === "register" ? "new-password" : "current-password"}"></label>` : ""}
         ${tab === "register" ? `<label class="m-accept"><input type="checkbox" name="accept" value="1" required><span>J'accepte les <a href="cgu.html" target="_blank">conditions d'utilisation</a> et la <a href="confidentialite.html" target="_blank">politique de confidentialité</a>.</span></label>` : ""}
         <p class="m-error" role="alert" hidden></p>
         <button class="btn-red" type="submit">${tab === "register" ? "Créer mon compte" : tab === "forgot" ? "Envoyer le lien" : "Se connecter"}</button>
