@@ -36,6 +36,11 @@ function install_schema(): void {
             created_at VARCHAR(19) NOT NULL, PRIMARY KEY (user_id, ref))$engine",
         "CREATE TABLE IF NOT EXISTS history (
             user_id INT NOT NULL, ref VARCHAR(64) NOT NULL, at VARCHAR(19) NOT NULL, PRIMARY KEY (user_id, ref))$engine",
+        "CREATE TABLE IF NOT EXISTS bugs (
+            id $id, user_id INT NULL, category VARCHAR(40) NOT NULL, body TEXT NOT NULL, url VARCHAR(500) NULL,
+            selector VARCHAR(500) NULL, snippet TEXT NULL, element_text VARCHAR(300) NULL, viewport VARCHAR(30) NULL,
+            agent VARCHAR(300) NULL, email VARCHAR(190) NULL, status VARCHAR(12) NOT NULL DEFAULT 'open',
+            note TEXT NULL, created_at VARCHAR(19) NOT NULL)$engine",
         "CREATE TABLE IF NOT EXISTS throttle (
             kind VARCHAR(20) NOT NULL, k VARCHAR(190) NOT NULL, at VARCHAR(19) NOT NULL)$engine",
     ];

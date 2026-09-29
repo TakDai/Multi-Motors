@@ -47,6 +47,7 @@ try {
     db()->query('SELECT 1 FROM garage LIMIT 1');
     db()->query('SELECT rating FROM comments LIMIT 1');
     db()->query('SELECT extra FROM profiles LIMIT 1');
+    db()->query('SELECT 1 FROM bugs LIMIT 1');
 } catch (PDOException $e) {
     install_schema();
 }
@@ -77,6 +78,7 @@ const COLORS = ['#111111', '#ff5757', '#ff9f1c', '#2ec4b6', '#3a86ff', '#8338ec'
 const LEVELS = ['Débutant', 'Intermédiaire', 'Confirmé', 'Expert', 'Pro'];
 const SIZES = ['Whoop', '2″', '2,5″', '3″', '3,5″', '4″', '5″', '6″', '7″', '8″ et +'];
 const VIDEO = ['DJI O4', 'DJI O3', 'DJI Vista / Air Unit', 'Walksnail', 'HDZero', 'Analogique'];
+const BUG_CATEGORIES = ['Affichage', 'Fiche moteur', 'Prix ou boutique', 'Photo ou vidéo', 'Recherche et filtres', 'Compte et profil', 'Lien cassé', 'Autre'];
 const BANNERS = ['couleur', 'coucher', 'ocean', 'foret', 'nuit', 'carbone', 'circuit', 'aurore'];
 
 // Extra pilot details of a profile, only known values (stored as JSON in profiles.extra)
@@ -490,6 +492,7 @@ case 'my_data':
         'historique' => q('SELECT ref, at FROM history WHERE user_id = ?', [$id])->fetchAll(),
         'avis' => q('SELECT ref, body, rating, pros, cons, status, created_at FROM comments WHERE user_id = ?', [$id])->fetchAll(),
         'corrections_proposees' => q('SELECT ref, field, old_value, new_value, source, note, status, created_at FROM suggestions WHERE user_id = ?', [$id])->fetchAll(),
+        'signalements_de_bug' => q('SELECT category, body, url, status, created_at FROM bugs WHERE user_id = ?', [$id])->fetchAll(),
     ];
     header('Content-Type: application/json; charset=utf-8');
     header('Content-Disposition: attachment; filename="multi-motors-mes-donnees.json"');
@@ -509,6 +512,7 @@ case 'account_delete':
     q('DELETE FROM profiles WHERE user_id = ?', [$u['id']]);
     q('DELETE FROM garage WHERE user_id = ?', [$u['id']]);
     q('DELETE FROM history WHERE user_id = ?', [$u['id']]);
+    q('UPDATE bugs SET user_id = NULL, email = NULL WHERE user_id = ?', [$u['id']]);
     q('DELETE FROM comments WHERE user_id = ?', [$u['id']]);
     // Corrections already reviewed stay in the catalogue's history, without any link to the account
     q("DELETE FROM suggestions WHERE user_id = ? AND status = 'pending'", [$u['id']]);
@@ -570,6 +574,40 @@ case 'suggest':
         [$ref, $u['id'], $field, arg('old', 255), $value, arg('source', 500), arg('note', 1000), 'pending', now()]);
     out(['message' => 'Merci ! Votre suggestion sera vérifiée par la modération.']);
 
+// --------------------------------------------------------------- bug reports
+case 'bug_report':
+    // Open to every visitor (signed in or not); the element picked on the page comes with its CSS path
+    if (!$post) fail('POST attendu.', 405);
+    throttle('bug', client_ip(), 6, 60);
+    $cat = arg('category', 40);
+    if (!in_array($cat, BUG_CATEGORIES, true)) fail('Choisissez une catégorie.');
+    $body = arg('body', 3000);
+    if (mb_strlen($body) < 10) fail('Décrivez le problème en quelques mots (10 caractères au moins).');
+    $email = mb_strtolower(arg('email', 190));
+    if ($email !== '' && !valid_email($email)) fail('Adresse email invalide.');
+    $me = current_user();
+    q('INSERT INTO bugs (user_id, category, body, url, selector, snippet, element_text, viewport, agent, email, status, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+        [$me['id'] ?? null, $cat, $body, arg('url', 500), arg('selector', 500), arg('snippet', 2000), arg('element_text', 300),
+         arg('viewport', 30), mb_substr($_SERVER['HTTP_USER_AGENT'] ?? '', 0, 300), $email ?: null, 'open', now()]);
+    out(['message' => 'Le signalement a été envoyé à l\'équipe du site.']);
+
+case 'admin_bugs':
+    require_role('moderator', 'admin');
+    $status = in_array(arg('status'), ['open', 'done', 'rejected'], true) ? arg('status') : 'open';
+    $rows = q('SELECT * FROM bugs WHERE status = ? ORDER BY id DESC LIMIT 300', [$status])->fetchAll();
+    $names = user_names(array_filter(array_column($rows, 'user_id')));
+    foreach ($rows as &$r) $r['author'] = $r['user_id'] ? ($names[$r['user_id']]['name'] ?? '?') : null;
+    out($rows);
+
+case 'bug_update':
+    if (!$post) fail('POST attendu.', 405);
+    require_role('moderator', 'admin');
+    $status = arg('status');
+    if (!in_array($status, ['open', 'done', 'rejected', 'deleted'], true)) fail('Statut inconnu.');
+    if ($status === 'deleted') q('DELETE FROM bugs WHERE id = ?', [(int) arg('id')]);
+    else q('UPDATE bugs SET status = ?, note = ? WHERE id = ?', [$status, arg('note', 1000) ?: null, (int) arg('id')]);
+    out(['ok' => true]);
+
 // --------------------------------------------------------------- moderation
 case 'admin_stats':
     require_role('moderator', 'admin');
@@ -578,6 +616,7 @@ case 'admin_stats':
         'users' => (int) q('SELECT COUNT(*) FROM users')->fetchColumn(),
         'comments' => (int) q("SELECT COUNT(*) FROM comments WHERE status = 'visible'")->fetchColumn(),
         'likes' => (int) q('SELECT COUNT(*) FROM likes')->fetchColumn(),
+        'bugs' => (int) q("SELECT COUNT(*) FROM bugs WHERE status = 'open'")->fetchColumn(),
     ]);
 
 case 'admin_suggestions':
