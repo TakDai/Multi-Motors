@@ -93,6 +93,7 @@ def page(path, title, desc, body, crumbs, ld=None):
 <footer class="s-foot"><p><b>Multi-Motors</b> : le catalogue des moteurs brushless pour drones FPV — fiches techniques, KV, poids, fixation, bancs d'essai, photos, vidéos et comparateur de prix, mis à jour chaque jour.</p>
 <p><a href="/moteurs-brushless.html">Tous les moteurs brushless FPV</a> · {" · ".join(f'<a href="/taille/{s[0]}.html">{e(s[2].split(":")[0])}</a>' for s in SIZES)}</p>
 <p class="s-legal"><a href="/mentions-legales.html">Mentions légales</a> · <a href="/confidentialite.html">Confidentialité et cookies</a> · <a href="/cgu.html">Conditions d'utilisation</a> · <a href="mailto:{CONTACT}">Contact</a></p></footer>
+<script src="/assets/bug.js" defer></script>
 </body>
 </html>
 """

@@ -579,9 +579,9 @@
       return;
     }
     const stats = await get("admin_stats").catch(() => ({}));
-    const tabs = [["suggestions", "Suggestions", stats.pending], ["comments", "Commentaires"], ["users", "Membres", stats.users], ["news", "Actualités"]];
+    const tabs = [["suggestions", "Suggestions", stats.pending], ["bugs", "Bugs", stats.bugs], ["comments", "Commentaires"], ["users", "Membres", stats.users], ["news", "Actualités"]];
     v.innerHTML = `<div class="page"><h1 class="page-title">Administration</h1>
-      <div class="stats">${[["Suggestions en attente", stats.pending], ["Membres", stats.users], ["Commentaires", stats.comments], ["J'aime", stats.likes]].map(([l, n]) => `<div class="stat"><b>${n ?? "—"}</b><span>${l}</span></div>`).join("")}</div>
+      <div class="stats">${[["Suggestions en attente", stats.pending], ["Bugs à traiter", stats.bugs], ["Membres", stats.users], ["Commentaires", stats.comments], ["J'aime", stats.likes]].map(([l, n]) => `<div class="stat"><b>${n ?? "—"}</b><span>${l}</span></div>`).join("")}</div>
       <div class="chips">${tabs.map(([k, l, n]) => `<button class="tab" data-admin-tab="${k}" aria-selected="${k === tab}">${l}${n ? ` (${n})` : ""}</button>`).join("")}</div>
       <div id="admin-body"><p class="note">Chargement…</p></div></div>`;
     const body = $("admin-body");
@@ -600,6 +600,25 @@
             <footer><span>Proposé par <b>${esc(s.author)}</b>${s.reviewer ? ` · traité par ${esc(s.reviewer)}` : ""}</span>
               ${status === "pending" ? `<button class="btn-dark" data-decide="rejected">Refuser</button><button class="btn-red" data-decide="approved">Valider</button>` : ""}</footer>
           </article>`).join("") : `<p class="note">Rien à traiter.</p>`);
+      } else if (tab === "bugs") {
+        const st = ["open", "done", "rejected"].includes(status) ? status : "open";
+        const rows = await get("admin_bugs", { status: st });
+        body.innerHTML = `<div class="chips small">${[["open", "À traiter"], ["done", "Résolus"], ["rejected", "Rejetés"]].map(([k, l]) => `<button class="tab" data-admin-bugs="${k}" aria-selected="${k === st}">${l}</button>`).join("")}</div>` +
+          (rows.length ? rows.map((b) => `
+          <article class="adm-card bug-card" data-bug="${b.id}">
+            <header><span class="bug-cat">${esc(b.category)}</span><time>${when(b.created_at)}</time></header>
+            <p class="bug-body">${esc(b.body).replace(/\n/g, "<br>")}</p>
+            <dl class="bug-meta">
+              ${b.url ? `<div><dt>Page</dt><dd><a href="${esc(b.url)}" target="_blank" rel="noopener">${esc(b.url.replace(/^https?:\/\/[^/]+/, "") || "/")}</a></dd></div>` : ""}
+              ${b.selector ? `<div><dt>Élément</dt><dd><code>${esc(b.selector)}</code>${b.element_text ? `<br><small>« ${esc(b.element_text)} »</small>` : ""}</dd></div>` : ""}
+              ${b.viewport ? `<div><dt>Écran</dt><dd>${esc(b.viewport)}</dd></div>` : ""}
+              ${b.agent ? `<div><dt>Navigateur</dt><dd><small>${esc(b.agent)}</small></dd></div>` : ""}
+            </dl>
+            ${b.snippet ? `<details class="bug-html"><summary>Code HTML de l'élément</summary><pre>${esc(b.snippet)}</pre></details>` : ""}
+            <footer><span>${b.author ? `par <b>${esc(b.author)}</b>` : "visiteur"}${b.email ? ` · <a href="mailto:${esc(b.email)}">${esc(b.email)}</a>` : ""}</span>
+              ${st === "open" ? `<button class="btn-dark" data-bug-set="rejected">Rejeter</button><button class="btn-red" data-bug-set="done">Résolu</button>`
+                : `<button class="btn-dark" data-bug-set="open">Rouvrir</button><button class="btn-red" data-bug-set="deleted">Supprimer</button>`}</footer>
+          </article>`).join("") : `<p class="note">Aucun signalement ${st === "open" ? "à traiter" : st === "done" ? "résolu" : "rejeté"}.</p>`);
       } else if (tab === "comments") {
         const rows = await get("admin_comments");
         body.innerHTML = rows.length ? rows.map((c) => `
@@ -1125,6 +1144,19 @@
     if (!t.closest(".pf-search") && $("pf-results")) $("pf-results").hidden = true;
     const tb = t.closest("[data-admin-tab]"); if (tb) return renderAdmin(tb.dataset.adminTab);
     const st = t.closest("[data-admin-status]"); if (st) return renderAdmin("suggestions", st.dataset.adminStatus);
+    const bs = t.closest("[data-admin-bugs]"); if (bs) return renderAdmin("bugs", bs.dataset.adminBugs);
+    const bu = t.closest("[data-bug-set]");
+    if (bu) {
+      const card = bu.closest("[data-bug]"), to = bu.dataset.bugSet;
+      if (to === "deleted" && !confirm("Supprimer définitivement ce signalement ?")) return;
+      try {
+        await api("bug_update", { id: card.dataset.bug, status: to });
+        card.classList.add("done");
+        toast({ done: "Signalement marqué comme résolu.", rejected: "Signalement rejeté.", open: "Signalement rouvert.", deleted: "Signalement supprimé." }[to], "good");
+        setTimeout(() => renderAdmin("bugs", $("view-admin").dataset.status || "open"), 300);
+      } catch (e) { toast(e.message, "bad"); }
+      return;
+    }
     const dc = t.closest("[data-decide]");
     if (dc) {
       const card = dc.closest("[data-sid]");
