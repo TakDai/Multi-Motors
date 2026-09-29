@@ -83,4 +83,9 @@ jobs:
             exit 0
           fi
           git commit -m "catalogue: nouveaux moteurs du $(date -u +%Y-%m-%d)"
-          git push
+          # The branch may have moved during the run (a merged pull request): replay on top, the new data wins
+          for i in 1 2 3; do
+            git pull --rebase -X theirs origin Moteurs && git push && exit 0
+            sleep 10
+          done
+          exit 1
