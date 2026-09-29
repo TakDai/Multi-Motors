@@ -1610,3 +1610,15 @@ dialog.crop-modal { width: min(640px, calc(100vw - 32px)); }
 .n-table td { padding: 8px 12px; border-bottom: 1px solid rgba(0, 0, 0, .07); white-space: nowrap; }
 .n-table td a { color: #111; font-weight: 700; }
 .n-table tr:hover td { background: #fafafa; }
+
+/* Administration > Bugs */
+.bug-cat { display: inline-block; padding: 3px 10px; border-radius: 10px; background: #ff5757; color: #fff; font: 700 11px var(--font); letter-spacing: .08em; text-transform: uppercase; }
+.bug-body { font-size: 15px; line-height: 1.5; }
+.bug-meta { display: grid; gap: 6px; margin: 10px 0; font-size: 13px; }
+.bug-meta div { display: grid; grid-template-columns: 90px minmax(0, 1fr); gap: 8px; }
+.bug-meta dt { font-weight: 700; color: rgba(0, 0, 0, .55); }
+.bug-meta dd { margin: 0; overflow-wrap: anywhere; }
+.bug-meta code, .bug-html pre { font: 12px ui-monospace, Menlo, monospace; }
+.bug-html summary { cursor: pointer; font: 700 12px var(--font); color: rgba(0, 0, 0, .6); }
+.bug-html pre { max-height: 220px; overflow: auto; margin: 8px 0 0; padding: 10px; border-radius: 8px; background: #f6f6f6; white-space: pre-wrap; word-break: break-all; }
+.adm-card.done { opacity: .4; transition: opacity .3s; }
