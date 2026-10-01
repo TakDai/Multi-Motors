@@ -4,14 +4,17 @@ whose #m/... addresses are not indexed by search engines).
 For every named motor model, every brand, every stator size and every drone size, a plain
 HTML page with the real content (specifications per KV, photo, prices, links), its own title
 and description, structured data (schema.org) and links to the full sheet in the app; plus a
-hub page "moteurs brushless FPV", sitemap.xml and robots.txt.
+hub page "moteurs brushless FPV", a 404 page, sitemap.xml (with the photos, and the real date each
+page last changed), robots.txt and the IndexNow key (Bing, Qwant, DuckDuckGo, Yandex).
+Model pages with too little information (a few figures, no photo, no price) are kept out of the
+index ("noindex, follow") until the daily job completes them: they come in by themselves.
 
 The pages are generated when the site is built for OVH (.github/workflows/ovh-branch.yml),
 never committed: they follow the catalogue every day.
 
 Usage: python tools/seo_pages.py <site output folder>   (e.g. build)
 """
-import csv, html, json, re, sys, unicodedata
+import csv, hashlib, html, json, os, re, sys, unicodedata
 from datetime import date
 from pathlib import Path
 
@@ -21,6 +24,10 @@ SITE = "https://multi-motors.fr"
 CONTACT = "contact@tom-bigot.fr"
 LEGAL_DATE = "1er octobre 2026"
 UNNAMED = re.compile(r"KV · [\d.]+ g$")
+# Public key of the IndexNow protocol (it is published as a file at the root of the site, by design)
+INDEXNOW_KEY = "5c1f0e7a9b3d4e6f8a2c4b6d8e0f1a3c"
+# Search Console / Bing Webmaster Tools verification codes (repository variables, optional)
+VERIFY = {"google-site-verification": os.environ.get("GOOGLE_SITE_VERIFICATION", ""), "msvalidate.01": os.environ.get("BING_SITE_VERIFICATION", "")}
 # Drone sizes, from the stator size (first two digits of the class): what people search for
 SIZES = [
     ("whoop", "Moteurs pour tiny whoop et micro drone", "Whoop et micro drones (65 à 85 mm)", range(5, 10)),
@@ -59,7 +66,7 @@ def num(v):
         return None
 
 
-def page(path, title, desc, body, crumbs, ld=None):
+def page(path, title, desc, body, crumbs, ld=None, index=True):
     """One page: head for search engines and link previews, header, breadcrumb, content, footer."""
     url = f"{SITE}/{path}"
     trail = [("Multi-Motors", "/")] + crumbs
@@ -75,6 +82,8 @@ def page(path, title, desc, body, crumbs, ld=None):
 <title>{e(title)}</title>
 <meta name="description" content="{e(desc)}">
 <link rel="canonical" href="{e(url)}">
+<meta name="robots" content="{"index, follow, max-image-preview:large" if index else "noindex, follow"}">
+{"".join(f'<meta name="{k}" content="{e(v)}">' for k, v in VERIFY.items() if v)}
 <link rel="icon" href="/favicon.ico" sizes="any">
 <link rel="apple-touch-icon" href="/apple-touch-icon.png">
 <meta property="og:type" content="website"><meta property="og:site_name" content="Multi-Motors"><meta property="og:locale" content="fr_FR">
@@ -138,7 +147,16 @@ def main(out):
                 + f'<span class="s-brand">{e(k[0])}</span><b>{e(k[1])}</b><small>{e(" · ".join(x for x in [cls, kvs] if x))}</small></a>')
 
     grid = lambda keys: '<div class="s-grid">' + "".join(card(k) for k in sorted(keys, key=lambda k: (popularity(k), k))) + "</div>"
-    urls = [("", "1.0")]
+    # List pages: the models they show, in order (schema.org ItemList)
+    item_list = lambda name, path, keys: {"@context": "https://schema.org", "@type": "CollectionPage", "name": name.split(" |")[0], "url": f"{SITE}/{path}",
+        "mainEntity": {"@type": "ItemList", "numberOfItems": len(keys), "itemListElement": [
+            {"@type": "ListItem", "position": i + 1, "url": f"{SITE}/{model_url[k]}", "name": f"{k[0]} {k[1]}"} for i, k in enumerate(sorted(keys, key=lambda k: (popularity(k), k))[:30])]}}
+    pages = {"": (None, hashlib.md5((ROOT / "site" / "index.html").read_bytes()).hexdigest())}  # indexed path -> (photo, content hash)
+
+    def emit(path, text, image=None, index=True):
+        (out / path).write_text(text, encoding="utf-8")
+        if index:
+            pages[path] = (image, hashlib.md5(text.encode()).hexdigest())
     (out / "moteur").mkdir(parents=True, exist_ok=True)
     (out / "marque").mkdir(exist_ok=True)
     (out / "classe").mkdir(exist_ok=True)
@@ -182,15 +200,20 @@ def main(out):
 <h2>Moteurs {e(b)} proches</h2>
 {grid([x for x in brands[b] if x != k][:12]) if len(brands[b]) > 1 else "<p>Pas d'autre modèle de cette marque dans le catalogue.</p>"}
 </article>"""
-        ld = {"@context": "https://schema.org", "@type": "Product", "name": f"Moteur brushless {b} {n}", "brand": {"@type": "Brand", "name": b},
-              "category": "Moteur brushless pour drone FPV", "url": f"{SITE}/{model_url[k]}", "description": desc}
-        if img:
-            ld["image"] = f"{SITE}/{img}"
+        # Product data only with prices (without offers, reviews or ratings Google reports it as an error)
+        ld = None
         if low:
-            ld["offers"] = {"@type": "AggregateOffer", "priceCurrency": "EUR", "lowPrice": f"{low:.2f}", "highPrice": f"{high:.2f}", "offerCount": len(offers)}
+            ld = {"@context": "https://schema.org", "@type": "Product", "name": f"Moteur brushless {b} {n}", "brand": {"@type": "Brand", "name": b},
+                  "category": "Moteur brushless pour drone FPV", "url": f"{SITE}/{model_url[k]}", "description": desc,
+                  "offers": {"@type": "AggregateOffer", "priceCurrency": "EUR", "lowPrice": f"{low:.2f}", "highPrice": f"{high:.2f}", "offerCount": len(offers)},
+                  "additionalProperty": [{"@type": "PropertyValue", "name": l, "value": v} for c, l, u in SPECS
+                                         for v in [", ".join(dict.fromkeys(str(r[c]) + (u if u and not str(r[c]).strip().endswith(u.strip()) else "") for r in m if r.get(c)))] if v][:10]}
+            if img:
+                ld["image"] = f"{SITE}/{img}"
+        # A page worth indexing: enough figures, or a photo or prices to show
+        index = len(cols) + 2 * bool(img) + 2 * bool(offers) >= 5
         crumbs = [(b, f"/marque/{slug(b)}.html"), (n, "/" + model_url[k])]
-        (out / model_url[k]).write_text(page(model_url[k], title, desc, body, crumbs, ld), encoding="utf-8")
-        urls.append((model_url[k], "0.6"))
+        emit(model_url[k], page(model_url[k], title, desc, body, crumbs, ld, index=index), image=img and (f"{SITE}/{img}", f"Moteur brushless {b} {n}"), index=index)
 
     # One page per brand
     for b, keys in brands.items():
@@ -198,8 +221,7 @@ def main(out):
         title = f"Moteurs brushless {b} : les {len(keys)} modèles, fiches et prix | Multi-Motors"
         desc = f"Tous les moteurs brushless {b} pour drone FPV : {len(keys)} modèles, KV, poids, classes, fiches techniques et prix comparés."
         body = f"<h1>Moteurs brushless {e(b)}</h1><p class='s-lead'>{len(keys)} modèle{'s' if len(keys) > 1 else ''} de moteurs {e(b)} pour drones FPV (course, freestyle, long range…), du plus populaire au moins connu.</p>{grid(keys)}"
-        (out / p).write_text(page(p, title, desc, body, [("Moteurs brushless", "/moteurs-brushless.html"), (b, "/" + p)]), encoding="utf-8")
-        urls.append((p, "0.7"))
+        emit(p, page(p, title, desc, body, [("Moteurs brushless", "/moteurs-brushless.html"), (b, "/" + p)], item_list(title, p, keys)))
 
     # One page per stator size (at least 2 models)
     for cls, keys in classes.items():
@@ -211,8 +233,7 @@ def main(out):
         desc = f"Comparez les {len(keys)} moteurs brushless {cls} pour drone FPV" + (f" ({sz[2].split(':')[0].lower()})" if sz else "") + " : KV, poids, marques, fiches techniques et prix."
         body = f"<h1>Moteurs brushless {e(cls)}</h1><p class='s-lead'>Stator de {e(cls[:2])} mm de diamètre et {e(cls[2:4])} mm de hauteur" + (f", utilisé pour : {e(sz[2])}" if sz else "") + f". {len(keys)} modèles de {len({k[0] for k in keys})} marques.</p>{grid(keys)}"
         crumbs = [("Moteurs brushless", "/moteurs-brushless.html")] + ([(sz[2].split(":")[0], f"/taille/{sz[0]}.html")] if sz else []) + [(f"Classe {cls}", "/" + p)]
-        (out / p).write_text(page(p, title, desc, body, crumbs), encoding="utf-8")
-        urls.append((p, "0.7"))
+        emit(p, page(p, title, desc, body, crumbs, item_list(title, p, keys)))
 
     # One page per drone size
     for key, h1, label, _ in SIZES:
@@ -223,8 +244,7 @@ def main(out):
         desc = f"{h1} : {len(keys)} moteurs brushless comparés (KV, poids, classe, prix) pour {label.lower()}."
         body = (f"<h1>{e(h1)}</h1><p class='s-lead'>{len(keys)} moteurs brushless pour {e(label.lower())}. Choisissez la classe du stator :</p>"
                 "<p class='s-tags'>" + "".join(f'<a href="/classe/{slug(c)}.html">{e(c)}</a>' for c in cls_here) + f"</p>{grid(keys)}")
-        (out / p).write_text(page(p, title, desc, body, [("Moteurs brushless", "/moteurs-brushless.html"), (label.split(":")[0], "/" + p)]), encoding="utf-8")
-        urls.append((p, "0.8"))
+        emit(p, page(p, title, desc, body, [("Moteurs brushless", "/moteurs-brushless.html"), (label.split(":")[0], "/" + p)], item_list(title, p, keys)))
 
     # Hub page
     p = "moteurs-brushless.html"
@@ -235,10 +255,9 @@ def main(out):
 <h2>Par marque</h2><p class="s-tags">{"".join(f'<a href="/marque/{slug(b)}.html">{e(b)} <small>{len(ks)}</small></a>' for b, ks in sorted(brands.items(), key=lambda x: (-len(x[1]), x[0])))}</p>
 <h2>Par classe de stator</h2><p class="s-tags">{"".join(f'<a href="/classe/{slug(c)}.html">{e(c)} <small>{len(ks)}</small></a>' for c, ks in sorted(classes.items(), key=lambda x: (-len(x[1]), x[0])) if len(ks) >= 2)}</p>
 <h2>Les moteurs les plus populaires</h2>{grid(top)}"""
-    (out / p).write_text(page(p, "Moteurs brushless FPV : catalogue et comparatif par marque, taille et KV | Multi-Motors",
-                              f"Catalogue de {len(fams)} moteurs brushless pour drone FPV : course, freestyle, long range, whoop. Comparez KV, poids, classes, marques et prix.",
-                              body, [("Moteurs brushless", "/" + p)]), encoding="utf-8")
-    urls.append((p, "0.9"))
+    emit(p, page(p, "Moteurs brushless FPV : catalogue et comparatif par marque, taille et KV | Multi-Motors",
+                 f"Catalogue de {len(fams)} moteurs brushless pour drone FPV : course, freestyle, long range, whoop. Comparez KV, poids, classes, marques et prix.",
+                 body, [("Moteurs brushless", "/" + p)], item_list("Moteurs brushless FPV", p, top)))
 
     # Legal pages: text written in pages/, same layout as the other pages
     for f in sorted((ROOT / "pages").glob("*.html")):
@@ -246,15 +265,43 @@ def main(out):
         title = re.search(r"<!-- title: (.*?) -->", src).group(1)
         desc = re.search(r"<!-- description: (.*?) -->", src).group(1)
         body = re.sub(r"<!--.*?-->\n?", "", src, flags=re.S)
-        (out / f.name).write_text(page(f.name, title, desc, f'<div class="s-legal-page">{body}</div>', [(title.split(" |")[0], "/" + f.name)]), encoding="utf-8")
-        urls.append((f.name, "0.3"))
+        emit(f.name, page(f.name, title, desc, f'<div class="s-legal-page">{body}</div>', [(title.split(" |")[0], "/" + f.name)]))
 
+    # 404 page (served by .htaccess for any unknown address), never indexed
+    body404 = ("<h1>Page introuvable</h1><p class='s-lead'>Cette page n'existe pas ou plus : le modèle a peut-être été renommé ou fusionné avec un autre.</p>"
+               "<p><a class='s-btn big' href='/'>Rechercher un moteur</a></p><h2>Parcourir le catalogue</h2>"
+               "<p class='s-tags'>" + "".join(f'<a href="/taille/{s_[0]}.html">{e(s_[2])}</a>' for s_ in SIZES) + "</p>")
+    emit("404.html", page("404.html", "Page introuvable | Multi-Motors", "Cette page n'existe pas ou plus sur Multi-Motors.", body404, [("Page introuvable", "/404.html")], index=False), index=False)
+
+    # Date each page last changed: kept from one build to the next (data/seo-etat.json, read back from the published site)
+    state_file = out / "data" / "seo-etat.json"
+    try:
+        old = json.loads(state_file.read_text())
+    except (OSError, ValueError):
+        old = {}
     today = date.today().isoformat()
-    (out / "sitemap.xml").write_text('<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n'
-                                     + "".join(f"<url><loc>{SITE}/{u}</loc><lastmod>{today}</lastmod><priority>{pr}</priority></url>\n" for u, pr in urls)
-                                     + "</urlset>\n", encoding="utf-8")
-    (out / "robots.txt").write_text(f"User-agent: *\nAllow: /\nDisallow: /api/\n\nSitemap: {SITE}/sitemap.xml\n", encoding="utf-8")
-    print(f"{len(fams)} pages modèle, {len(brands)} marques, {sum(1 for ks in classes.values() if len(ks) >= 2)} classes, {len(SIZES)} tailles, {len(urls)} adresses dans le sitemap")
+    state = {p: [h, old[p][1] if p in old and old[p][0] == h else today] for p, (_, h) in pages.items()}
+    state_file.parent.mkdir(exist_ok=True)
+    state_file.write_text(json.dumps(state, separators=(",", ":")))
+    changed = [f"{SITE}/{p}" for p, (h, d) in state.items() if d == today]
+    (out.parent / "indexnow-urls.txt").write_text("\n".join(changed) + ("\n" if changed else ""), encoding="utf-8")
+
+    sm = ['<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9" xmlns:image="http://www.google.com/schemas/sitemap-image/1.1">\n']
+    for p, (img, _) in pages.items():
+        sm.append(f"<url><loc>{SITE}/{e(p)}</loc><lastmod>{state[p][1]}</lastmod>"
+                  + (f"<image:image><image:loc>{e(img[0])}</image:loc></image:image>" if img else "") + "</url>\n")
+    (out / "sitemap.xml").write_text("".join(sm) + "</urlset>\n", encoding="utf-8")
+    (out / "robots.txt").write_text(f"User-agent: *\nAllow: /\nDisallow: /api/\nDisallow: /data/seo-etat.json\n\nSitemap: {SITE}/sitemap.xml\n", encoding="utf-8")
+    (out / f"{INDEXNOW_KEY}.txt").write_text(INDEXNOW_KEY, encoding="utf-8")
+    # Verification codes in the home page too (Search Console reads the home page)
+    home = out / "index.html"
+    if home.exists() and any(VERIFY.values()):
+        t = home.read_text(encoding="utf-8")
+        tags = "".join(f'<meta name="{k}" content="{e(v)}">\n' for k, v in VERIFY.items() if v and f'name="{k}"' not in t)
+        home.write_text(t.replace("<meta name=\"theme-color\"", tags + "<meta name=\"theme-color\"", 1), encoding="utf-8")
+    thin = sum(1 for k in fams if model_url[k] not in pages)
+    print(f"{len(fams)} pages modèle (dont {thin} trop maigres, hors index pour l'instant), {len(brands)} marques, "
+          f"{sum(1 for ks in classes.values() if len(ks) >= 2)} classes, {len(SIZES)} tailles ; {len(pages)} adresses dans le sitemap, {len(changed)} modifiées aujourd'hui")
 
 
 if __name__ == "__main__":

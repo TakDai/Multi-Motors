@@ -42,7 +42,14 @@ jobs:
             "${{ github.event.repository.default_branch }}" "$(git rev-parse --short HEAD)" > build/LISEZMOI.txt
 
       - name: Pages pour Google (une par modèle, marque, classe et taille) et sitemap
-        run: python3 tools/seo_pages.py build
+        env:
+          # Codes de vérification Search Console / Bing Webmaster Tools (Settings > Secrets and variables > Actions > Variables)
+          GOOGLE_SITE_VERIFICATION: ${{ vars.GOOGLE_SITE_VERIFICATION }}
+          BING_SITE_VERIFICATION: ${{ vars.BING_SITE_VERIFICATION }}
+        run: |
+          # Dates de dernière modification des pages : reprises de la version en ligne (branche ovh)
+          git fetch -q --depth 1 origin ovh && git show FETCH_HEAD:data/seo-etat.json > build/data/seo-etat.json 2>/dev/null || true
+          python3 tools/seo_pages.py build
 
       - name: Versionner les feuilles de style et scripts
         # assets/style.css -> assets/style.css?v=<empreinte> : navigateurs et téléphones chargent la nouvelle version dès qu'un fichier change
@@ -78,3 +85,14 @@ jobs:
           if git diff --cached --quiet; then echo "Rien de nouveau à publier."; exit 0; fi
           git commit -q -m "Site du $(date -u +%F) ($(git -C .. rev-parse --short HEAD))"
           git push -q origin ovh
+
+      - name: Prévenir Bing, Qwant, DuckDuckGo et Yandex des pages modifiées (IndexNow)
+        # Google lit le sitemap (dates de modification à jour) ; IndexNow ne le concerne pas
+        continue-on-error: true
+        run: |
+          [ -s indexnow-urls.txt ] || { echo "Aucune page modifiée."; exit 0; }
+          sleep 120   # le temps qu'OVH récupère la nouvelle version
+          KEY=$(python3 -c "import sys; sys.path.insert(0, 'tools'); import seo_pages; print(seo_pages.INDEXNOW_KEY)")
+          head -n 10000 indexnow-urls.txt | python3 -c "import json, sys; print(json.dumps({'host': 'multi-motors.fr', 'key': '$KEY', 'keyLocation': 'https://multi-motors.fr/$KEY.txt', 'urlList': [l.strip() for l in sys.stdin if l.strip()]}))" > indexnow.json
+          echo "$(wc -l < indexnow-urls.txt) pages signalées"
+          curl -sS -o /dev/null -w "IndexNow : HTTP %{http_code}\n" -H "Content-Type: application/json; charset=utf-8" --data @indexnow.json https://api.indexnow.org/indexnow
