@@ -103,6 +103,7 @@ const PERMS = [
     'bugs' => 'Traiter les signalements de bug',
     'news' => 'Publier et modifier les actualités',
     'coupons' => 'Créer et gérer les codes promo',
+    'partners' => 'Gérer les boutiques partenaires (liens affiliés) et voir les clics',
     'members' => 'Voir les membres et les profils privés',
     'ban' => 'Suspendre ou réactiver des membres',
     'assign' => 'Changer le rôle et les permissions des membres',

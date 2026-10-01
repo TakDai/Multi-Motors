@@ -43,7 +43,7 @@
   // Demo API for the standalone preview: nothing leaves the browser page
   const DEMO_PERMS = { suggestions: "Valider ou refuser les corrections proposées", comments: "Modérer les avis (masquer, supprimer)", bugs: "Traiter les signalements de bug",
     news: "Publier et modifier les actualités", coupons: "Créer et gérer les codes promo", members: "Voir les membres et les profils privés", ban: "Suspendre ou réactiver des membres",
-    assign: "Changer le rôle et les permissions des membres", roles: "Créer et modifier les rôles", settings: "Modifier les réglages du site (bandeau, inscriptions, avis)", logs: "Consulter le journal d'activité" };
+    assign: "Changer le rôle et les permissions des membres", roles: "Créer et modifier les rôles", partners: "Gérer les boutiques partenaires (liens affiliés) et voir les clics", settings: "Modifier les réglages du site (bandeau, inscriptions, avis)", logs: "Consulter le journal d'activité" };
   const D = { users: [], me: null, likes: {}, comments: [], sugg: [], news: [], profiles: {}, garage: {}, history: {}, id: 1, coupons: [], log: [], settings: { registrations: "1", comments: "1", announce_kind: "info" },
     roles: [{ slug: "user", label: "Membre", color: "#888888", perms: [] }, { slug: "moderator", label: "Modération", color: "#3a86ff", perms: ["suggestions", "comments", "bugs", "news", "members"] }, { slug: "admin", label: "Admin", color: "#ff5757", perms: Object.keys(DEMO_PERMS) }] };
   function demoApi(action, d) {
@@ -57,6 +57,7 @@
     const today = now.slice(0, 10);
     const site = () => ({ registrations: true, comments: true, roles: Object.fromEntries(D.roles.map((r) => [r.slug, { label: r.label, color: r.color }])),
       announce: D.settings.announce_on === "1" && D.settings.announce_text ? { text: D.settings.announce_text, link: D.settings.announce_link, kind: D.settings.announce_kind } : null,
+      partners: (D.partners || []).filter((p) => +p.active),
       coupons: D.coupons.filter((c) => +c.active && (!c.starts || c.starts <= today) && (!c.ends || c.ends >= today)) });
     const log = (action, target, detail = "") => D.log.unshift({ id: D.id++, who: me.name, action, target, detail, created_at: now });
     switch (action) {
@@ -127,6 +128,9 @@
       case "coupon_use": { const c = D.coupons.find((x) => x.id === +d.id); if (c) c.uses++; return { ok: true }; }
       case "admin_settings": mod(); return { ...D.settings };
       case "settings_save": mod(); Object.assign(D.settings, d); log("settings", "réglages"); return { ok: true, message: "Réglages enregistrés." };
+      case "admin_partners": mod(); return { partners: (D.partners || []).map((p) => ({ ...p, c7: 0, c30: 0, call: 0 })), shops: [], days: Array.from({ length: 30 }, (_, i) => ({ d: new Date(Date.now() - (29 - i) * 864e5).toISOString().slice(0, 10), n: 0 })) };
+      case "partner_save": { mod(); if (!d.shop || !d.link) throw new Error("Indiquez la boutique et le paramètre d'affiliation."); D.partners = D.partners || []; const p = D.partners.find((x) => x.id === +d.id); const v = { shop: d.shop, domain: d.domain, link: d.link.replace(/^[?&]/, ""), note: d.note, active: d.active === "0" ? 0 : 1 }; if (p) Object.assign(p, v); else D.partners.push({ id: D.id++, ...v }); return { ok: true }; }
+      case "partner_delete": mod(); D.partners = (D.partners || []).filter((p) => p.id !== +d.id); return { ok: true };
       case "admin_log": mod(); return D.log.filter((l) => !q.kind || l.action.startsWith(q.kind));
       case "admin_suggestions": mod(); return D.sugg.filter((s) => s.status === (q.status || "pending"));
       case "moderate_suggestion": { mod(); const s = D.sugg.find((x) => x.id === +d.id); if (s) { s.status = d.decision; if (d.value) s.new_value = d.value; s.reviewer = me.name; s.reviewed_at = now; } return { ok: true }; }
@@ -331,6 +335,27 @@
     if (C.user) refreshCurrent();
   };
 
+  // Every link to a partner shop leaves with the affiliate parameter (product page of the motor, promo codes…);
+  // links to shops are counted
+  let hostShops = null;
+  const shopByHost = (h) => {
+    if (!hostShops) { hostShops = {}; Object.values(C.prices || {}).forEach((x) => (x.offers || []).forEach((o) => { const k = hostOf(o.url); if (k && !hostShops[k]) hostShops[k] = o.shop; })); }
+    return hostShops[h] || "";
+  };
+  const onShopLink = (ev) => {
+    const a = ev.target.closest && ev.target.closest('a[href^="http"]');
+    if (!a || a.closest("#view-admin")) return;
+    let p = null;
+    if (!a.hasAttribute("data-aff")) {
+      p = partnerFor(a.href, a.dataset.shop);
+      if (p) { a.href = affiliate(a.href, p); a.rel = "sponsored noopener"; a.setAttribute("data-aff", ""); }
+    }
+    const shop = a.dataset.shop || (p || partnerFor(a.href, ""))?.shop || shopByHost(hostOf(a.href));
+    if (shop) countClick(shop);
+  };
+  document.addEventListener("click", onShopLink, true);
+  document.addEventListener("auxclick", (ev) => { if (ev.button === 1) onShopLink(ev); }, true);
+
   // Banner, role names and promo codes again after a change in the administration
   async function refreshSite() {
     try { const me = await get("me"); C.site = me.site || C.site; if (me.user) C.user = me.user; } catch (e) { /* keep the previous ones */ }
@@ -353,6 +378,27 @@
     const a = shopKey(c.shop), b = shopKey(shop);
     return a && b && (a === b || a.includes(b) || b.includes(a)) && (!c.brand || !brand || c.brand.toLowerCase() === brand.toLowerCase());
   });
+  // Partner shops (affiliate links set in the administration): their links carry the partner parameter
+  const hostOf = (u) => { try { return new URL(u).hostname.replace(/^www\./, ""); } catch (e) { return ""; } };
+  function partnerFor(url, shop) {
+    const h = hostOf(url);
+    return (C.site.partners || []).find((p) => (shop && shopKey(p.shop) === shopKey(shop)) || (p.domain && h && (h === p.domain || h.endsWith("." + p.domain))));
+  }
+  function affiliate(url, p) {
+    if (!p || !/^https?:\/\//.test(url)) return url;
+    if (p.link.includes("{url}")) return p.link.replace("{url}", encodeURIComponent(url));
+    try {
+      const u = new URL(url);
+      new URLSearchParams(p.link).forEach((v, k) => u.searchParams.set(k, v));
+      return u.href;
+    } catch (e) { return url; }
+  }
+  // Clicks to shops, counted per shop and per day (no visitor data)
+  function countClick(shop) {
+    if (!C.online || DEMO || !shop) return;
+    try { navigator.sendBeacon("api/index.php?action=click", new Blob([JSON.stringify({ shop })], { type: "application/json" })); } catch (e) { /* not counted */ }
+  }
+  const partnerNote = `<p class="o-aff-note"><span class="o-aff">Partenaire</span> Lien affilié : si vous achetez après avoir cliqué, Multi-Motors peut toucher une petite commission, sans que le prix change pour vous. Le classement des offres n'en tient pas compte.</p>`;
   const couponLine = (c) => `<div class="o-coupon"><span class="o-c-lbl">Code promo</span><code>${esc(c.code)}</code>${c.discount ? `<b>${esc(c.discount)}</b>` : ""}
     <small>${esc([c.title, c.ends ? `jusqu'au ${when(c.ends)}` : ""].filter(Boolean).join(" · "))}</small><button type="button" class="mini" data-coupon-copy="${c.id}" data-code="${esc(c.code)}">Copier</button></div>`;
 
@@ -430,7 +476,7 @@
     if (!p || !p.offers?.length) {
       return `${head("price", "Comparateur de prix")}<p class="note">Aucune offre relevée pour ce moteur pour l'instant.</p>${more}`;
     }
-    const offers = p.offers.map((o) => { const cc = o.country || SHOP_COUNTRY[o.shop] || "US"; return { ...o, cc, zone: zoneOf(cc, me), ttc: ttc(o) }; })
+    const offers = p.offers.map((o) => { const cc = o.country || SHOP_COUNTRY[o.shop] || "US"; return { ...o, cc, zone: zoneOf(cc, me), ttc: ttc(o), partner: partnerFor(o.url, o.shop) }; })
       .sort((a, b) => a.zone - b.zone || (!a.stock - !b.stock) || a.ttc - b.ttc);
     const best = Math.min(...offers.map((o) => o.ttc)), mid = ttcOf(p);
     const labels = ZONE_LABEL(me);
@@ -439,8 +485,8 @@
         <p>Médiane de ${offers.length} offre${offers.length > 1 ? "s" : ""} relevée${offers.length > 1 ? "s" : ""} le ${new Date(p.date).toLocaleDateString("fr-FR")}, convertie${offers.length > 1 ? "s" : ""} en euros au taux BCE du jour. Boutiques hors Europe : TVA de 20 % ajoutée ; frais de port et de douane non compris.</p></div>
       <div class="o-bar">${picker}<small>Les boutiques de votre pays s'affichent en premier.</small></div>
       <div class="offers">${offers.map((o, i) => `${i === 0 || offers[i - 1].zone !== o.zone ? `<p class="o-zone">${esc(labels[o.zone])}</p>` : ""}
-        <a class="offer ${o.ttc === best ? "best" : ""} ${o.stock ? "" : "oos"}" href="${esc(o.url)}" target="_blank" rel="noopener">
-          <span class="o-shop"><i class="o-flag" title="${esc(COUNTRIES[o.cc] || o.cc)}">${flag(o.cc)}</i>${esc(o.shop)}${o.ttc === best ? `<em>Meilleur prix</em>` : ""}</span>
+        <a class="offer ${o.ttc === best ? "best" : ""} ${o.stock ? "" : "oos"}" href="${esc(o.partner ? affiliate(o.url, o.partner) : o.url)}" target="_blank" rel="${o.partner ? "sponsored noopener" : "noopener"}" data-shop="${esc(o.partner ? o.partner.shop : o.shop)}"${o.partner ? " data-aff" : ""}>
+          <span class="o-shop"><i class="o-flag" title="${esc(COUNTRIES[o.cc] || o.cc)}">${flag(o.cc)}</i>${esc(o.shop)}${o.ttc === best ? `<em>Meilleur prix</em>` : ""}${o.partner ? `<span class="o-aff" title="Lien affilié">Partenaire</span>` : ""}</span>
           <span class="o-price">${priceTag(o.ttc)}<small class="o-orig">${(() => {
             const sym = o.cur === "USD" ? "$" : o.cur === "GBP" ? "£" : "€";
             const f = (v) => `${v.toLocaleString("fr-FR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ${sym}`;
@@ -448,7 +494,7 @@
           })()}</small></span>
           <span class="o-stock">${o.stock ? "En stock" : "Rupture"}</span>
           <span class="o-go">Voir l'offre →</span>
-        </a>${couponsFor(o.shop, m.MARQUE).map(couponLine).join("")}`).join("")}</div>${more}`;
+        </a>${couponsFor(o.shop, m.MARQUE).map(couponLine).join("")}`).join("")}</div>${offers.some((o) => o.partner) ? partnerNote : ""}${more}`;
   }
 
   async function loadSocial(ref) {
@@ -643,16 +689,16 @@
   // ----------------------------------------------------------------- admin
   // Tabs shown according to the permissions of the member (administrators have them all)
   const ADMIN_TABS = [["dashboard", "Tableau de bord"], ["suggestions", "Corrections", "suggestions", "pending"], ["bugs", "Bugs", "bugs", "bugs"],
-    ["comments", "Avis", "comments"], ["users", "Membres", "members"], ["roles", "Rôles", "roles"], ["coupons", "Codes promo", "coupons"],
+    ["comments", "Avis", "comments"], ["users", "Membres", "members"], ["roles", "Rôles", "roles"], ["coupons", "Codes promo", "coupons"], ["partners", "Partenaires", "partners"],
     ["news", "Actualités", "news"], ["settings", "Réglages", "settings"], ["log", "Journal", "logs"]];
-  const LOG_LABELS = { suggestion: "Correction", comment: "Avis", bug: "Bug", user: "Membre", role: "Rôle", coupon: "Code promo", news: "Actualité", settings: "Réglages" };
+  const LOG_LABELS = { suggestion: "Correction", comment: "Avis", bug: "Bug", user: "Membre", role: "Rôle", coupon: "Code promo", partner: "Partenaire", news: "Actualité", settings: "Réglages" };
   const LOG_VERBS = {
     "suggestion.approved": "a validé une correction", "suggestion.rejected": "a refusé une correction", "comment.hidden": "a masqué un avis",
     "comment.visible": "a rétabli un avis", "comment.deleted": "a supprimé un avis", "bug.done": "a résolu un bug", "bug.rejected": "a rejeté un bug",
     "bug.open": "a rouvert un bug", "bug.deleted": "a supprimé un bug", "user.role": "a changé le rôle de", "user.perms": "a changé les permissions de",
     "user.banned": "a suspendu", "user.unbanned": "a réactivé", "user.verified": "a confirmé l'email de", "user.note": "a annoté la fiche de",
     "role.created": "a créé le rôle", "role.updated": "a modifié le rôle", "role.deleted": "a supprimé le rôle", "coupon.created": "a créé le code",
-    "coupon.updated": "a modifié le code", "coupon.deleted": "a supprimé le code", "news.created": "a publié", "news.updated": "a modifié l'actualité",
+    "coupon.updated": "a modifié le code", "coupon.deleted": "a supprimé le code", "partner.created": "a ajouté la boutique partenaire", "partner.updated": "a modifié la boutique partenaire", "partner.deleted": "a retiré la boutique partenaire", "news.created": "a publié", "news.updated": "a modifié l'actualité",
     "news.deleted": "a supprimé l'actualité", settings: "a modifié les réglages :",
   };
   const COUPON_STATE = { on: ["Actif", "good"], later: ["Programmé", "blue"], expired: ["Expiré", "grey"], off: ["Désactivé", "grey"] };
@@ -713,6 +759,19 @@
       <div class="f-actions">${c.id ? `<button class="btn-dark" type="button" data-coupon-new>Annuler</button>` : ""}<button class="btn-red" type="submit">${c.id ? "Enregistrer le code" : "Créer le code"}</button></div></form>`;
   }
 
+  function partnerForm(p = {}) {
+    const shops = [...new Set(Object.values(C.prices || {}).flatMap((x) => (x.offers || []).map((o) => o.shop)))].sort();
+    return `<form class="m-form" data-partner-form><input type="hidden" name="id" value="${p.id || ""}">
+      <div class="f-2"><label>Boutique<input name="shop" required maxlength="60" list="dl-pshops" value="${esc(p.shop || "")}" placeholder="Drone-FPV-Racer"></label>
+        <label>Domaine du site (facultatif)<input name="domain" maxlength="120" value="${esc(p.domain || "")}" placeholder="drone-fpv-racer.com"></label></div>
+      <datalist id="dl-pshops">${shops.map((x) => `<option value="${esc(x)}">`).join("")}</datalist>
+      <label>Paramètre ou lien d'affiliation<input name="link" required maxlength="500" value="${esc(p.link || "")}" placeholder="ref=multimotors   ou   https://plateforme.com/clic?id=123&url={url}"></label>
+      <label>Note privée (commission, contact, conditions…)<textarea name="note" rows="2" maxlength="2000">${esc(p.note || "")}</textarea></label>
+      <label class="inline"><input type="checkbox" name="active" ${p.id && !+p.active ? "" : "checked"}> Actif</label>
+      <p class="m-error" role="alert" hidden></p>
+      <div class="f-actions">${p.id ? `<button class="btn-dark" type="button" data-partner-new>Annuler</button>` : ""}<button class="btn-red" type="submit">${p.id ? "Enregistrer" : "Ajouter la boutique"}</button></div></form>`;
+  }
+
   async function renderAdmin(tab = "dashboard", status = "") {
     const v = $("view-admin");
     v.hidden = false;
@@ -733,7 +792,8 @@
         const w = stats.week || {}, max = Math.max(1, ...(stats.signups || []).map((d) => d.n));
         const tiles = [["Corrections à valider", stats.pending, "suggestions"], ["Bugs à traiter", stats.bugs, "bugs"], ["Membres", stats.users, "users", w.users ? `+${w.users} cette semaine` : ""],
           ["Membres actifs", w.active, "", "ces 7 derniers jours"], ["Avis publiés", stats.comments, "comments", w.comments ? `+${w.comments} cette semaine` : ""], ["J'aime", stats.likes],
-          ["Codes promo actifs", stats.coupons, "coupons"], ["Codes copiés", stats.coupon_uses, "coupons"]];
+          ["Codes promo actifs", stats.coupons, "coupons"], ["Codes copiés", stats.coupon_uses, "coupons"],
+          ["Clics vers les boutiques", stats.clicks, "partners", "ces 30 derniers jours"], ["Boutiques partenaires", stats.partners, "partners"]];
         body.innerHTML = `<div class="stats adm-stats">${tiles.map(([l, n, t, sub]) => `<${t && tabs.some(([k]) => k === t) ? `button type="button" data-admin-tab="${t}"` : "div"} class="stat"><b>${n ?? "—"}</b><span>${l}</span>${sub ? `<small>${sub}</small>` : ""}</${t && tabs.some(([k]) => k === t) ? "button" : "div"}>`).join("")}</div>
           <div class="adm-dash">
             <section class="adm-chart"><h3>Inscriptions des 14 derniers jours</h3>
@@ -824,6 +884,23 @@
               <td><small>${c.starts ? `du ${when(c.starts)}` : "dès maintenant"}<br>${c.ends ? `au ${when(c.ends)}` : "sans fin"}</small></td>
               <td><span class="st ${COUPON_STATE[c.state][1]}">${COUPON_STATE[c.state][0]}</span></td><td>${c.uses} fois</td>
               <td class="adm-actions"><button class="mini" data-coupon-edit>Modifier</button><button class="mini" data-coupon-toggle>${+c.active ? "Désactiver" : "Activer"}</button><button class="mini" data-coupon-del>Supprimer</button></td></tr>`).join("")}</tbody></table></div>` : `<p class="note">Aucun code promo pour l'instant.</p>`}`;
+      } else if (tab === "partners") {
+        const d = await get("admin_partners"), max = Math.max(1, ...d.days.map((x) => x.n)), top = Math.max(1, ...d.shops.map((x) => x.n));
+        body.innerHTML = `<p class="note">Quand une boutique vous affilie, elle vous donne un paramètre (ex. <code>ref=multimotors</code>) ou un lien de plateforme d'affiliation contenant <code>{url}</code>. Il est ajouté automatiquement à tous les liens vers cette boutique, et ses offres portent la mention « Partenaire » (obligatoire).</p>
+          <div class="adm-new open" id="partner-edit"><h3>Nouvelle boutique partenaire</h3>${partnerForm()}</div>
+          ${d.partners.length ? `<div class="tbl-wrap"><table class="adm-table"><thead><tr><th>Boutique</th><th>Lien d'affiliation</th><th>Clics 7 j</th><th>30 j</th><th>Total</th><th>État</th><th></th></tr></thead><tbody>${d.partners.map((p) => `
+            <tr data-partner='${esc(JSON.stringify(p))}'><td><b>${esc(p.shop)}</b>${p.domain ? `<br><small>${esc(p.domain)}</small>` : ""}${p.note ? `<br><small class="adm-note-i" title="${esc(p.note)}">📝 ${esc(p.note.slice(0, 60))}</small>` : ""}</td>
+              <td><code class="aff-code">${esc(p.link)}</code><br><small>ex. ${esc(affiliate(`https://${p.domain || "boutique.com"}/produit`, p))}</small></td>
+              <td>${p.c7}</td><td>${p.c30}</td><td>${p.call}</td><td><span class="st ${+p.active ? "good" : "grey"}">${+p.active ? "Actif" : "En pause"}</span></td>
+              <td class="adm-actions"><button class="mini" data-partner-edit>Modifier</button><button class="mini" data-partner-toggle>${+p.active ? "Mettre en pause" : "Activer"}</button><button class="mini" data-partner-del>Retirer</button></td></tr>`).join("")}</tbody></table></div>` : `<p class="note">Aucune boutique partenaire pour l'instant.</p>`}
+          <div class="adm-dash">
+            <section class="adm-chart"><h3>Clics vers les boutiques, 30 derniers jours</h3>
+              <div class="sbars" role="img" aria-label="${d.days.map((x) => `${when(x.d)} : ${x.n}`).join(", ")}">${d.days.map((x) =>
+                `<span class="sbar" style="--h:${x.n ? Math.max(4, Math.round((x.n / max) * 100)) : 0}%" data-tip="${esc(new Date(x.d).toLocaleDateString("fr-FR", { weekday: "short", day: "numeric", month: "short" }))} : ${x.n} clic${x.n > 1 ? "s" : ""}" tabindex="0"><i></i></span>`).join("")}</div>
+              <div class="sbars-axis"><span>${new Date(d.days[0].d).toLocaleDateString("fr-FR", { day: "numeric", month: "short" })}</span><span>max. ${max} / jour</span><span>aujourd'hui</span></div></section>
+            <section class="adm-chart"><h3>Boutiques les plus cliquées (30 jours)</h3>${d.shops.length ? `<ol class="hbars">${d.shops.slice(0, 15).map((x) => `<li><span>${esc(x.shop)}${d.partners.some((p) => p.shop === x.shop && +p.active) ? ` <span class="o-aff">Partenaire</span>` : ""}</span><i style="--w:${Math.max(2, Math.round((x.n / top) * 100))}%"></i><b>${x.n}</b></li>`).join("")}</ol>
+              <p class="note">Ces chiffres permettent de démarcher une boutique (« vos offres ont reçu N clics ce mois-ci ») et de comparer avec ses rapports d'affiliation.</p>` : `<p class="note">Pas encore de clic enregistré.</p>`}</section>
+          </div>`;
       } else if (tab === "news") {
         const rows = await get("admin_news");
         body.innerHTML = `<form class="m-form news-form" data-news-form><input type="hidden" name="id" value="">
@@ -888,12 +965,35 @@
       try { await api("coupon_delete", { id: JSON.parse(row.dataset.coupon).id }); toast("Code supprimé.", "good"); await refreshSite(); renderAdmin("coupons"); } catch (e) { toast(e.message, "bad"); }
       return;
     }
-    if (t.closest("[data-coupon-new]")) { $("coupon-edit").innerHTML = `<h3>Nouveau code promo</h3>${couponForm()}`; }
+    if (t.closest("[data-coupon-new]")) { $("coupon-edit").innerHTML = `<h3>Nouveau code promo</h3>${couponForm()}`; return; }
+    const pr = t.closest("[data-partner]");
+    if (pr && t.closest("[data-partner-edit]")) {
+      const p = JSON.parse(pr.dataset.partner), box = $("partner-edit");
+      box.innerHTML = `<h3>Modifier ${esc(p.shop)}</h3>${partnerForm(p)}`; box.scrollIntoView({ behavior: "smooth", block: "start" }); return;
+    }
+    if (pr && t.closest("[data-partner-toggle]")) {
+      const p = JSON.parse(pr.dataset.partner);
+      try { await api("partner_save", { ...p, active: +p.active ? "0" : "1" }); toast(+p.active ? "Partenaire en pause." : "Partenaire activé.", "good"); await refreshSite(); renderAdmin("partners"); } catch (e) { toast(e.message, "bad"); }
+      return;
+    }
+    if (pr && t.closest("[data-partner-del]")) {
+      if (!confirm("Retirer cette boutique des partenaires ? Ses liens redeviendront des liens normaux.")) return;
+      try { await api("partner_delete", { id: JSON.parse(pr.dataset.partner).id }); toast("Partenaire retiré.", "good"); await refreshSite(); renderAdmin("partners"); } catch (e) { toast(e.message, "bad"); }
+      return;
+    }
+    if (t.closest("[data-partner-new]")) $("partner-edit").innerHTML = `<h3>Nouvelle boutique partenaire</h3>${partnerForm()}`;
   });
-  document.addEventListener("input", (ev) => { if (ev.target.matches("[data-users-q]")) { A.q = ev.target.value; drawUsers(); } });
+  document.addEventListener("input", (ev) => {
+    if (ev.target.matches("[data-users-q]")) { A.q = ev.target.value; drawUsers(); }
+    // Partner form: the shop's domain is taken from its offers
+    if (ev.target.matches("[data-partner-form] [name=shop]")) {
+      const dom = ev.target.form.domain, o = Object.values(C.prices || {}).flatMap((x) => x.offers || []).find((x) => x.shop === ev.target.value);
+      if (o && !dom.value) dom.value = hostOf(o.url);
+    }
+  });
   document.addEventListener("submit", async (ev) => {
     const f = ev.target;
-    if (!f.matches("[data-perm-form], [data-role-form], [data-coupon-form], [data-settings-form]")) return;
+    if (!f.matches("[data-perm-form], [data-role-form], [data-coupon-form], [data-settings-form], [data-partner-form]")) return;
     ev.preventDefault();
     const d = formData(f), btn = f.querySelector("[type=submit]");
     btn.disabled = true;
@@ -915,6 +1015,10 @@
         await api("coupon_save", { ...d, active: f.active.checked ? "1" : "0" });
         toast(d.id ? "Code promo enregistré." : "Code promo créé.", "good");
         await refreshSite(); renderAdmin("coupons");
+      } else if (f.matches("[data-partner-form]")) {
+        await api("partner_save", { ...d, active: f.active.checked ? "1" : "0" });
+        toast(d.id ? "Partenaire enregistré." : "Boutique partenaire ajoutée.", "good");
+        await refreshSite(); renderAdmin("partners");
       } else if (f.matches("[data-settings-form]")) {
         const r = await api("settings_save", { ...d, announce_on: f.announce_on.checked ? "1" : "0", registrations: f.registrations.checked ? "1" : "0", comments: f.comments.checked ? "1" : "0" });
         toast(r.message, "good");
