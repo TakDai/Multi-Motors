@@ -4,12 +4,15 @@ For every motor family (brand + model name) it looks the product up in shops
 that publish their catalogue as JSON (Shopify), reads the "Key: value" lines
 of the product description and fills the EMPTY fields only. Existing values
 are never overwritten. Every added value is logged with its source in
-catalogue/enrichissement.csv, and families already searched are remembered in
-catalogue/enrichissement_fait.json so the job can run in several passes.
+catalogue/enrichissement.csv, and the date each family was searched is kept in
+catalogue/enrichissement_fait.json: new families first, then the families still
+incomplete are searched again (shops add details and new products) after RECHECK days,
+the oldest search first.
 
 Usage: python tools/enrich.py [--limit N] [--brand EMAX]
 """
 import argparse, csv, html, json, re, sys, time
+from datetime import date, timedelta
 from pathlib import Path
 import requests
 
@@ -18,6 +21,9 @@ CAT = ROOT / "catalogue" / "moteurs.csv"
 LOG = ROOT / "catalogue" / "enrichissement.csv"
 DONE = ROOT / "catalogue" / "enrichissement_fait.json"
 EXTRA_COLS = ["RESISTANCE", "UTILISATION"]
+RECHECK = 30  # days before an incomplete family is searched again
+# A family is complete when every motor has these
+KEY_FIELDS = ["POIDS", "D MOTEUR", "H MOTEUR", "LIPO", "D SHAFT", "ENTRAXE FIX", "CONFIG", "LIEN", "IMG"]
 SHOPS = ["www.racedayquads.com", "pyrodrone.com", "newbeedrone.com", "shop.emax-usa.com",
          "rushfpv.net", "www.unmannedtechshop.co.uk", "betafpv.com", "rotorriot.com", "www.speedyfpv.com",
          "www.fpvfaster.com", "www.quadmula.com", "www.hglrc.com", "www.diatone.us"]
@@ -244,7 +250,9 @@ def main():
     for c in EXTRA_COLS:
         if c not in cols:
             cols.append(c)
-    done = set(json.loads(DONE.read_text())) if DONE.exists() else set()
+    # Family -> date of the last search (the first versions kept a plain list: searched long ago)
+    raw = json.loads(DONE.read_text()) if DONE.exists() else {}
+    done = raw if isinstance(raw, dict) else {k: "2000-01-01" for k in raw}
     if args.audit:
         return audit(cols, rows)
 
@@ -253,10 +261,16 @@ def main():
         if r.get("NOM") and not UNNAMED.search(r["NOM"]):
             families.setdefault((r["MARQUE"], r["NOM"]), []).append(r)
     shops = [h.strip() for h in args.shops.split(",") if h.strip()] or None
-    todo = [k for k in families if (shops or f"{k[0]}|{k[1]}" not in done) and (not args.brand or k[0].lower() == args.brand.lower())]
+    stale = (date.today() - timedelta(days=RECHECK)).isoformat()
+    incomplete = lambda k: any(not m.get(c) for m in families[k] for c in KEY_FIELDS)
+    todo = [k for k in families if (shops or f"{k[0]}|{k[1]}" not in done or (done[f"{k[0]}|{k[1]}"] < stale and incomplete(k)))
+            and (not args.brand or k[0].lower() == args.brand.lower())]
+    # Never searched first, then the oldest searches
+    todo.sort(key=lambda k: done.get(f"{k[0]}|{k[1]}", ""))
     if args.limit:
         todo = todo[: args.limit]
-    print(f"{len(todo)} familles à chercher ({len(families)} au total)", flush=True)
+    fresh = sum(1 for k in todo if f"{k[0]}|{k[1]}" not in done)
+    print(f"{len(todo)} familles à chercher ({fresh} nouvelles, {len(todo) - fresh} incomplètes revérifiées ; {len(families)} au total)", flush=True)
 
     new_log = []
     filled_fam = 0
@@ -297,7 +311,7 @@ def main():
                             m[col] = v
                             new_log.append({"REF": m["REF"], "CHAMP": col, "VALEUR": v, "SOURCE": url})
                             added += 1
-        done.add(f"{brand}|{name}")
+        done[f"{brand}|{name}"] = date.today().isoformat()
         filled_fam += bool(added)
         if i % 25 == 0 or i == len(todo):
             print(f"{i}/{len(todo)} familles, {filled_fam} complétées, {len(new_log)} valeurs ajoutées", flush=True)
@@ -339,7 +353,7 @@ def save(cols, rows, new_log, done):
         if new:
             w.writeheader()
         w.writerows(new_log)
-    DONE.write_text(json.dumps(sorted(done), ensure_ascii=False))
+    DONE.write_text(json.dumps(dict(sorted(done.items())), ensure_ascii=False, separators=(",", ":")))
 
 
 if __name__ == "__main__":

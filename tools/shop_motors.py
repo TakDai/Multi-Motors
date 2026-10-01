@@ -48,7 +48,7 @@ NOT_BRANDS = {"editionyukisavage", "unite", "camerabutter", "fpvstorerc", "fpvel
 ACCESSORY = re.compile(r"\b(roulements?|bearings?|plugs?|screws?|vis|magnets?|aimants?|stators? only|connecteurs?|connectors?|"
                        r"guards?|tubes?|protections?|covers?|brushed|coreless|[àa] balais|capacitors?|condensateurs?|dampers?|amortisseurs?|dc|rechange|spare bell)\b", re.I)  # not brushless motors
 # Words that only mean "accessory" when the title gives no KV ("spare part motor 16000KV" is a motor)
-MAYBE_ACCESSORY = re.compile(r"\b(replacement|spare|kit|bells?|cloches?|shafts?)\b", re.I)
+MAYBE_ACCESSORY = re.compile(r"\b(replacement|spare|kit|bells?|cloches?|shafts?|wires?|câbles?|cables?)\b", re.I)
 COLORS = r"(black|white|red|blue|green|orange|gold|golden|silver|grey|gray|purple|pink|yellow|rainbow|royal|gunmetal|titanium|" \
          r"noir|blanc|rouge|bleu|vert|violet|jaune|&|and|et|/)"
 
@@ -182,7 +182,8 @@ def main():
             continue
         model = model_of(title, brand, bool(p.get("adapter")))
         # Size of the stator: 4 digits that are neither a KV ("2480KV", "KV2480", "1700/2400KV") nor a part number
-        clean = re.sub(r"\bEMX[-=\s]*MT[-\s]*\d+|\bkv\s*\d{3,5}\b|\b\d{3,5}(?:\s*/\s*\d{3,5})*\s*kv", " ", title, flags=re.I)
+        # ("1505 KV3600": the "KV" belongs to the 3600 after it, not to the size before it)
+        clean = re.sub(r"\bEMX[-=\s]*MT[-\s]*\d+|\bkv\s*\d{3,5}\b|\b\d{3,5}(?:\s*/\s*\d{3,5})*\s*kv(?!\s*\d)", " ", title, flags=re.I)
         cls = re.search(r"(?<![\d.])(\d{4}(?:[.,]\d)?)(?![\d])", clean)
         cls = cls.group(1).replace(",", ".") if cls else ""
         # The stator size is part of the name: two sizes of a range are two models
