@@ -12,6 +12,8 @@
 </IfModule>
 
 DirectoryIndex index.html
+# Adresse inconnue : vraie erreur 404 (pour Google) avec une page utile
+ErrorDocument 404 /404.html
 Options -Indexes
 AddDefaultCharset utf-8
 AddType text/csv .csv
