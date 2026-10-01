@@ -43,6 +43,22 @@ jobs:
       - name: Pages pour Google (une par modèle, marque, classe et taille) et sitemap
         run: python3 tools/seo_pages.py build
 
+      - name: Versionner les feuilles de style et scripts
+        # assets/style.css -> assets/style.css?v=<empreinte> : navigateurs et téléphones chargent la nouvelle version dès qu'un fichier change
+        run: |
+          python3 - <<'PY'
+          import hashlib, pathlib, re
+          b = pathlib.Path("build")
+          v = lambda m: m.group(1) + "?v=" + hashlib.md5((b / m.group(1).lstrip("/")).read_bytes()).hexdigest()[:10] if (b / m.group(1).lstrip("/")).is_file() else m.group(1)
+          n = 0
+          for f in b.rglob("*.html"):
+              s = f.read_text(encoding="utf-8")
+              t = re.sub(r'(?<=")(/?assets/[\w.-]+\.(?:css|js))(?=")', v, s)
+              if t != s:
+                  f.write_text(t, encoding="utf-8"); n += 1
+          print(n, "pages mises à jour")
+          PY
+
       - name: Pousser sur la branche ovh
         # Historique conservé (pas de push forcé) : OVH met à jour son dossier par un simple "pull"
         run: |
