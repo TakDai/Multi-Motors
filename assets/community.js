@@ -617,7 +617,7 @@
       ${catalogueStats()}
       ${(C.site.coupons || []).length ? `<section class="promo-box" aria-label="Codes promo du moment"><h2>Codes promo du moment</h2>${C.site.coupons.map((c) =>
         `<div class="promo"><span class="promo-shop">${c.url ? `<a href="${esc(c.url)}" target="_blank" rel="noopener">${esc(c.shop)}</a>` : esc(c.shop)}${c.brand ? ` <small>${esc(c.brand)}</small>` : ""}</span>${couponLine(c)}</div>`).join("")}</section>` : ""}
-      <div class="chips" role="tablist"><button class="tab" data-actus="all" aria-selected="true">Tout</button><button class="tab" data-actus="moteurs" aria-selected="false">Nouveaux moteurs</button><button class="tab" data-actus="site" aria-selected="false">Le site</button></div>
+      <div class="chips" role="tablist"><button class="tab" data-actus="all" aria-selected="true">Tout</button><button class="tab" data-actus="moteurs" aria-selected="false">Nouveaux moteurs</button><button class="tab" data-actus="rapport" aria-selected="false">Rapports du jour</button><button class="tab" data-actus="site" aria-selected="false">Le site</button></div>
       <div id="feed"><p class="note">Chargement…</p></div></div>`;
     // Figures count up when the page opens
     if (!matchMedia("(prefers-reduced-motion: reduce)").matches) {
@@ -632,7 +632,7 @@
     (C.online ? get("news").catch(() => []) : Promise.resolve([])).then((news) => {
       const items = [
         ...news.map((n) => ({ kind: "site", at: n.at, title: n.title, body: n.body, author: n.author })),
-        ...(C.actus || []).map((a) => ({ kind: a.type || "moteurs", at: a.date, title: a.title, body: a.body || "", refs: a.refs || [], all: a.all || [], count: a.count || (a.refs || []).length, models: a.models, brands: a.newBrands || [], nBrands: a.newBrandsCount || 0 })),
+        ...(C.actus || []).map((a) => ({ kind: a.type || "moteurs", at: a.date, title: a.title, body: a.body || "", refs: a.refs || [], all: a.all || [], count: a.count || (a.refs || []).length, models: a.models, brands: a.newBrands || [], nBrands: a.newBrandsCount || 0, rep: a.type === "rapport" ? a : null })),
       ].sort((a, b) => String(b.at).localeCompare(String(a.at)));
       v._items = items;
       drawFeed("all");
@@ -664,14 +664,27 @@
     const items = (v._items || []).filter((i) => kind === "all" || i.kind === kind);
     $("feed").innerHTML = items.length ? items.map((i) => `
       <article class="news ${i.kind}">
-        <header><span class="n-kind">${i.kind === "site" ? "Le site" : "Nouveaux moteurs"}</span><time>${when(String(i.at).length === 10 ? i.at + " 12:00:00" : i.at)}</time></header>
+        <header><span class="n-kind">${i.kind === "site" ? "Le site" : i.kind === "rapport" ? "Rapport du jour" : "Nouveaux moteurs"}</span><time>${when(String(i.at).length === 10 ? i.at + " 12:00:00" : i.at)}</time></header>
         <h2>${esc(i.title)}</h2>
         ${i.body ? `<p>${esc(i.body).replace(/\n/g, "<br>")}</p>` : ""}
+        ${i.rep ? reportBlock(i.rep) : ""}
         ${i.kind === "moteurs" && i.models ? `<p class="n-sum">${nf(i.models)} modèle${i.models > 1 ? "s" : ""}${i.nBrands ? ` · ${nf(i.nBrands)} nouvelle${i.nBrands > 1 ? "s" : ""} marque${i.nBrands > 1 ? "s" : ""}` : ""}</p>` : ""}
         ${i.brands?.length ? `<p class="n-brands">${i.brands.slice(0, 20).map((b) => `<span>${esc(b)}</span>`).join("")}${i.nBrands > 20 ? `<span class="note">et ${nf(i.nBrands - 20)} autres</span>` : ""}</p>` : ""}
         ${i.refs?.length ? `<div class="n-motors">${i.refs.slice(0, 12).map((r) => { const m = motorBy(r); return m ? `<a class="n-motor" href="#m/${encodeURIComponent(r)}">${MM().photo(m)}<span>${MM().freshTag(m)}${esc(m.MARQUE)} ${esc(m.NOM || "")}<small>${esc(m.CLASSE || "")} · ${esc(m.KV || "")}KV</small></span></a>` : ""; }).join("")}</div>` : ""}
         ${i.all?.filter(motorBy).length > 1 ? `<button type="button" class="n-all-btn" data-n-all="${esc(i.at)}" aria-expanded="false">Voir les ${nf(i.all.filter(motorBy).length)} moteurs ajoutés</button><div class="n-all" hidden></div>` : ""}
       </article>`).join("") : `<p class="note">Aucune actualité pour l'instant.</p>`;
+  }
+  // Daily report: the figures of the day, and the price drops with a link to each motor
+  function reportBlock(r) {
+    const tiles = [[r.motors, "nouveaux moteurs", r.models ? `dont ${nf(r.models)} nouveaux modèles` : ""], [r.values, "informations ajoutées", r.completed ? `sur ${nf(r.completed)} fiches` : ""],
+      [r.drops, "baisses de prix"], [r.priced, "nouveaux prix"], [r.photos, "nouvelles photos"], [r.videos, "nouvelles vidéos"],
+      [r.bench, "bancs d'essai"], [r.fab, "fiches fabricant"]].filter(([n]) => n > 0);
+    const drops = (r.dropList || []).filter((d) => motorBy(d.ref));
+    return `${tiles.length ? `<div class="rep-tiles">${tiles.map(([n, l, sub]) => `<div class="rep-tile"><b>${nf(n)}</b><span>${l}</span>${sub ? `<small>${sub}</small>` : ""}</div>`).join("")}</div>`
+        : `<p>Toutes les sources ont été vérifiées : pas de changement aujourd'hui.</p>`}
+      ${drops.length ? `<h3 class="rep-h">Baisses de prix</h3><ul class="rep-drops">${drops.map((d) => `<li><a href="#m/${encodeURIComponent(d.ref)}">${esc(d.model)}</a><span><s>${euro(d.old)}</s> ${euro(d.new)}</span><em>−${d.pct} %</em></li>`).join("")}</ul>
+        <p class="rep-note">Prix le plus bas relevé parmi les offres en stock (avant TVA pour les boutiques hors Europe).</p>` : ""}
+      <p class="rep-total">Catalogue : ${nf(r.total)} moteurs, ${nf(r.totalModels)} modèles identifiés.</p>`;
   }
   // Every motor of an announcement, listed on demand (brand, model, class, KV), freshly released ones marked
   function drawAll(btn) {

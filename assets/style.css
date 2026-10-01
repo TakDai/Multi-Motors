@@ -1769,3 +1769,18 @@ dialog.crop-modal { width: min(640px, calc(100vw - 32px)); }
 .hbars li > span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .hbars i { display: block; width: var(--w); height: 12px; border-radius: 0 4px 4px 0; background: var(--red); }
 .hbars b { text-align: right; }
+
+/* Daily report in the news feed */
+.news.rapport .n-kind { background: #1d4fa8; }
+.rep-tiles { display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 8px; margin-top: 12px; }
+.rep-tile { display: flex; flex-direction: column; padding: 10px 12px; border-radius: 10px; background: #f4f6fb; }
+.rep-tile b { font: 700 22px var(--font); }
+.rep-tile span { font: 700 10px var(--font); letter-spacing: .1em; text-transform: uppercase; color: rgba(0, 0, 0, .6); }
+.rep-tile small { margin-top: 2px; font: 400 11px var(--font); color: rgba(0, 0, 0, .55); }
+.rep-h { margin: 16px 0 6px; font: 700 12px var(--font); letter-spacing: .14em; text-transform: uppercase; }
+.rep-drops { margin: 0; padding: 0; list-style: none; }
+.rep-drops li { display: grid; grid-template-columns: minmax(0, 1fr) auto auto; align-items: center; gap: 10px; padding: 6px 0; border-bottom: 1px dashed rgba(0, 0, 0, .15); font: 400 14px var(--font); }
+.rep-drops a { color: #111; font-weight: 700; overflow-wrap: anywhere; }
+.rep-drops s { color: rgba(0, 0, 0, .45); margin-right: 4px; }
+.rep-drops em { padding: 1px 7px; border-radius: 8px; background: #e3f4e5; color: #1f6b2a; font: 700 12px var(--font); font-style: normal; }
+.rep-note, .rep-total { margin-top: 8px !important; font-size: 12px !important; color: rgba(0, 0, 0, .55) !important; }

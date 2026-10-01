@@ -1,2 +1,2 @@
-Site Multi-Motors prêt à servir, généré automatiquement depuis la branche Moteurs (fefec70).
+Site Multi-Motors prêt à servir, généré automatiquement depuis la branche Moteurs (edb70db).
 Ne pas modifier ici : les changements sont écrasés à chaque mise à jour.
