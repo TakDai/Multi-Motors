@@ -11,7 +11,7 @@
   const MM = () => window.MM;
   const esc = (s) => MM().esc(s);
   const DEMO = !!window.MM_ASSETS;
-  const C = { user: null, googleId: "", likes: {}, overrides: {}, prices: {}, actus: [], online: false };
+  const C = { user: null, googleId: "", likes: {}, overrides: {}, prices: {}, actus: [], online: false, site: { roles: {}, coupons: [] } };
   const FIELD_LABELS = {
     NOM: "Nom du modèle", VERSION: "Version", CLASSE: "Classe (stator)", KV: "KV", POIDS: "Poids (g)",
     "D MOTEUR": "Diamètre moteur (mm)", "H MOTEUR": "Hauteur moteur (mm)", "D SHAFT": "Diamètre shaft (mm)",
@@ -22,6 +22,9 @@
     IMG: "Photo (lien)", AUTRE: "Autre remarque",
   };
   const ROLE_LABEL = { user: "Membre", moderator: "Modération", admin: "Admin" };
+  // Role names come from the server (roles created in the administration)
+  const roleLabel = (slug) => (C.site.roles || {})[slug]?.label || ROLE_LABEL[slug] || slug;
+  const can = (perm) => !!(C.user && (C.user.perms || []).includes(perm));
 
   // ------------------------------------------------------------------ API
   async function api(action, data) {
@@ -38,16 +41,26 @@
   const get = (action, params) => api(action, params ? { __get: params } : undefined);
 
   // Demo API for the standalone preview: nothing leaves the browser page
-  const D = { users: [], me: null, likes: {}, comments: [], sugg: [], news: [], profiles: {}, garage: {}, history: {}, id: 1 };
+  const DEMO_PERMS = { suggestions: "Valider ou refuser les corrections proposées", comments: "Modérer les avis (masquer, supprimer)", bugs: "Traiter les signalements de bug",
+    news: "Publier et modifier les actualités", coupons: "Créer et gérer les codes promo", members: "Voir les membres et les profils privés", ban: "Suspendre ou réactiver des membres",
+    assign: "Changer le rôle et les permissions des membres", roles: "Créer et modifier les rôles", settings: "Modifier les réglages du site (bandeau, inscriptions, avis)", logs: "Consulter le journal d'activité" };
+  const D = { users: [], me: null, likes: {}, comments: [], sugg: [], news: [], profiles: {}, garage: {}, history: {}, id: 1, coupons: [], log: [], settings: { registrations: "1", comments: "1", announce_kind: "info" },
+    roles: [{ slug: "user", label: "Membre", color: "#888888", perms: [] }, { slug: "moderator", label: "Modération", color: "#3a86ff", perms: ["suggestions", "comments", "bugs", "news", "members"] }, { slug: "admin", label: "Admin", color: "#ff5757", perms: Object.keys(DEMO_PERMS) }] };
   function demoApi(action, d) {
     const q = d.__get || d;
     const me = D.me;
     const now = new Date().toISOString().slice(0, 19).replace("T", " ");
     const need = () => { if (!me) throw new Error("Connectez-vous pour faire cela."); };
-    const mod = () => { need(); if (me.role === "user") throw new Error("Réservé à la modération."); };
-    const pub = (u) => u && { id: u.id, name: u.name, email: u.email, role: u.role, verified: true, color: D.profiles[u.id]?.color || "", avatar: D.profiles[u.id]?.avatar || "" };
+    const permsOf = (u) => u.role === "admin" ? Object.keys(DEMO_PERMS) : (D.roles.find((r) => r.slug === u.role)?.perms || []);
+    const mod = () => { need(); if (!permsOf(me).length) throw new Error("Réservé à l'équipe du site."); };
+    const pub = (u) => u && { id: u.id, name: u.name, email: u.email, role: u.role, verified: true, perms: permsOf(u), color: D.profiles[u.id]?.color || "", avatar: D.profiles[u.id]?.avatar || "" };
+    const today = now.slice(0, 10);
+    const site = () => ({ registrations: true, comments: true, roles: Object.fromEntries(D.roles.map((r) => [r.slug, { label: r.label, color: r.color }])),
+      announce: D.settings.announce_on === "1" && D.settings.announce_text ? { text: D.settings.announce_text, link: D.settings.announce_link, kind: D.settings.announce_kind } : null,
+      coupons: D.coupons.filter((c) => +c.active && (!c.starts || c.starts <= today) && (!c.ends || c.ends >= today)) });
+    const log = (action, target, detail = "") => D.log.unshift({ id: D.id++, who: me.name, action, target, detail, created_at: now });
     switch (action) {
-      case "me": return { user: pub(me), google_client_id: "" };
+      case "me": return { user: pub(me), google_client_id: "", site: site() };
       case "register": case "login": {
         const email = (d.email || "").toLowerCase();
         if (!/.+@.+\..+/.test(email)) throw new Error("Adresse email invalide.");
@@ -89,12 +102,41 @@
       };
       case "comment_delete": case "moderate_comment": { need(); const c = D.comments.find((x) => x.id === +d.id); if (c) c.status = d.status || "deleted"; return { ok: true }; }
       case "suggest": need(); if (!d.value) throw new Error("Indiquez la nouvelle valeur."); D.sugg.push({ id: D.id++, ...d, new_value: d.value, old_value: d.old, user_id: me.id, author: me.name, status: "pending", created_at: now }); return { message: "Merci ! Votre suggestion sera vérifiée par la modération." };
-      case "admin_stats": mod(); return { pending: D.sugg.filter((s) => s.status === "pending").length, users: D.users.length, comments: D.comments.filter((c) => c.status === "visible").length, likes: Object.values(D.likes).reduce((a, s) => a + s.size, 0) };
+      case "admin_stats": mod(); return { pending: D.sugg.filter((s) => s.status === "pending").length, users: D.users.length, comments: D.comments.filter((c) => c.status === "visible").length,
+        likes: Object.values(D.likes).reduce((a, s) => a + s.size, 0), coupons: site().coupons.length, coupon_uses: D.coupons.reduce((a, c) => a + c.uses, 0), perms: permsOf(me),
+        week: { users: D.users.length, active: D.users.length }, signups: Array.from({ length: 14 }, (_, i) => ({ d: new Date(Date.now() - (13 - i) * 864e5).toISOString().slice(0, 10), n: i === 13 ? D.users.length : 0 })) };
+      case "admin_roles": mod(); return { perms: DEMO_PERMS, system: ["user", "admin"], roles: D.roles.map((r) => ({ ...r, members: D.users.filter((u) => u.role === r.slug).length })) };
+      case "role_save": {
+        mod(); if (!d.label) throw new Error("Donnez un nom au rôle.");
+        const r = D.roles.find((x) => x.slug === d.slug);
+        if (r) Object.assign(r, { label: d.label, color: d.color, perms: ["user", "admin"].includes(r.slug) ? r.perms : d.perms });
+        else D.roles.splice(-1, 0, { slug: d.label.toLowerCase().normalize("NFD").replace(/[^a-z0-9]+/g, "").slice(0, 10) || "role" + D.id++, label: d.label, color: d.color, perms: d.perms || [] });
+        log(r ? "role.updated" : "role.created", d.label); return { ok: true };
+      }
+      case "role_delete": mod(); D.users.forEach((u) => { if (u.role === d.slug) u.role = "user"; }); D.roles = D.roles.filter((r) => r.slug !== d.slug); log("role.deleted", d.slug); return { ok: true };
+      case "admin_coupons": mod(); return D.coupons.map((c) => ({ ...c, state: !+c.active ? "off" : c.starts > today ? "later" : c.ends && c.ends < today ? "expired" : "on" }));
+      case "coupon_save": {
+        mod(); const code = (d.code || "").toUpperCase().replace(/\s+/g, "");
+        if (!/^[A-Z0-9_-]{2,40}$/.test(code)) throw new Error("Code invalide : lettres, chiffres, - et _ uniquement.");
+        if (!d.shop) throw new Error("Indiquez la boutique où le code fonctionne.");
+        const c = D.coupons.find((x) => x.id === +d.id), vals = { code, shop: d.shop, discount: d.discount, title: d.title, url: d.url, brand: d.brand, starts: d.starts, ends: d.ends, active: d.active === "0" ? 0 : 1 };
+        if (c) Object.assign(c, vals); else D.coupons.unshift({ id: D.id++, uses: 0, ...vals });
+        log(c ? "coupon.updated" : "coupon.created", `${code} (${d.shop})`); return { ok: true };
+      }
+      case "coupon_delete": mod(); D.coupons = D.coupons.filter((c) => c.id !== +d.id); return { ok: true };
+      case "coupon_use": { const c = D.coupons.find((x) => x.id === +d.id); if (c) c.uses++; return { ok: true }; }
+      case "admin_settings": mod(); return { ...D.settings };
+      case "settings_save": mod(); Object.assign(D.settings, d); log("settings", "réglages"); return { ok: true, message: "Réglages enregistrés." };
+      case "admin_log": mod(); return D.log.filter((l) => !q.kind || l.action.startsWith(q.kind));
       case "admin_suggestions": mod(); return D.sugg.filter((s) => s.status === (q.status || "pending"));
       case "moderate_suggestion": { mod(); const s = D.sugg.find((x) => x.id === +d.id); if (s) { s.status = d.decision; if (d.value) s.new_value = d.value; s.reviewer = me.name; s.reviewed_at = now; } return { ok: true }; }
       case "admin_comments": mod(); return D.comments.filter((c) => c.status !== "deleted").map((c) => ({ ...c, created_at: c.at, author: D.users.find((u) => u.id === c.user_id)?.name })).reverse();
-      case "admin_users": mod(); return D.users.map((u) => ({ ...u, verified: 1, banned: u.banned ? 1 : 0, created_at: now }));
-      case "user_update": { mod(); const u = D.users.find((x) => x.id === +d.id); if (u) { if (d.role) u.role = d.role; if (d.banned !== undefined && d.banned !== "") u.banned = d.banned === "1"; } return { ok: true }; }
+      case "admin_users": mod(); return D.users.map((u) => ({ ...u, verified: 1, banned: u.banned ? 1 : 0, created_at: now, note: u.note || "", overrides: u.overrides || { grant: [], deny: [] }, perms: permsOf(u), comments: 0, suggestions: 0 }));
+      case "user_update": {
+        mod(); const u = D.users.find((x) => x.id === +d.id);
+        if (u) { if (d.role) u.role = d.role; if (d.banned !== undefined && d.banned !== "") u.banned = d.banned === "1"; if (d.note !== undefined) u.note = d.note; if (d.grant) u.overrides = { grant: d.grant, deny: d.deny || [] }; log("user.role", u.name); }
+        return { ok: true };
+      }
       case "profile": {
         const u = D.users.find((x) => x.id === +q.id);
         if (!u) throw new Error("Ce membre n'existe pas ou plus.");
@@ -195,7 +237,7 @@
   const ttcOf = (p) => (p?.offers?.length ? median(p.offers.map(ttc)) : null);
   const priceTag = (v, cls = "") => `<span class="pt ${cls}"><b>${euro(v)}</b><small>TTC</small><span class="pt-ht">${euro(ht(v))} HT</span></span>`;
   const motorBy = (ref) => MM().state.motors.find((m) => m.REF === ref);
-  const isMod = () => C.user && C.user.role !== "user";
+  const isMod = () => !!(C.user && (C.user.perms || []).length);
   const motorName = (ref) => { const m = motorBy(ref); return m ? `${m.MARQUE} ${m.NOM || ""} ${m.KV ? m.KV + "KV" : ""}` : ref; };
 
   // ------------------------------------------------------------- account bar
@@ -203,7 +245,7 @@
     const el = $("acct");
     if (!el) return;
     el.innerHTML = C.user
-      ? `<button type="button" class="nav-pill acct-btn" aria-haspopup="true" aria-expanded="false">${avatar(C.user, "xs")}${esc(C.user.name)}${C.user.role !== "user" ? `<em>${ROLE_LABEL[C.user.role]}</em>` : ""}</button>
+      ? `<button type="button" class="nav-pill acct-btn" aria-haspopup="true" aria-expanded="false">${avatar(C.user, "xs")}${esc(C.user.name)}${C.user.role !== "user" ? `<em>${esc(roleLabel(C.user.role))}</em>` : ""}</button>
          <div class="acct-menu" hidden>
            ${C.user.verified === false ? `<button type="button" class="acct-verify" data-resend-verify>⚠ Adresse non confirmée<small>Renvoyer le lien de confirmation</small></button>` : ""}
            <a href="#moi">Mon espace</a>
@@ -279,14 +321,40 @@
     [C.prices, C.actus] = await Promise.all([load("prix", window.MM_PRIX), load("actus", window.MM_ACTUS)]);
     try {
       const me = await get("me");
-      C.user = me.user; C.googleId = me.google_client_id || ""; C.online = true;
+      C.user = me.user; C.googleId = me.google_client_id || ""; C.online = true; C.site = me.site || C.site;
       [C.likes, C.overrides] = await Promise.all([get("likes"), get("overrides")]);
     } catch (e) { C.online = false; /* server not configured yet: catalogue still works */ }
     applyOverrides();
     renderAccount();
+    drawAnnounce();
     // A motor page opened before the session was known: show the member's options now
     if (C.user) refreshCurrent();
   };
+
+  // Banner, role names and promo codes again after a change in the administration
+  async function refreshSite() {
+    try { const me = await get("me"); C.site = me.site || C.site; if (me.user) C.user = me.user; } catch (e) { /* keep the previous ones */ }
+  }
+
+  // Announcement banner set in the administration; a visitor who closes it does not see that text again
+  const textKey = (t) => [...t].reduce((h, c) => (h * 31 + c.charCodeAt(0)) | 0, 7).toString(36);
+  function drawAnnounce() {
+    document.querySelector(".mm-announce")?.remove();
+    const a = C.site.announce;
+    if (!a) return;
+    try { if (localStorage.getItem("mm-announce-off") === textKey(a.text)) return; } catch (e) { /* storage blocked */ }
+    const link = a.link && /^(https?:\/\/|#)/.test(a.link) ? ` <a href="${esc(a.link)}"${a.link[0] === "#" ? "" : ' target="_blank" rel="noopener"'}>En savoir plus</a>` : "";
+    document.body.insertAdjacentHTML("afterbegin", `<div class="mm-announce ${esc(a.kind || "info")}" role="region" aria-label="Annonce"><p>${esc(a.text)}${link}</p><button type="button" data-announce-off aria-label="Fermer l'annonce">×</button></div>`);
+  }
+
+  // Promo codes of a shop (and of the motor's brand when the code is limited to one)
+  const shopKey = (s) => (s || "").toLowerCase().replace(/\(.*?\)/g, "").replace(/[^a-z0-9]/g, "");
+  const couponsFor = (shop, brand) => (C.site.coupons || []).filter((c) => {
+    const a = shopKey(c.shop), b = shopKey(shop);
+    return a && b && (a === b || a.includes(b) || b.includes(a)) && (!c.brand || !brand || c.brand.toLowerCase() === brand.toLowerCase());
+  });
+  const couponLine = (c) => `<div class="o-coupon"><span class="o-c-lbl">Code promo</span><code>${esc(c.code)}</code>${c.discount ? `<b>${esc(c.discount)}</b>` : ""}
+    <small>${esc([c.title, c.ends ? `jusqu'au ${when(c.ends)}` : ""].filter(Boolean).join(" · "))}</small><button type="button" class="mini" data-coupon-copy="${c.id}" data-code="${esc(c.code)}">Copier</button></div>`;
 
   // Approved community corrections are applied on top of the catalogue
   function applyOverrides() {
@@ -380,7 +448,7 @@
           })()}</small></span>
           <span class="o-stock">${o.stock ? "En stock" : "Rupture"}</span>
           <span class="o-go">Voir l'offre →</span>
-        </a>`).join("")}</div>${more}`;
+        </a>${couponsFor(o.shop, m.MARQUE).map(couponLine).join("")}`).join("")}</div>${more}`;
   }
 
   async function loadSocial(ref) {
@@ -420,7 +488,7 @@
       : `<p class="c-login"><button type="button" class="btn-dark" data-login>Connectez-vous</button> pour donner votre avis.</p>`;
     const items = s.comments.length ? s.comments.map((c) => `
       <article class="comment ${c.status === "hidden" ? "hidden-c" : ""}">
-        <header>${c.uid ? `<a class="c-author" href="#u/${c.uid}">${avatar({ name: c.author, color: c.color, avatar: c.avatar }, "sm")}<b>${esc(c.author)}</b></a>` : `<b>${esc(c.author)}</b>`}${c.role && c.role !== "user" ? `<em>${ROLE_LABEL[c.role]}</em>` : ""}${c.rating ? stars(c.rating) : ""}<time>${when(c.at)}</time>
+        <header>${c.uid ? `<a class="c-author" href="#u/${c.uid}">${avatar({ name: c.author, color: c.color, avatar: c.avatar }, "sm")}<b>${esc(c.author)}</b></a>` : `<b>${esc(c.author)}</b>`}${c.role && c.role !== "user" ? `<em>${esc(roleLabel(c.role))}</em>` : ""}${c.rating ? stars(c.rating) : ""}<time>${when(c.at)}</time>
           ${c.status === "hidden" ? `<span class="tagc">Masqué</span>` : ""}</header>
         ${c.pros || c.cons ? `<ul class="rv-points">${points(c.pros, "pro")}${points(c.cons, "con")}</ul>` : ""}
         ${c.body ? `<p>${esc(c.body).replace(/\n/g, "<br>")}</p>` : ""}
@@ -501,6 +569,8 @@
     v.hidden = false;
     v.innerHTML = `<div class="page"><h1 class="page-title">Actualités</h1>
       ${catalogueStats()}
+      ${(C.site.coupons || []).length ? `<section class="promo-box" aria-label="Codes promo du moment"><h2>Codes promo du moment</h2>${C.site.coupons.map((c) =>
+        `<div class="promo"><span class="promo-shop">${c.url ? `<a href="${esc(c.url)}" target="_blank" rel="noopener">${esc(c.shop)}</a>` : esc(c.shop)}${c.brand ? ` <small>${esc(c.brand)}</small>` : ""}</span>${couponLine(c)}</div>`).join("")}</section>` : ""}
       <div class="chips" role="tablist"><button class="tab" data-actus="all" aria-selected="true">Tout</button><button class="tab" data-actus="moteurs" aria-selected="false">Nouveaux moteurs</button><button class="tab" data-actus="site" aria-selected="false">Le site</button></div>
       <div id="feed"><p class="note">Chargement…</p></div></div>`;
     // Figures count up when the page opens
@@ -571,22 +641,111 @@
   }
 
   // ----------------------------------------------------------------- admin
-  async function renderAdmin(tab = "suggestions", status = "pending") {
+  // Tabs shown according to the permissions of the member (administrators have them all)
+  const ADMIN_TABS = [["dashboard", "Tableau de bord"], ["suggestions", "Corrections", "suggestions", "pending"], ["bugs", "Bugs", "bugs", "bugs"],
+    ["comments", "Avis", "comments"], ["users", "Membres", "members"], ["roles", "Rôles", "roles"], ["coupons", "Codes promo", "coupons"],
+    ["news", "Actualités", "news"], ["settings", "Réglages", "settings"], ["log", "Journal", "logs"]];
+  const LOG_LABELS = { suggestion: "Correction", comment: "Avis", bug: "Bug", user: "Membre", role: "Rôle", coupon: "Code promo", news: "Actualité", settings: "Réglages" };
+  const LOG_VERBS = {
+    "suggestion.approved": "a validé une correction", "suggestion.rejected": "a refusé une correction", "comment.hidden": "a masqué un avis",
+    "comment.visible": "a rétabli un avis", "comment.deleted": "a supprimé un avis", "bug.done": "a résolu un bug", "bug.rejected": "a rejeté un bug",
+    "bug.open": "a rouvert un bug", "bug.deleted": "a supprimé un bug", "user.role": "a changé le rôle de", "user.perms": "a changé les permissions de",
+    "user.banned": "a suspendu", "user.unbanned": "a réactivé", "user.verified": "a confirmé l'email de", "user.note": "a annoté la fiche de",
+    "role.created": "a créé le rôle", "role.updated": "a modifié le rôle", "role.deleted": "a supprimé le rôle", "coupon.created": "a créé le code",
+    "coupon.updated": "a modifié le code", "coupon.deleted": "a supprimé le code", "news.created": "a publié", "news.updated": "a modifié l'actualité",
+    "news.deleted": "a supprimé l'actualité", settings: "a modifié les réglages :",
+  };
+  const COUPON_STATE = { on: ["Actif", "good"], later: ["Programmé", "blue"], expired: ["Expiré", "grey"], off: ["Désactivé", "grey"] };
+  const A = { meta: null, users: [], q: "", role: "" };
+  const adminMeta = async () => (A.meta = A.meta || await get("admin_roles"));
+  const dateFr = (at) => at ? new Date(at.replace(" ", "T") + "Z").toLocaleString("fr-FR", { day: "numeric", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" }) : "";
+  const roleChip = (slug) => { const r = (C.site.roles || {})[slug]; return `<span class="role-chip" style="--rc:${esc(r?.color || "#888")}">${esc(roleLabel(slug))}</span>`; };
+  const permBoxes = (meta, on, locked) => `<div class="perm-grid">${Object.entries(meta.perms).map(([k, l]) =>
+    `<label class="perm"><input type="checkbox" name="perm" value="${k}" ${on.includes(k) ? "checked" : ""} ${locked ? "disabled" : ""}><span>${esc(l)}</span></label>`).join("")}</div>`;
+  const topList = (title, rows) => `<div class="adm-top"><h3>${title}</h3>${rows?.length ? `<ol>${rows.map((r) => `<li><a href="#m/${encodeURIComponent(r.ref)}">${esc(motorName(r.ref))}</a><b>${r.n}</b></li>`).join("")}</ol>` : `<p class="note">Rien pour l'instant.</p>`}</div>`;
+
+  function drawUsers() {
+    const body = $("adm-users");
+    if (!body) return;
+    const q = A.q.toLowerCase(), assign = can("assign"), ban = can("ban"), admin = C.user.role === "admin";
+    const rows = A.users.filter((u) => (!A.role || u.role === A.role || (A.role === "banned" && u.banned)) && (!q || `${u.name} ${u.email}`.toLowerCase().includes(q)));
+    const roles = Object.keys(C.site.roles || {});
+    body.innerHTML = rows.length ? `<div class="tbl-wrap"><table class="adm-table"><thead><tr><th>Membre</th><th>Rôle</th><th>État</th><th>Activité</th><th>Inscrit</th><th></th></tr></thead><tbody>${rows.map((u) => {
+      const self = u.id === C.user.id, locked = self || (u.role === "admin" && !admin);
+      const extra = u.overrides.grant.length + u.overrides.deny.length;
+      return `<tr data-uid="${u.id}"><td><a href="#u/${u.id}"><b>${esc(u.name)}</b></a><br><small>${esc(u.email)}</small>${u.note ? `<br><small class="adm-note-i" title="${esc(u.note)}">📝 ${esc(u.note.slice(0, 60))}</small>` : ""}</td>
+        <td>${assign && !locked ? `<select data-role aria-label="Rôle de ${esc(u.name)}">${roles.filter((r) => r !== "admin" || admin).map((r) => `<option value="${esc(r)}" ${r === u.role ? "selected" : ""}>${esc(roleLabel(r))}</option>`).join("")}</select>` : roleChip(u.role)}
+          ${extra ? `<br><small class="adm-extra">${u.overrides.grant.length ? `+${u.overrides.grant.length}` : ""} ${u.overrides.deny.length ? `−${u.overrides.deny.length}` : ""} permission${extra > 1 ? "s" : ""}</small>` : ""}</td>
+        <td>${+u.banned ? `<span class="st bad">Suspendu</span>` : +u.verified ? `<span class="st good">Actif</span>` : `<span class="st grey">Email non confirmé</span>`}</td>
+        <td><small>${u.comments} avis · ${u.suggestions} corrections${u.last_seen ? `<br>vu le ${when(u.last_seen)}` : ""}</small></td>
+        <td><small>${when(u.created_at)}</small></td>
+        <td class="adm-actions">${locked ? "" : `${ban && !+u.verified ? `<button class="mini" data-uverify>Confirmer</button>` : ""}${ban ? `<button class="mini" data-ban="${+u.banned ? 0 : 1}">${+u.banned ? "Réactiver" : "Suspendre"}</button>` : ""}<button class="mini" data-uperm>${assign ? "Permissions" : "Note"}</button>`}</td></tr>`;
+    }).join("")}</tbody></table></div>` : `<p class="note">Aucun membre ne correspond.</p>`;
+  }
+
+  async function permForm(uid) {
+    const u = A.users.find((x) => x.id === +uid), meta = await adminMeta(), assign = can("assign");
+    const role = meta.roles.find((r) => r.slug === u.role) || { perms: [] };
+    const state = (k) => u.overrides.grant.includes(k) ? "grant" : u.overrides.deny.includes(k) ? "deny" : "";
+    modal(`<h2>${esc(u.name)}</h2><p class="m-sub">${roleChip(u.role)} · inscrit le ${when(u.created_at)}</p>
+      <form class="m-form" data-perm-form="${u.id}">
+        ${assign ? `<p class="note">Chaque permission suit le rôle, ou peut être accordée ou retirée à ce membre seulement.</p>
+        <div class="perm-list">${Object.entries(meta.perms).map(([k, l]) => `<label class="perm-row"><span>${esc(l)}<small>${role.perms.includes(k) ? "incluse dans le rôle" : "pas dans le rôle"}</small></span>
+          <select name="p_${k}"><option value="">Selon le rôle</option><option value="grant" ${state(k) === "grant" ? "selected" : ""}>Accordée</option><option value="deny" ${state(k) === "deny" ? "selected" : ""}>Retirée</option></select></label>`).join("")}</div>` : ""}
+        <label>Note de l'équipe (visible seulement dans l'administration)<textarea name="note" rows="3" maxlength="2000">${esc(u.note || "")}</textarea></label>
+        <p class="m-error" role="alert" hidden></p><button class="btn-red" type="submit">Enregistrer</button></form>`, "m-wide");
+  }
+
+  function couponForm(c = {}) {
+    const shops = [...new Set(Object.values(C.prices || {}).flatMap((p) => (p.offers || []).map((o) => o.shop)))].sort();
+    const brands = [...new Set(MM().state.motors.map((m) => m.MARQUE).filter(Boolean))].sort();
+    return `<form class="m-form coupon-form" data-coupon-form><input type="hidden" name="id" value="${c.id || ""}">
+      <div class="f-2"><label>Code<input name="code" required maxlength="40" value="${esc(c.code || "")}" placeholder="MULTIMOTORS10" autocapitalize="characters"></label>
+        <label>Réduction<input name="discount" maxlength="30" value="${esc(c.discount || "")}" placeholder="-10 %"></label></div>
+      <div class="f-2"><label>Boutique<input name="shop" required maxlength="60" list="dl-shops" value="${esc(c.shop || "")}" placeholder="Drone-FPV-Racer"></label>
+        <label>Marque (facultatif)<input name="brand" maxlength="60" list="dl-brands" value="${esc(c.brand || "")}" placeholder="Toutes les marques"></label></div>
+      <datalist id="dl-shops">${shops.map((s) => `<option value="${esc(s)}">`).join("")}</datalist><datalist id="dl-brands">${brands.map((s) => `<option value="${esc(s)}">`).join("")}</datalist>
+      <label>Description<input name="title" maxlength="160" value="${esc(c.title || "")}" placeholder="Sur tous les moteurs, dès 50 € d'achat"></label>
+      <label>Lien de la boutique (facultatif)<input name="url" type="url" maxlength="500" value="${esc(c.url || "")}" placeholder="https://"></label>
+      <div class="f-2"><label>Début (facultatif)<input name="starts" type="date" value="${esc(c.starts || "")}"></label><label>Fin (facultatif)<input name="ends" type="date" value="${esc(c.ends || "")}"></label></div>
+      <label class="inline"><input type="checkbox" name="active" ${c.id && !+c.active ? "" : "checked"}> Actif</label>
+      <p class="m-error" role="alert" hidden></p>
+      <div class="f-actions">${c.id ? `<button class="btn-dark" type="button" data-coupon-new>Annuler</button>` : ""}<button class="btn-red" type="submit">${c.id ? "Enregistrer le code" : "Créer le code"}</button></div></form>`;
+  }
+
+  async function renderAdmin(tab = "dashboard", status = "") {
     const v = $("view-admin");
     v.hidden = false;
     if (!isMod()) {
-      v.innerHTML = `<div class="page"><h1 class="page-title">Administration</h1><p class="note">Connectez-vous avec un compte de modération.</p><p class="note"><button class="btn-dark" data-login>Connexion</button></p></div>`;
+      v.innerHTML = `<div class="page"><h1 class="page-title">Administration</h1><p class="note">Connectez-vous avec un compte de l'équipe du site.</p><p class="note"><button class="btn-dark" data-login>Connexion</button></p></div>`;
       return;
     }
+    const tabs = ADMIN_TABS.filter(([k, , p]) => !p || can(p) || (k === "roles" && can("assign")));
+    if (!tabs.some(([k]) => k === tab)) tab = "dashboard";
     const stats = await get("admin_stats").catch(() => ({}));
-    const tabs = [["suggestions", "Suggestions", stats.pending], ["bugs", "Bugs", stats.bugs], ["comments", "Commentaires"], ["users", "Membres", stats.users], ["news", "Actualités"]];
-    v.innerHTML = `<div class="page"><h1 class="page-title">Administration</h1>
-      <div class="stats">${[["Suggestions en attente", stats.pending], ["Bugs à traiter", stats.bugs], ["Membres", stats.users], ["Commentaires", stats.comments], ["J'aime", stats.likes]].map(([l, n]) => `<div class="stat"><b>${n ?? "—"}</b><span>${l}</span></div>`).join("")}</div>
-      <div class="chips">${tabs.map(([k, l, n]) => `<button class="tab" data-admin-tab="${k}" aria-selected="${k === tab}">${l}${n ? ` (${n})` : ""}</button>`).join("")}</div>
+    v.innerHTML = `<div class="page adm-page"><h1 class="page-title">Administration</h1>
+      <div class="chips adm-tabs">${tabs.map(([k, l, , n]) => `<button class="tab" data-admin-tab="${k}" aria-selected="${k === tab}">${l}${n && stats[n] ? ` <i>${stats[n]}</i>` : ""}</button>`).join("")}</div>
       <div id="admin-body"><p class="note">Chargement…</p></div></div>`;
-    const body = $("admin-body");
+    const body = $("admin-body"), on = v.querySelector(".adm-tabs [aria-selected=true]");
+    if (on) on.parentNode.scrollLeft = on.offsetLeft - (on.parentNode.clientWidth - on.offsetWidth) / 2;
     try {
-      if (tab === "suggestions") {
+      if (tab === "dashboard") {
+        const w = stats.week || {}, max = Math.max(1, ...(stats.signups || []).map((d) => d.n));
+        const tiles = [["Corrections à valider", stats.pending, "suggestions"], ["Bugs à traiter", stats.bugs, "bugs"], ["Membres", stats.users, "users", w.users ? `+${w.users} cette semaine` : ""],
+          ["Membres actifs", w.active, "", "ces 7 derniers jours"], ["Avis publiés", stats.comments, "comments", w.comments ? `+${w.comments} cette semaine` : ""], ["J'aime", stats.likes],
+          ["Codes promo actifs", stats.coupons, "coupons"], ["Codes copiés", stats.coupon_uses, "coupons"]];
+        body.innerHTML = `<div class="stats adm-stats">${tiles.map(([l, n, t, sub]) => `<${t && tabs.some(([k]) => k === t) ? `button type="button" data-admin-tab="${t}"` : "div"} class="stat"><b>${n ?? "—"}</b><span>${l}</span>${sub ? `<small>${sub}</small>` : ""}</${t && tabs.some(([k]) => k === t) ? "button" : "div"}>`).join("")}</div>
+          <div class="adm-dash">
+            <section class="adm-chart"><h3>Inscriptions des 14 derniers jours</h3>
+              <div class="sbars" role="img" aria-label="${(stats.signups || []).map((d) => `${when(d.d)} : ${d.n}`).join(", ")}">${(stats.signups || []).map((d) =>
+                `<span class="sbar" style="--h:${d.n ? Math.max(4, Math.round((d.n / max) * 100)) : 0}%" data-tip="${esc(new Date(d.d).toLocaleDateString("fr-FR", { weekday: "short", day: "numeric", month: "short" }))} : ${d.n} inscription${d.n > 1 ? "s" : ""}" tabindex="0"><i></i></span>`).join("")}</div>
+              <div class="sbars-axis"><span>${stats.signups?.[0] ? new Date(stats.signups[0].d).toLocaleDateString("fr-FR", { day: "numeric", month: "short" }) : ""}</span><span>max. ${max} / jour</span><span>aujourd'hui</span></div></section>
+            ${topList("Les plus aimés", stats.top_liked)}${topList("Les plus commentés", stats.top_reviewed)}${topList("Les plus possédés", stats.top_owned)}
+            <section class="adm-top"><h3>Votre accès</h3><p>${roleChip(C.user.role)}</p><ul class="perm-mine">${(stats.perms || []).map((p) => `<li>${esc((A.meta?.perms || {})[p] || p)}</li>`).join("")}</ul></section>
+          </div>`;
+        if (!A.meta) adminMeta().then(() => { const ul = body.querySelector(".perm-mine"); if (ul) ul.innerHTML = (stats.perms || []).map((p) => `<li>${esc(A.meta.perms[p] || p)}</li>`).join(""); }).catch(() => {});
+      } else if (tab === "suggestions") {
+        status = ["pending", "approved", "rejected"].includes(status) ? status : "pending";
         const rows = await get("admin_suggestions", { status });
         body.innerHTML = `<div class="chips small">${[["pending", "En attente"], ["approved", "Validées"], ["rejected", "Refusées"]].map(([k, l]) => `<button class="tab" data-admin-status="${k}" aria-selected="${k === status}">${l}</button>`).join("")}</div>` +
           (rows.length ? rows.map((s) => `
@@ -602,6 +761,7 @@
           </article>`).join("") : `<p class="note">Rien à traiter.</p>`);
       } else if (tab === "bugs") {
         const st = ["open", "done", "rejected"].includes(status) ? status : "open";
+        status = st;
         const rows = await get("admin_bugs", { status: st });
         body.innerHTML = `<div class="chips small">${[["open", "À traiter"], ["done", "Résolus"], ["rejected", "Rejetés"]].map(([k, l]) => `<button class="tab" data-admin-bugs="${k}" aria-selected="${k === st}">${l}</button>`).join("")}</div>` +
           (rows.length ? rows.map((b) => `
@@ -623,20 +783,47 @@
         const rows = await get("admin_comments");
         body.innerHTML = rows.length ? rows.map((c) => `
           <article class="adm-card ${c.status === "hidden" ? "hidden-c" : ""}">
-            <header><a href="#m/${encodeURIComponent(c.ref)}">${esc(motorName(c.ref))}</a><time>${when(c.created_at)}</time></header>
+            <header><a href="#m/${encodeURIComponent(c.ref)}">${esc(motorName(c.ref))}</a>${c.rating ? stars(c.rating) : ""}<time>${when(c.created_at)}</time></header>
             <p>${esc(c.body)}</p>
             <footer><span>par <b>${esc(c.author)}</b>${c.status === "hidden" ? " · masqué" : ""}</span>
               ${c.status === "hidden" ? `<button class="btn-dark" data-cmod="${c.id}" data-status="visible">Rétablir</button>` : `<button class="btn-dark" data-cmod="${c.id}" data-status="hidden">Masquer</button>`}
               <button class="btn-red" data-cmod="${c.id}" data-status="deleted">Supprimer</button></footer>
           </article>`).join("") : `<p class="note">Aucun commentaire.</p>`;
       } else if (tab === "users") {
-        const rows = await get("admin_users");
-        const admin = C.user.role === "admin";
-        body.innerHTML = `<div class="tbl-wrap"><table class="adm-table"><thead><tr><th>Pseudo</th><th>Email</th><th>Rôle</th><th>État</th><th>Inscrit le</th></tr></thead><tbody>${rows.map((u) => `
-          <tr data-uid="${u.id}"><td>${esc(u.name)}</td><td>${esc(u.email)}</td>
-            <td>${admin && u.id !== C.user.id ? `<select data-role>${["user", "moderator", "admin"].map((r) => `<option value="${r}" ${r === u.role ? "selected" : ""}>${ROLE_LABEL[r]}</option>`).join("")}</select>` : ROLE_LABEL[u.role]}</td>
-            <td>${+u.banned ? "Suspendu" : +u.verified ? "Actif" : "Email non confirmé"} ${admin && u.id !== C.user.id ? `<button class="mini" data-ban="${+u.banned ? 0 : 1}">${+u.banned ? "Réactiver" : "Suspendre"}</button>` : ""}</td>
-            <td>${when(u.created_at)}</td></tr>`).join("")}</tbody></table></div>`;
+        A.users = await get("admin_users");
+        const counts = A.users.reduce((o, u) => ((o[u.role] = (o[u.role] || 0) + 1), o), {});
+        const banned = A.users.filter((u) => +u.banned).length;
+        body.innerHTML = `<div class="adm-filter"><input type="search" data-users-q placeholder="Chercher un pseudo ou un email" value="${esc(A.q)}" aria-label="Chercher un membre">
+            <div class="chips small"><button class="tab" data-users-role="" aria-selected="${!A.role}">Tous <i>${A.users.length}</i></button>${Object.keys(C.site.roles || {}).filter((r) => counts[r]).map((r) =>
+              `<button class="tab" data-users-role="${esc(r)}" aria-selected="${A.role === r}">${esc(roleLabel(r))} <i>${counts[r]}</i></button>`).join("")}${banned ? `<button class="tab" data-users-role="banned" aria-selected="${A.role === "banned"}">Suspendus <i>${banned}</i></button>` : ""}</div></div>
+          <div id="adm-users"></div>`;
+        drawUsers();
+      } else if (tab === "roles") {
+        A.meta = null;
+        const meta = await adminMeta(), edit = can("roles"), admin = C.user.role === "admin";
+        body.innerHTML = `<p class="note">Un rôle regroupe des permissions. Les administrateurs ont toujours toutes les permissions et les membres aucune ; chaque membre peut ensuite recevoir ou perdre une permission précise depuis l'onglet Membres.</p>
+          ${edit ? `<details class="adm-new"><summary>Créer un rôle</summary><form class="m-form" data-role-form>
+            <div class="f-2"><label>Nom du rôle<input name="label" required maxlength="40" placeholder="Rédaction"></label><label>Couleur<input name="color" type="color" value="#2ec4b6"></label></div>
+            ${permBoxes(meta, [], false)}<p class="m-error" role="alert" hidden></p><button class="btn-red" type="submit">Créer le rôle</button></form></details>` : ""}
+          ${meta.roles.map((r) => {
+            const sys = meta.system.includes(r.slug), canEdit = edit && (r.slug !== "admin" || admin);
+            return `<article class="adm-card role-card" style="--rc:${esc(r.color || "#888")}"><form class="m-form" data-role-form="${esc(r.slug)}">
+              <header><span class="role-dot"></span>${canEdit ? `<input name="label" value="${esc(r.label)}" maxlength="40" aria-label="Nom du rôle" class="role-name">` : `<b>${esc(r.label)}</b>`}
+                ${canEdit ? `<input name="color" type="color" value="${esc(r.color || "#888888")}" aria-label="Couleur">` : ""}<small>${r.members} membre${r.members > 1 ? "s" : ""}</small></header>
+              ${r.slug === "admin" ? `<p class="note">Toutes les permissions, toujours.</p>` : r.slug === "user" ? `<p class="note">Aucune permission d'administration : c'est le rôle de chaque nouveau compte.</p>` : permBoxes(meta, r.perms, !canEdit)}
+              <p class="m-error" role="alert" hidden></p>
+              ${canEdit ? `<footer>${sys ? "" : `<button class="btn-dark" type="button" data-role-del="${esc(r.slug)}">Supprimer</button>`}<button class="btn-red" type="submit">Enregistrer</button></footer>` : ""}</form></article>`;
+          }).join("")}`;
+      } else if (tab === "coupons") {
+        const rows = await get("admin_coupons");
+        body.innerHTML = `<p class="note">Les codes actifs s'affichent sous les offres de la boutique dans le comparateur de prix (et seulement pour la marque choisie, le cas échéant), et dans les actualités.</p>
+          <div class="adm-new open" id="coupon-edit"><h3>Nouveau code promo</h3>${couponForm()}</div>
+          ${rows.length ? `<div class="tbl-wrap"><table class="adm-table"><thead><tr><th>Code</th><th>Boutique</th><th>Réduction</th><th>Validité</th><th>État</th><th>Copié</th><th></th></tr></thead><tbody>${rows.map((c) => `
+            <tr data-coupon='${esc(JSON.stringify(c))}'><td><code class="cp-code">${esc(c.code)}</code>${c.title ? `<br><small>${esc(c.title)}</small>` : ""}</td>
+              <td>${esc(c.shop)}${c.brand ? `<br><small>${esc(c.brand)} uniquement</small>` : ""}</td><td>${esc(c.discount || "—")}</td>
+              <td><small>${c.starts ? `du ${when(c.starts)}` : "dès maintenant"}<br>${c.ends ? `au ${when(c.ends)}` : "sans fin"}</small></td>
+              <td><span class="st ${COUPON_STATE[c.state][1]}">${COUPON_STATE[c.state][0]}</span></td><td>${c.uses} fois</td>
+              <td class="adm-actions"><button class="mini" data-coupon-edit>Modifier</button><button class="mini" data-coupon-toggle>${+c.active ? "Désactiver" : "Activer"}</button><button class="mini" data-coupon-del>Supprimer</button></td></tr>`).join("")}</tbody></table></div>` : `<p class="note">Aucun code promo pour l'instant.</p>`}`;
       } else if (tab === "news") {
         const rows = await get("admin_news");
         body.innerHTML = `<form class="m-form news-form" data-news-form><input type="hidden" name="id" value="">
@@ -646,10 +833,96 @@
             <button class="btn-red" type="submit">Enregistrer l'actualité</button></form>` +
           rows.map((n) => `<article class="adm-card"><header><b>${esc(n.title)}</b><time>${when(n.created_at)}</time></header><p>${esc(n.body)}</p>
             <footer><span>${+n.published ? "Publiée" : "Brouillon"}</span><button class="btn-dark" data-news-edit='${esc(JSON.stringify(n))}'>Modifier</button><button class="btn-red" data-news-del="${n.id}">Supprimer</button></footer></article>`).join("");
+      } else if (tab === "settings") {
+        const s = await get("admin_settings");
+        body.innerHTML = `<form class="m-form adm-settings" data-settings-form>
+          <fieldset><legend>Bandeau d'annonce</legend><p class="note">Affiché en haut de toutes les pages ; chaque visiteur peut le fermer.</p>
+            <label class="inline"><input type="checkbox" name="announce_on" ${s.announce_on === "1" ? "checked" : ""}> Afficher le bandeau</label>
+            <label>Texte<input name="announce_text" maxlength="300" value="${esc(s.announce_text)}" placeholder="-10 % chez Drone-FPV-Racer avec le code MULTIMOTORS"></label>
+            <div class="f-2"><label>Lien (facultatif)<input name="announce_link" maxlength="500" value="${esc(s.announce_link)}" placeholder="https://… ou #actus"></label>
+              <label>Style<select name="announce_kind">${[["info", "Information"], ["promo", "Promotion"], ["warning", "Alerte"]].map(([k, l]) => `<option value="${k}" ${s.announce_kind === k ? "selected" : ""}>${l}</option>`).join("")}</select></label></div></fieldset>
+          <fieldset><legend>Communauté</legend>
+            <label class="inline"><input type="checkbox" name="registrations" ${s.registrations !== "0" ? "checked" : ""}> Inscriptions ouvertes <small>(les comptes existants peuvent toujours se connecter)</small></label>
+            <label class="inline"><input type="checkbox" name="comments" ${s.comments !== "0" ? "checked" : ""}> Avis ouverts <small>(l'équipe peut toujours publier)</small></label></fieldset>
+          <p class="m-error" role="alert" hidden></p><button class="btn-red" type="submit">Enregistrer les réglages</button></form>`;
+      } else if (tab === "log") {
+        const kind = Object.keys(LOG_LABELS).includes(status) ? status : "";
+        status = kind;
+        const rows = await get("admin_log", kind ? { kind } : undefined);
+        body.innerHTML = `<div class="chips small"><button class="tab" data-admin-log="" aria-selected="${!kind}">Tout</button>${Object.entries(LOG_LABELS).map(([k, l]) => `<button class="tab" data-admin-log="${k}" aria-selected="${k === kind}">${l}</button>`).join("")}</div>
+          ${rows.length ? `<ol class="adm-log">${rows.map((r) => `<li><time>${dateFr(r.created_at)}</time><span><b>${esc(r.who)}</b> ${esc(LOG_VERBS[r.action] || r.action)} ${r.target ? `<em>${esc(r.target)}</em>` : ""}${r.detail ? `<small>${esc(r.detail)}</small>` : ""}</span></li>`).join("")}</ol>` : `<p class="note">Aucune action enregistrée.</p>`}`;
       }
     } catch (e) { body.innerHTML = `<p class="note">${esc(e.message)}</p>`; }
     v.dataset.tab = tab; v.dataset.status = status;
   }
+  const readPerms = (f) => [...f.querySelectorAll('input[name="perm"]:checked')].map((i) => i.value);
+
+  // Admin actions that are not in the main click handler
+  document.addEventListener("click", async (ev) => {
+    const t = ev.target;
+    if (!t.closest || !t.closest("#view-admin, #modal")) return;
+    const ur = t.closest("[data-users-role]"); if (ur) { A.role = ur.dataset.usersRole; document.querySelectorAll("[data-users-role]").forEach((b) => b.setAttribute("aria-selected", String(b === ur))); return drawUsers(); }
+    const lg = t.closest("[data-admin-log]"); if (lg) return renderAdmin("log", lg.dataset.adminLog);
+    const up = t.closest("[data-uperm]"); if (up) return permForm(up.closest("tr").dataset.uid);
+    const uv = t.closest("[data-uverify]");
+    if (uv) { try { await api("user_update", { id: uv.closest("tr").dataset.uid, verified: "1" }); toast("Adresse confirmée.", "good"); renderAdmin("users"); } catch (e) { toast(e.message, "bad"); } return; }
+    const rd = t.closest("[data-role-del]");
+    if (rd) {
+      if (!confirm("Supprimer ce rôle ? Ses membres redeviendront de simples membres.")) return;
+      try { await api("role_delete", { slug: rd.dataset.roleDel }); toast("Rôle supprimé.", "good"); await refreshSite(); renderAdmin("roles"); } catch (e) { toast(e.message, "bad"); }
+      return;
+    }
+    const row = t.closest("[data-coupon]");
+    if (row && t.closest("[data-coupon-edit]")) {
+      const box = $("coupon-edit"), c = JSON.parse(row.dataset.coupon);
+      box.innerHTML = `<h3>Modifier le code ${esc(c.code)}</h3>${couponForm(c)}`;
+      box.scrollIntoView({ behavior: "smooth", block: "start" }); return;
+    }
+    if (row && t.closest("[data-coupon-toggle]")) {
+      const c = JSON.parse(row.dataset.coupon);
+      try { await api("coupon_save", { ...c, active: +c.active ? "0" : "1" }); toast(+c.active ? "Code désactivé." : "Code activé.", "good"); await refreshSite(); renderAdmin("coupons"); } catch (e) { toast(e.message, "bad"); }
+      return;
+    }
+    if (row && t.closest("[data-coupon-del]")) {
+      if (!confirm("Supprimer définitivement ce code promo ?")) return;
+      try { await api("coupon_delete", { id: JSON.parse(row.dataset.coupon).id }); toast("Code supprimé.", "good"); await refreshSite(); renderAdmin("coupons"); } catch (e) { toast(e.message, "bad"); }
+      return;
+    }
+    if (t.closest("[data-coupon-new]")) { $("coupon-edit").innerHTML = `<h3>Nouveau code promo</h3>${couponForm()}`; }
+  });
+  document.addEventListener("input", (ev) => { if (ev.target.matches("[data-users-q]")) { A.q = ev.target.value; drawUsers(); } });
+  document.addEventListener("submit", async (ev) => {
+    const f = ev.target;
+    if (!f.matches("[data-perm-form], [data-role-form], [data-coupon-form], [data-settings-form]")) return;
+    ev.preventDefault();
+    const d = formData(f), btn = f.querySelector("[type=submit]");
+    btn.disabled = true;
+    try {
+      if (f.dataset.permForm) {
+        const payload = { id: f.dataset.permForm, note: d.note || "" };
+        if (can("assign")) {
+          const keys = Object.keys(d).filter((k) => k.startsWith("p_"));
+          payload.grant = keys.filter((k) => d[k] === "grant").map((k) => k.slice(2));
+          payload.deny = keys.filter((k) => d[k] === "deny").map((k) => k.slice(2));
+        }
+        await api("user_update", payload);
+        closeModal(); toast("Membre mis à jour.", "good"); renderAdmin("users");
+      } else if (f.matches("[data-role-form]")) {
+        await api("role_save", { slug: f.dataset.roleForm || "", label: d.label, color: d.color || "", perms: readPerms(f) });
+        toast(f.dataset.roleForm ? "Rôle enregistré." : "Rôle créé.", "good");
+        await refreshSite(); renderAdmin("roles");
+      } else if (f.matches("[data-coupon-form]")) {
+        await api("coupon_save", { ...d, active: f.active.checked ? "1" : "0" });
+        toast(d.id ? "Code promo enregistré." : "Code promo créé.", "good");
+        await refreshSite(); renderAdmin("coupons");
+      } else if (f.matches("[data-settings-form]")) {
+        const r = await api("settings_save", { ...d, announce_on: f.announce_on.checked ? "1" : "0", registrations: f.registrations.checked ? "1" : "0", comments: f.comments.checked ? "1" : "0" });
+        toast(r.message, "good");
+        await refreshSite(); drawAnnounce();
+      }
+    } catch (e) { showErr(f, e.message); }
+    finally { btn.disabled = false; }
+  });
 
   // ---------------------------------------------------------------- profiles
   const COLORS = ["#111111", "#ff5757", "#ff9f1c", "#2ec4b6", "#3a86ff", "#8338ec", "#06a77d", "#e63973"];
@@ -687,7 +960,7 @@
   // Badges earned from what the member did on the site
   function badges(p) {
     const b = [], s = p.stats || {}, e = p.extra || {};
-    if (p.role === "admin") b.push(["Administrateur", "gold"]); else if (p.role === "moderator") b.push(["Modérateur", "gold"]);
+    if (p.role === "admin") b.push(["Administrateur", "gold"]); else if (p.role === "moderator") b.push(["Modérateur", "gold"]); else if (p.role && p.role !== "user") b.push([roleLabel(p.role), "gold"]);
     if (s.approved >= 10) b.push(["Expert catalogue", "gold"]); else if (s.approved >= 1) b.push(["Contributeur", "blue"]);
     if (s.comments >= 10) b.push(["Pilote bavard", "green"]); else if (s.comments >= 1) b.push(["A donné son avis", "green"]);
     if ((p.setup || []).length) b.push(["Setup partagé", "purple"]);
@@ -720,7 +993,7 @@
         <div class="pf-id">
           ${avatar(p, "xl")}
           <div class="pf-name">
-            <h1>${esc(p.name)}</h1>${p.role && p.role !== "user" ? `<em class="pf-role">${ROLE_LABEL[p.role]}</em>` : ""}${e.level ? `<em class="pf-level">${PICON.lvl}${esc(e.level)}</em>` : ""}
+            <h1>${esc(p.name)}</h1>${p.role && p.role !== "user" ? `<em class="pf-role">${esc(roleLabel(p.role))}</em>` : ""}${e.level ? `<em class="pf-level">${PICON.lvl}${esc(e.level)}</em>` : ""}
             <p class="pf-meta">${since ? `<span>${PICON.cal}Membre depuis ${esc(since)}</span>` : ""}${p.location ? `<span>${PICON.pin}${esc(p.location)}</span>` : ""}${styles.length ? `<span>${PICON.fly}${esc(styles.join(" · "))}</span>` : ""}${e.pilot_since ? `<span>${PICON.lvl}Pilote depuis ${esc(e.pilot_since)}</span>` : ""}</p>
           </div>
           ${p.mine && !preview ? `<a class="btn-dark pf-edit" href="#profil">Modifier mon profil</a>` : ""}
@@ -1081,6 +1354,17 @@
       return;
     }
     const sg = t.closest("[data-suggest]"); if (sg) return suggestForm(sg.dataset.suggest);
+    const cc = t.closest("[data-coupon-copy]");
+    if (cc) {
+      try { await navigator.clipboard.writeText(cc.dataset.code); toast(`Code ${cc.dataset.code} copié.`, "good"); } catch (e) { toast(`Code promo : ${cc.dataset.code}`); }
+      cc.textContent = "Copié ✓";
+      if (C.online) api("coupon_use", { id: cc.dataset.couponCopy }).catch(() => {});
+      return;
+    }
+    if (t.closest("[data-announce-off]")) {
+      try { localStorage.setItem("mm-announce-off", textKey(C.site.announce?.text || "")); } catch (e) { /* this page only */ }
+      document.querySelector(".mm-announce")?.remove(); return;
+    }
     const cd = t.closest("[data-cdel]");
     if (cd) { try { await api("comment_delete", { id: cd.dataset.cdel }); loadSocial($("detail").dataset.ref); } catch (e) { toast(e.message, "bad"); } return; }
     const cm = t.closest("[data-cmod]");
@@ -1209,7 +1493,7 @@
     }
     if (["level", "pilot_since"].includes(ev.target.name) && ev.target.closest('[data-pf="profil"]')) return refreshAvatarPreview();
     const r = ev.target.closest("[data-role]");
-    if (r) { try { await api("user_update", { id: r.closest("tr").dataset.uid, role: r.value }); toast("Rôle modifié.", "good"); } catch (e) { toast(e.message, "bad"); } }
+    if (r) { try { await api("user_update", { id: r.closest("tr").dataset.uid, role: r.value }); toast("Rôle modifié.", "good"); } catch (e) { toast(e.message, "bad"); } renderAdmin("users"); }
   });
 
   document.addEventListener("submit", async (ev) => {
