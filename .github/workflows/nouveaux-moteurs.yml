@@ -2,21 +2,43 @@ name: Recherche quotidienne des nouveaux moteurs
 
 on:
   schedule:
-    # Tous les jours à 06:00 UTC (08:00 heure de Paris en été)
-    - cron: "0 6 * * *"
+    # GitHub lance les tâches programmées avec du retard (jusqu'à 6 h à l'heure pile, très demandée) :
+    # trois horaires décalés du matin (heure de Paris en été : 5 h 23, 6 h 53, 8 h 37) ;
+    # le premier qui démarre fait la recherche, les suivants voient qu'elle est faite et s'arrêtent.
+    - cron: "23 3 * * *"
+    - cron: "53 4 * * *"
+    - cron: "37 6 * * *"
   workflow_dispatch: {}
 
 permissions:
   contents: write
+  actions: read
 
 concurrency:
   group: nouveaux-moteurs
   cancel-in-progress: false
 
 jobs:
-  scan:
+  check:
     runs-on: ubuntu-latest
-    timeout-minutes: 120
+    outputs:
+      run: ${{ steps.c.outputs.run }}
+    steps:
+      - id: c
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          # Lancement à la main : toujours ; programmé : seulement si aucune recherche n'a réussi aujourd'hui
+          if [ "${{ github.event_name }}" != "schedule" ]; then echo "run=true" >> "$GITHUB_OUTPUT"; exit 0; fi
+          n=$(gh run list -R "${{ github.repository }}" --workflow nouveaux-moteurs.yml --status success --created "$(date -u +%F)" --json databaseId --jq length)
+          echo "Recherches réussies aujourd'hui : $n"
+          if [ "$n" = "0" ]; then echo "run=true" >> "$GITHUB_OUTPUT"; else echo "run=false" >> "$GITHUB_OUTPUT"; fi
+
+  scan:
+    needs: check
+    if: needs.check.outputs.run == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 150
     steps:
       - uses: actions/checkout@v4
 
@@ -38,40 +60,40 @@ jobs:
           rm -f tableau.xlsx
 
       - name: Moteurs vendus en boutique qui manquent au catalogue
-        run: python tools/shop_motors.py || true
+        run: tools/etape.sh python tools/shop_motors.py
 
       - name: Fiches techniques des sites fabricants (T-Motor…)
-        run: python tools/maker_sheets.py || true
+        run: tools/etape.sh python tools/maker_sheets.py
 
       - name: Compléter les fiches (500 familles par jour)
-        run: python tools/enrich.py --limit 500 || true
+        run: tools/etape.sh python tools/enrich.py --limit 500
 
       - name: Corrections validées par la communauté
         env:
           MM_SITE_URL: ${{ secrets.MM_SITE_URL }}
           MM_EXPORT_KEY: ${{ secrets.MM_EXPORT_KEY }}
-        run: python tools/community_sync.py || true
+        run: tools/etape.sh python tools/community_sync.py
 
       - name: Prix, photos et vidéos (400 familles par jour, toutes les boutiques)
         run: |
-          python tools/prices.py --limit 400 --workers 6 || true
-          python tools/videos.py --limit 300 || true
-          python tools/photos.py || true
-          python tools/photos_sites.py || true
-          python tools/photos_dedupe.py || true
-          python tools/photos_frame.py || true
-          python tools/links_check.py || true
-          python tools/bench.py || true
+          tools/etape.sh python tools/prices.py --limit 400 --workers 6
+          tools/etape.sh python tools/videos.py --limit 300
+          tools/etape.sh python tools/photos.py
+          tools/etape.sh python tools/photos_sites.py
+          tools/etape.sh python tools/photos_dedupe.py
+          tools/etape.sh python tools/photos_frame.py
+          tools/etape.sh python tools/links_check.py
+          tools/etape.sh python tools/bench.py
 
       - name: Miniatures et fil d'actualité
         run: |
-          python tools/thumbs.py || true
-          python tools/ranking.py || true
-          python tools/logos.py || true
-          python tools/actus.py || true
+          tools/etape.sh python tools/thumbs.py
+          tools/etape.sh python tools/ranking.py
+          tools/etape.sh python tools/logos.py
+          tools/etape.sh python tools/actus.py
 
       - name: Uniformiser le format des caractéristiques
-        run: python tools/normalize.py
+        run: tools/etape.sh python tools/normalize.py
 
       - name: Publier sur GitHub
         run: |
@@ -82,10 +104,21 @@ jobs:
             echo "Aucun nouveau moteur aujourd'hui."
             exit 0
           fi
-          git commit -m "catalogue: nouveaux moteurs du $(date -u +%Y-%m-%d)"
+          git commit -q -m "catalogue: nouveaux moteurs du $(date -u +%Y-%m-%d)"
           # The branch may have moved during the run (a merged pull request): replay on top, the new data wins
           for i in 1 2 3; do
             git pull --rebase -X theirs origin Moteurs && git push && exit 0
             sleep 10
           done
           exit 1
+
+      - name: Bilan
+        if: always()
+        run: |
+          {
+            echo "## Recherche du $(date -u +%F)"
+            git log -1 --format='Dernière publication : %s (%cr)' origin/Moteurs 2>/dev/null || true
+            if [ -s "$RUNNER_TEMP/echecs.md" ]; then echo "### Outils en échec"; cat "$RUNNER_TEMP/echecs.md"; else echo "Tous les outils ont fonctionné."; fi
+          } >> "$GITHUB_STEP_SUMMARY"
+          # Run marked failed (red, email from GitHub) when a tool crashed, after its data was published
+          [ ! -s "$RUNNER_TEMP/echecs.md" ]
