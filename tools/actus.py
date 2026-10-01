@@ -6,12 +6,15 @@ run the dates are rebuilt from the git history of catalogue/moteurs.csv. One
 news item per day lists the motors added that day (sheet import, shops,
 manufacturer pages…), with the new brands. The daily reports
 catalogue/nouveautes/AAAA-MM-JJ.md are merged in.
+Daily report: what changed in the catalogue since the day before (tools/rapport.py,
+catalogue/rapports.json), one item per day.
 Site news: catalogue/actus_site.json (hand-written) and, on the page, the news
 posted from the admin panel. The live catalogue figures are computed by the page.
 
 Usage: python tools/actus.py
 """
 import csv, datetime, io, json, re, subprocess
+import rapport
 from collections import defaultdict
 from pathlib import Path
 
@@ -51,6 +54,7 @@ def main():
     today = datetime.date.today().isoformat()
     first = {ref: first.get(ref, today) for ref in by_ref}  # motors merged or removed since are dropped
     FIRST.write_text(json.dumps(first, ensure_ascii=False, sort_keys=True, separators=(",", ":")), encoding="utf-8")
+    rapport.daily()
 
     days = defaultdict(set)
     for ref, day in first.items():
@@ -85,7 +89,11 @@ def main():
                       "newBrands": brands[:40], "newBrandsCount": len(brands), "refs": show[:24],
                       # Every motor of the day, for the "see them all" list (brand, model, KV order)
                       "all": sorted(refs, key=lambda r: (by_ref[r]["MARQUE"].lower(), by_ref[r]["NOM"].lower(), float(by_ref[r]["KV"] or 0) if re.fullmatch(r"\d+(\.\d+)?", by_ref[r]["KV"] or "") else 0))[:600]})
-    items.sort(key=lambda i: (i["date"], i["type"] == "site"), reverse=True)
+    for r in json.loads(rapport.REPORTS.read_text()) if rapport.REPORTS.exists() else []:
+        items.append({"type": "rapport", **r})
+    # Same day: the report first, then the new motors, then the site news
+    order = {"rapport": 2, "moteurs": 1, "site": 0}
+    items.sort(key=lambda i: (i["date"], order.get(i["type"], 0)), reverse=True)
     OUT.parent.mkdir(parents=True, exist_ok=True)
     OUT.write_text(json.dumps(items[:100], ensure_ascii=False, separators=(",", ":")), encoding="utf-8")
     print(f"{len(items)} actualités ; motors per day: " + ", ".join(f"{d} {len(r)}" for d, r in sorted(days.items())))
