@@ -8,7 +8,6 @@ require __DIR__ . '/schema.php';
 const FIELDS = ['NOM', 'VERSION', 'CLASSE', 'KV', 'POIDS', 'D MOTEUR', 'H MOTEUR', 'D SHAFT', 'L SHAFT', 'TYPE SHAFT',
     'VIS HEL', 'VIS FIX', 'ENTRAXE FIX', 'LIPO', 'L CABLE', 'TYPE CABLE', 'HELICE', 'PUISSANCE', 'AMP', 'AIMANT',
     'CLOCHE', 'CONFIG', 'RESISTANCE', 'UTILISATION', 'LIEN', 'IMG', 'AUTRE'];
-const ROLES = ['user', 'moderator', 'admin'];
 
 if (!is_file(__DIR__ . '/config.php')) fail('Les comptes ne sont pas encore ouverts : la base de données du site n\'est pas encore configurée.', 503);
 
@@ -48,6 +47,9 @@ try {
     db()->query('SELECT rating FROM comments LIMIT 1');
     db()->query('SELECT extra FROM profiles LIMIT 1');
     db()->query('SELECT 1 FROM bugs LIMIT 1');
+    db()->query('SELECT perms FROM users LIMIT 1');
+    db()->query('SELECT 1 FROM coupons LIMIT 1');
+    db()->query('SELECT 1 FROM settings LIMIT 1');
 } catch (PDOException $e) {
     install_schema();
 }
@@ -115,6 +117,41 @@ function profile_row(int $id): array {
     return q('SELECT * FROM profiles WHERE user_id = ?', [$id])->fetch() ?: [];
 }
 
+// What every page needs from the server besides the session: banner, open features, role names, promo codes
+function site_public(): array {
+    $today = gmdate('Y-m-d');
+    $coupons = q("SELECT id, code, shop, discount, title, url, brand, ends FROM coupons WHERE active = 1 AND (starts IS NULL OR starts <= ?) AND (ends IS NULL OR ends >= ?) ORDER BY shop, id", [$today, $today])->fetchAll();
+    return [
+        'announce' => setting('announce_on') === '1' && setting('announce_text') !== ''
+            ? ['text' => setting('announce_text'), 'link' => setting('announce_link'), 'kind' => setting('announce_kind', 'info')] : null,
+        'registrations' => setting('registrations', '1') === '1',
+        'comments' => setting('comments', '1') === '1',
+        'roles' => array_map(fn ($r) => ['label' => $r['label'], 'color' => $r['color']], roles_all()),
+        'coupons' => array_map(fn ($c) => ['id' => (int) $c['id']] + array_filter($c, fn ($v, $k) => $k !== 'id' && $v !== null && $v !== '', ARRAY_FILTER_USE_BOTH), $coupons),
+    ];
+}
+
+function coupon_state(array $c): string {
+    $today = gmdate('Y-m-d');
+    return !$c['active'] ? 'off' : ($c['starts'] && $c['starts'] > $today ? 'later' : ($c['ends'] && $c['ends'] < $today ? 'expired' : 'on'));
+}
+
+// A member the team member $a may change: never themself, an administrator only by an administrator
+function editable_user(array $a, int $id): array {
+    if ($id === (int) $a['id']) fail('Vous ne pouvez pas modifier votre propre compte ici.');
+    $t = q('SELECT id, email, name, role, perms, verified, banned FROM users WHERE id = ?', [$id])->fetch();
+    if (!$t) fail('Membre introuvable.', 404);
+    if ($t['role'] === 'admin' && $a['role'] !== 'admin') fail('Seul un administrateur peut modifier un autre administrateur.', 403);
+    return $t;
+}
+
+// Nobody gives more than they have: a role or permissions are given only by someone who holds them all
+function check_grant(array $a, array $perms): void {
+    if ($a['role'] === 'admin') return;
+    $over = array_diff($perms, perms_of($a));
+    if ($over) fail('Vous ne pouvez pas donner une permission que vous n\'avez pas : ' . implode(', ', array_map(fn ($p) => PERMS[$p] ?? $p, $over)) . '.', 403);
+}
+
 function me_payload(?array $u): ?array {
     if (!$u) return null;
     $p = profile_row((int) $u['id']);
@@ -125,7 +162,7 @@ switch ($action) {
 
 // ---------------------------------------------------------------- accounts
 case 'me':
-    out(['user' => me_payload(current_user()), 'google_client_id' => cfg('google_client_id', '')]);
+    out(['user' => me_payload(current_user()), 'google_client_id' => cfg('google_client_id', ''), 'site' => site_public()]);
 
 case 'register':
     if (!$post) fail('POST attendu.', 405);
@@ -136,6 +173,7 @@ case 'register':
     if (!valid_email($email)) fail('Adresse email invalide.');
     if (mb_strlen($name) < 2) fail('Choisissez un pseudo d\'au moins 2 caractères.');
     if (strlen($pass) < 8) fail('Le mot de passe doit faire au moins 8 caractères.');
+    if (setting('registrations', '1') !== '1') fail('Les inscriptions sont fermées pour le moment.', 403);
     if (arg('accept') !== '1') fail('Acceptez les conditions d\'utilisation et la politique de confidentialité pour créer un compte.');
     purge_unverified();
     if (q('SELECT id FROM users WHERE email = ?', [$email])->fetch()) fail('Un compte existe déjà avec cette adresse.');
@@ -202,6 +240,7 @@ case 'google':
         q('UPDATE users SET google_sub = ?, verified = 1 WHERE id = ?', [$info['sub'], $u['id']]);
         $id = (int) $u['id'];
     } else {
+        if (setting('registrations', '1') !== '1') fail('Les inscriptions sont fermées pour le moment.', 403);
         $role = $email === mb_strtolower((string) cfg('admin_email', '')) ? 'admin' : 'user';
         $name = mb_substr($info['given_name'] ?? $info['name'] ?? explode('@', $email)[0], 0, 40);
         q('INSERT INTO users (email, name, google_sub, role, verified, created_at) VALUES (?, ?, ?, ?, 1, ?)', [$email, $name, $info['sub'], $role, now()]);
@@ -239,7 +278,7 @@ case 'motor':
     $me = current_user();
     $likes = (int) q('SELECT COUNT(*) FROM likes WHERE ref = ?', [$ref])->fetchColumn();
     $liked = $me ? (bool) q('SELECT 1 FROM likes WHERE ref = ? AND user_id = ?', [$ref, $me['id']])->fetchColumn() : false;
-    $mod = $me && in_array($me['role'], ['moderator', 'admin'], true);
+    $mod = can($me, 'comments');
     $rows = q('SELECT id, user_id, body, status, created_at, rating, pros, cons FROM comments WHERE ref = ?' . ($mod ? " AND status <> 'deleted'" : " AND status = 'visible'") . ' ORDER BY id DESC LIMIT 200', [$ref])->fetchAll();
     $names = user_names(array_column($rows, 'user_id'));
     $comments = array_map(fn ($c) => [
@@ -286,7 +325,7 @@ case 'profile':
     $me = current_user();
     $p = profile_row($id);
     $mine = $me && (int) $me['id'] === $id;
-    $public = ($p['is_public'] ?? 1) || $mine || ($me && $me['role'] !== 'user');
+    $public = ($p['is_public'] ?? 1) || $mine || can($me, 'members');
     $extra = profile_extra($p);
     $base = ['id' => $id, 'name' => $u['name'], 'role' => $u['role'], 'since' => $u['created_at'], 'mine' => $mine,
         'color' => $p['color'] ?? '', 'avatar' => avatar_url(['id' => $id, 'has_avatar' => !empty($p['avatar']), 'avatar_v' => $p['avatar_v'] ?? 0]),
@@ -481,7 +520,7 @@ case 'my_data':
     $u = current_user();
     if (!$u) fail('Connectez-vous pour faire cela.', 401);
     $id = (int) $u['id'];
-    $acc = q('SELECT id, email, name, role, verified, created_at FROM users WHERE id = ?', [$id])->fetch();
+    $acc = q('SELECT id, email, name, role, verified, created_at, last_seen, admin_note AS note_de_l_equipe FROM users WHERE id = ?', [$id])->fetch();
     $prof = profile_row($id);
     unset($prof['user_id']);
     $prof['extra'] = profile_extra($prof);
@@ -547,6 +586,7 @@ case 'comment':
     $rating = (int) arg('rating');
     if ($rating < 0 || $rating > 5) fail('Note invalide.');
     if (mb_strlen($text) < 3 && $pros === '' && $cons === '') fail('Votre avis est vide.');
+    if (setting('comments', '1') !== '1' && !is_staff($u)) fail('Les avis sont fermés pour le moment.', 403);
     throttle('comment', (string) $u['id'], 5, 10);
     q('INSERT INTO comments (ref, user_id, body, status, created_at, rating, pros, cons) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
         [$ref, $u['id'], $text, 'visible', now(), $rating ?: null, $pros ?: null, $cons ?: null]);
@@ -557,8 +597,9 @@ case 'comment_delete':
     $u = require_user();
     $c = q('SELECT user_id FROM comments WHERE id = ?', [(int) arg('id')])->fetch();
     if (!$c) fail('Commentaire introuvable.', 404);
-    if ((int) $c['user_id'] !== (int) $u['id'] && !in_array($u['role'], ['moderator', 'admin'], true)) fail('Action non autorisée.', 403);
+    if ((int) $c['user_id'] !== (int) $u['id'] && !can($u, 'comments')) fail('Action non autorisée.', 403);
     q("UPDATE comments SET status = 'deleted' WHERE id = ?", [(int) arg('id')]);
+    if ((int) $c['user_id'] !== (int) $u['id']) audit('comment.deleted', 'avis #' . (int) arg('id'));
     out(['ok' => true]);
 
 case 'suggest':
@@ -592,7 +633,7 @@ case 'bug_report':
     out(['message' => 'Le signalement a été envoyé à l\'équipe du site.']);
 
 case 'admin_bugs':
-    require_role('moderator', 'admin');
+    require_perm('bugs');
     $status = in_array(arg('status'), ['open', 'done', 'rejected'], true) ? arg('status') : 'open';
     $rows = q('SELECT * FROM bugs WHERE status = ? ORDER BY id DESC LIMIT 300', [$status])->fetchAll();
     $names = user_names(array_filter(array_column($rows, 'user_id')));
@@ -601,26 +642,51 @@ case 'admin_bugs':
 
 case 'bug_update':
     if (!$post) fail('POST attendu.', 405);
-    require_role('moderator', 'admin');
+    require_perm('bugs');
     $status = arg('status');
     if (!in_array($status, ['open', 'done', 'rejected', 'deleted'], true)) fail('Statut inconnu.');
     if ($status === 'deleted') q('DELETE FROM bugs WHERE id = ?', [(int) arg('id')]);
     else q('UPDATE bugs SET status = ?, note = ? WHERE id = ?', [$status, arg('note', 1000) ?: null, (int) arg('id')]);
+    audit('bug.' . $status, 'bug #' . (int) arg('id'));
     out(['ok' => true]);
 
 // --------------------------------------------------------------- moderation
 case 'admin_stats':
-    require_role('moderator', 'admin');
+    // Dashboard: figures of the community and of what waits for the team
+    $a = require_staff();
+    $week = gmdate('Y-m-d H:i:s', time() - 7 * 86400);
+    $count = fn (string $sql, array $args = []) => (int) q($sql, $args)->fetchColumn();
+    $top = fn (string $sql) => array_map(fn ($r) => ['ref' => $r['ref'], 'n' => (int) $r['n']], q($sql)->fetchAll());
+    $signups = [];
+    foreach (q('SELECT SUBSTR(created_at, 1, 10) AS d, COUNT(*) AS n FROM users WHERE created_at >= ? GROUP BY d', [gmdate('Y-m-d', time() - 13 * 86400)])->fetchAll() as $r) $signups[$r['d']] = (int) $r['n'];
+    $days = [];
+    for ($i = 13; $i >= 0; $i--) { $d = gmdate('Y-m-d', time() - $i * 86400); $days[] = ['d' => $d, 'n' => $signups[$d] ?? 0]; }
     out([
-        'pending' => (int) q("SELECT COUNT(*) FROM suggestions WHERE status = 'pending'")->fetchColumn(),
-        'users' => (int) q('SELECT COUNT(*) FROM users')->fetchColumn(),
-        'comments' => (int) q("SELECT COUNT(*) FROM comments WHERE status = 'visible'")->fetchColumn(),
-        'likes' => (int) q('SELECT COUNT(*) FROM likes')->fetchColumn(),
-        'bugs' => (int) q("SELECT COUNT(*) FROM bugs WHERE status = 'open'")->fetchColumn(),
+        'pending' => $count("SELECT COUNT(*) FROM suggestions WHERE status = 'pending'"),
+        'users' => $count('SELECT COUNT(*) FROM users'),
+        'comments' => $count("SELECT COUNT(*) FROM comments WHERE status = 'visible'"),
+        'likes' => $count('SELECT COUNT(*) FROM likes'),
+        'bugs' => $count("SELECT COUNT(*) FROM bugs WHERE status = 'open'"),
+        'banned' => $count('SELECT COUNT(*) FROM users WHERE banned = 1'),
+        'staff' => $count("SELECT COUNT(*) FROM users WHERE role <> 'user'"),
+        'week' => [
+            'users' => $count('SELECT COUNT(*) FROM users WHERE created_at >= ?', [$week]),
+            'comments' => $count("SELECT COUNT(*) FROM comments WHERE status = 'visible' AND created_at >= ?", [$week]),
+            'suggestions' => $count('SELECT COUNT(*) FROM suggestions WHERE created_at >= ?', [$week]),
+            'bugs' => $count('SELECT COUNT(*) FROM bugs WHERE created_at >= ?', [$week]),
+            'active' => $count('SELECT COUNT(*) FROM users WHERE last_seen >= ?', [$week]),
+        ],
+        'coupons' => $count('SELECT COUNT(*) FROM coupons WHERE active = 1 AND (ends IS NULL OR ends >= ?)', [gmdate('Y-m-d')]),
+        'coupon_uses' => $count('SELECT COALESCE(SUM(uses), 0) FROM coupons'),
+        'signups' => $days,
+        'top_liked' => $top('SELECT ref, COUNT(*) AS n FROM likes GROUP BY ref ORDER BY n DESC LIMIT 5'),
+        'top_reviewed' => $top("SELECT ref, COUNT(*) AS n FROM comments WHERE status = 'visible' GROUP BY ref ORDER BY n DESC LIMIT 5"),
+        'top_owned' => $top("SELECT ref, COUNT(*) AS n FROM garage WHERE status = 'owned' GROUP BY ref ORDER BY n DESC LIMIT 5"),
+        'perms' => perms_of($a),
     ]);
 
 case 'admin_suggestions':
-    require_role('moderator', 'admin');
+    require_perm('suggestions');
     $status = in_array(arg('status'), ['pending', 'approved', 'rejected'], true) ? arg('status') : 'pending';
     $rows = q('SELECT * FROM suggestions WHERE status = ? ORDER BY id ' . ($status === 'pending' ? 'ASC' : 'DESC') . ' LIMIT 200', [$status])->fetchAll();
     $names = user_names(array_merge(array_column($rows, 'user_id'), array_filter(array_column($rows, 'reviewer_id'))));
@@ -632,7 +698,7 @@ case 'admin_suggestions':
 
 case 'moderate_suggestion':
     if (!$post) fail('POST attendu.', 405);
-    $m = require_role('moderator', 'admin');
+    $m = require_perm('suggestions');
     $decision = arg('decision');
     if (!in_array($decision, ['approved', 'rejected'], true)) fail('Décision inconnue.');
     $id = (int) arg('id');
@@ -641,61 +707,229 @@ case 'moderate_suggestion':
         q('UPDATE suggestions SET new_value = ? WHERE id = ?', [$value, $id]);
     }
     q('UPDATE suggestions SET status = ?, reviewer_id = ?, reviewed_at = ? WHERE id = ?', [$decision, $m['id'], now(), $id]);
+    $s = q('SELECT ref, field, new_value FROM suggestions WHERE id = ?', [$id])->fetch();
+    if ($s) audit('suggestion.' . $decision, $s['ref'], $s['field'] . ' = ' . $s['new_value']);
     out(['ok' => true]);
 
 case 'admin_comments':
-    require_role('moderator', 'admin');
-    $rows = q("SELECT id, ref, user_id, body, status, created_at FROM comments WHERE status <> 'deleted' ORDER BY id DESC LIMIT 200")->fetchAll();
+    require_perm('comments');
+    $rows = q("SELECT id, ref, user_id, body, status, created_at, rating FROM comments WHERE status <> 'deleted' ORDER BY id DESC LIMIT 200")->fetchAll();
     $names = user_names(array_column($rows, 'user_id'));
     foreach ($rows as &$r) $r['author'] = $names[$r['user_id']]['name'] ?? '?';
     out($rows);
 
 case 'moderate_comment':
     if (!$post) fail('POST attendu.', 405);
-    require_role('moderator', 'admin');
+    require_perm('comments');
     $status = arg('status');
     if (!in_array($status, ['visible', 'hidden', 'deleted'], true)) fail('Statut inconnu.');
     q('UPDATE comments SET status = ? WHERE id = ?', [$status, (int) arg('id')]);
+    $c = q('SELECT ref FROM comments WHERE id = ?', [(int) arg('id')])->fetch();
+    audit('comment.' . $status, ($c['ref'] ?? '') . ' (avis #' . (int) arg('id') . ')');
     out(['ok' => true]);
 
+// ------------------------------------------------------------ members, roles
 case 'admin_users':
-    require_role('moderator', 'admin');
-    out(q('SELECT id, email, name, role, verified, banned, created_at FROM users ORDER BY id DESC LIMIT 500')->fetchAll());
+    require_perm('members');
+    $rows = q('SELECT id, email, name, role, verified, banned, perms, admin_note, last_seen, created_at FROM users ORDER BY id DESC LIMIT 1000')->fetchAll();
+    $n = fn (string $sql) => array_map('intval', array_column(q($sql)->fetchAll(), 'n', 'user_id'));
+    $comments = $n("SELECT user_id, COUNT(*) AS n FROM comments WHERE status = 'visible' GROUP BY user_id");
+    $suggs = $n('SELECT user_id, COUNT(*) AS n FROM suggestions GROUP BY user_id');
+    out(array_map(fn ($u) => [
+        'id' => (int) $u['id'], 'email' => $u['email'], 'name' => $u['name'], 'role' => $u['role'],
+        'verified' => (int) $u['verified'], 'banned' => (int) $u['banned'], 'note' => $u['admin_note'] ?? '',
+        'last_seen' => $u['last_seen'], 'created_at' => $u['created_at'], 'overrides' => user_overrides($u), 'perms' => perms_of($u),
+        'comments' => $comments[$u['id']] ?? 0, 'suggestions' => $suggs[$u['id']] ?? 0,
+    ], $rows));
 
 case 'user_update':
     if (!$post) fail('POST attendu.', 405);
-    $a = require_role('admin');
-    $id = (int) arg('id');
-    if ($id === (int) $a['id']) fail('Vous ne pouvez pas modifier votre propre compte ici.');
+    $a = require_staff();
+    $t = editable_user($a, (int) arg('id'));
+    $who = $t['name'] . ' (#' . $t['id'] . ')';
     if (arg('role') !== '') {
-        if (!in_array(arg('role'), ROLES, true)) fail('Rôle inconnu.');
-        q('UPDATE users SET role = ? WHERE id = ?', [arg('role'), $id]);
+        if (!can($a, 'assign')) fail('Vous n\'avez pas la permission de changer les rôles.', 403);
+        $role = roles_all()[arg('role')] ?? fail('Rôle inconnu.');
+        if ($role['slug'] === 'admin' && $a['role'] !== 'admin') fail('Seul un administrateur peut nommer un administrateur.', 403);
+        check_grant($a, $role['perms']);
+        q('UPDATE users SET role = ? WHERE id = ?', [$role['slug'], $t['id']]);
+        audit('user.role', $who, $t['role'] . ' → ' . $role['slug']);
     }
-    if (arg('banned') !== '') q('UPDATE users SET banned = ? WHERE id = ?', [arg('banned') === '1' ? 1 : 0, $id]);
+    if (array_key_exists('grant', body()) || array_key_exists('deny', body())) {
+        if (!can($a, 'assign')) fail('Vous n\'avez pas la permission de changer les permissions.', 403);
+        $list = fn ($k) => array_values(array_intersect(is_array(body()[$k] ?? null) ? body()[$k] : [], array_keys(PERMS)));
+        $grant = $list('grant');
+        $deny = array_values(array_diff($list('deny'), $grant));
+        check_grant($a, array_merge($grant, $deny));
+        q('UPDATE users SET perms = ? WHERE id = ?', [$grant || $deny ? json_encode(['grant' => $grant, 'deny' => $deny]) : null, $t['id']]);
+        audit('user.perms', $who, ($grant ? '+' . implode(' +', $grant) : '') . ($deny ? ' -' . implode(' -', $deny) : '') ?: 'selon le rôle');
+    }
+    if (arg('banned') !== '') {
+        if (!can($a, 'ban')) fail('Vous n\'avez pas la permission de suspendre des membres.', 403);
+        q('UPDATE users SET banned = ? WHERE id = ?', [arg('banned') === '1' ? 1 : 0, $t['id']]);
+        audit(arg('banned') === '1' ? 'user.banned' : 'user.unbanned', $who);
+    }
+    if (arg('verified') === '1') {
+        if (!can($a, 'ban')) fail('Vous n\'avez pas la permission de faire cela.', 403);
+        q('UPDATE users SET verified = 1, verify_token = NULL WHERE id = ?', [$t['id']]);
+        audit('user.verified', $who);
+    }
+    if (array_key_exists('note', body())) {
+        q('UPDATE users SET admin_note = ? WHERE id = ?', [arg('note', 2000) ?: null, $t['id']]);
+        audit('user.note', $who);
+    }
     out(['ok' => true]);
 
+case 'admin_roles':
+    require_staff();
+    $counts = array_map('intval', array_column(q('SELECT role, COUNT(*) AS n FROM users GROUP BY role')->fetchAll(), 'n', 'role'));
+    out(['perms' => PERMS, 'system' => SYSTEM_ROLES, 'roles' => array_values(array_map(fn ($r) => $r + ['members' => $counts[$r['slug']] ?? 0], roles_all()))]);
+
+case 'role_save':
+    if (!$post) fail('POST attendu.', 405);
+    $a = require_perm('roles');
+    $label = arg('label', 40);
+    if (mb_strlen($label) < 2) fail('Donnez un nom au rôle.');
+    $color = preg_match('/^#[0-9a-f]{6}$/i', arg('color')) ? arg('color') : null;
+    $perms = array_values(array_intersect(is_array(body()['perms'] ?? null) ? body()['perms'] : [], array_keys(PERMS)));
+    $slug = arg('slug', 12);
+    $old = $slug !== '' ? (roles_all()[$slug] ?? fail('Rôle introuvable.', 404)) : null;
+    if ($old && $old['slug'] === 'admin' && $a['role'] !== 'admin') fail('Seul un administrateur peut modifier ce rôle.', 403);
+    if ($old && in_array($old['slug'], SYSTEM_ROLES, true)) $perms = $old['perms'];  // fixed: members have none, administrators all
+    else check_grant($a, $perms);
+    if ($old && $old['slug'] !== 'admin' && $a['role'] !== 'admin') check_grant($a, $old['perms']);
+    if ($old) {
+        q('UPDATE roles SET label = ?, color = ?, perms = ? WHERE slug = ?', [$label, $color, json_encode($perms), $old['slug']]);
+        audit('role.updated', $label, implode(', ', $perms) ?: 'aucune permission');
+    } else {
+        // Short identifier from the name: "Rédaction" -> "redaction", made unique
+        $base = substr(trim(preg_replace('/[^a-z0-9]+/', '-', strtolower((function_exists('iconv') ? @iconv('UTF-8', 'ASCII//TRANSLIT', $label) : '') ?: $label)), '-'), 0, 10) ?: 'role';
+        $slug = $base;
+        for ($i = 2; isset(roles_all()[$slug]); $i++) $slug = substr($base, 0, 10 - strlen((string) $i)) . $i;
+        q('INSERT INTO roles (slug, label, color, perms, position, created_at) VALUES (?, ?, ?, ?, ?, ?)', [$slug, $label, $color, json_encode($perms), 50, now()]);
+        audit('role.created', $label, implode(', ', $perms) ?: 'aucune permission');
+    }
+    out(['ok' => true, 'slug' => $slug]);
+
+case 'role_delete':
+    if (!$post) fail('POST attendu.', 405);
+    $a = require_perm('roles');
+    $r = roles_all()[arg('slug', 12)] ?? fail('Rôle introuvable.', 404);
+    if (in_array($r['slug'], SYSTEM_ROLES, true)) fail('Ce rôle ne peut pas être supprimé.');
+    check_grant($a, $r['perms']);
+    $n = (int) q('SELECT COUNT(*) FROM users WHERE role = ?', [$r['slug']])->fetchColumn();
+    q("UPDATE users SET role = 'user' WHERE role = ?", [$r['slug']]);
+    q('DELETE FROM roles WHERE slug = ?', [$r['slug']]);
+    audit('role.deleted', $r['label'], $n ? "$n membre(s) repassé(s) en Membre" : '');
+    out(['ok' => true]);
+
+// ------------------------------------------------------------ promo codes
+case 'coupon_use':
+    // A visitor copied a code: counted for the team (one count per visitor and code per hour)
+    if (!$post) fail('POST attendu.', 405);
+    $id = (int) arg('id');
+    if (!q('SELECT 1 FROM throttle WHERE kind = ? AND k = ? AND at > ?', ['coupon', "$id|" . client_ip(), gmdate('Y-m-d H:i:s', time() - 3600)])->fetchColumn()) {
+        throttle('coupon', "$id|" . client_ip(), 1, 60);
+        q('UPDATE coupons SET uses = uses + 1 WHERE id = ? AND active = 1', [$id]);
+    }
+    out(['ok' => true]);
+
+case 'admin_coupons':
+    require_perm('coupons');
+    $rows = q('SELECT * FROM coupons ORDER BY active DESC, id DESC')->fetchAll();
+    foreach ($rows as &$c) $c['state'] = coupon_state($c);
+    out($rows);
+
+case 'coupon_save':
+    if (!$post) fail('POST attendu.', 405);
+    $a = require_perm('coupons');
+    $code = strtoupper(preg_replace('/\s+/', '', arg('code', 40)));
+    if (!preg_match('/^[A-Z0-9_\-]{2,40}$/', $code)) fail('Code invalide : lettres, chiffres, - et _ uniquement.');
+    $shop = arg('shop', 60);
+    if ($shop === '') fail('Indiquez la boutique où le code fonctionne.');
+    $date = function (string $k) { $v = arg($k, 10); if ($v !== '' && !preg_match('/^\d{4}-\d{2}-\d{2}$/', $v)) fail('Date invalide.'); return $v ?: null; };
+    [$starts, $ends] = [$date('starts'), $date('ends')];
+    if ($starts && $ends && $ends < $starts) fail('La date de fin est avant la date de début.');
+    $url = arg('url', 500) !== '' ? clean_url(arg('url', 500)) : null;
+    $vals = [$code, $shop, arg('discount', 30) ?: null, arg('title', 160) ?: null, $url, arg('brand', 60) ?: null, $starts, $ends, arg('active') === '0' ? 0 : 1];
+    if ((int) arg('id')) {
+        q('UPDATE coupons SET code = ?, shop = ?, discount = ?, title = ?, url = ?, brand = ?, starts = ?, ends = ?, active = ? WHERE id = ?', [...$vals, (int) arg('id')]);
+        audit('coupon.updated', "$code ($shop)");
+    } else {
+        q('INSERT INTO coupons (code, shop, discount, title, url, brand, starts, ends, active, created_by, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)', [...$vals, $a['id'], now()]);
+        audit('coupon.created', "$code ($shop)", (string) arg('discount', 30));
+    }
+    out(['ok' => true]);
+
+case 'coupon_delete':
+    if (!$post) fail('POST attendu.', 405);
+    require_perm('coupons');
+    $c = q('SELECT code, shop FROM coupons WHERE id = ?', [(int) arg('id')])->fetch();
+    q('DELETE FROM coupons WHERE id = ?', [(int) arg('id')]);
+    if ($c) audit('coupon.deleted', "{$c['code']} ({$c['shop']})");
+    out(['ok' => true]);
+
+// ------------------------------------------------------------ settings, log
+case 'admin_settings':
+    require_perm('settings');
+    out(['announce_on' => setting('announce_on'), 'announce_text' => setting('announce_text'), 'announce_link' => setting('announce_link'),
+        'announce_kind' => setting('announce_kind', 'info'), 'registrations' => setting('registrations', '1'), 'comments' => setting('comments', '1')]);
+
+case 'settings_save':
+    if (!$post) fail('POST attendu.', 405);
+    require_perm('settings');
+    $vals = [
+        'announce_on' => arg('announce_on') === '1' ? '1' : '0', 'announce_text' => arg('announce_text', 300),
+        'announce_link' => arg('announce_link', 500) !== '' ? (str_starts_with(arg('announce_link', 500), '#') ? arg('announce_link', 500) : clean_url(arg('announce_link', 500))) : '',
+        'announce_kind' => in_array(arg('announce_kind'), ['info', 'promo', 'warning'], true) ? arg('announce_kind') : 'info',
+        'registrations' => arg('registrations') === '0' ? '0' : '1', 'comments' => arg('comments') === '0' ? '0' : '1',
+    ];
+    if ($vals['announce_on'] === '1' && $vals['announce_text'] === '') fail('Écrivez le texte du bandeau.');
+    $changed = [];
+    foreach ($vals as $k => $v) {
+        if (setting($k, in_array($k, ['registrations', 'comments'], true) ? '1' : '') === $v) continue;
+        $changed[] = $k;
+        q('DELETE FROM settings WHERE k = ?', [$k]);
+        q('INSERT INTO settings (k, v) VALUES (?, ?)', [$k, $v]);
+    }
+    if ($changed) audit('settings', implode(', ', $changed));
+    out(['ok' => true, 'message' => $changed ? 'Réglages enregistrés.' : 'Rien à modifier.']);
+
+case 'admin_log':
+    require_perm('logs');
+    $kind = preg_replace('/[^a-z]/', '', arg('kind', 20));
+    $rows = q('SELECT id, user_id, action, target, detail, created_at FROM admin_log' . ($kind ? ' WHERE action LIKE ?' : '') . ' ORDER BY id DESC LIMIT 400', $kind ? [$kind . '%'] : [])->fetchAll();
+    $names = user_names(array_filter(array_column($rows, 'user_id')));
+    foreach ($rows as &$r) $r['who'] = $r['user_id'] ? ($names[$r['user_id']]['name'] ?? 'ancien membre') : 'système';
+    out($rows);
+
+// --------------------------------------------------------------- news
 case 'news_save':
     if (!$post) fail('POST attendu.', 405);
-    $a = require_role('moderator', 'admin');
+    $a = require_perm('news');
     $title = arg('title', 160);
     $text = arg('body', 5000);
     if ($title === '' || $text === '') fail('Titre et texte obligatoires.');
     $published = arg('published') === '0' ? 0 : 1;
     if ((int) arg('id')) {
         q('UPDATE news SET title = ?, body = ?, published = ? WHERE id = ?', [$title, $text, $published, (int) arg('id')]);
+        audit('news.updated', $title);
     } else {
         q('INSERT INTO news (title, body, author_id, published, created_at) VALUES (?, ?, ?, ?, ?)', [$title, $text, $a['id'], $published, now()]);
+        audit('news.created', $title);
     }
     out(['ok' => true]);
 
 case 'news_delete':
     if (!$post) fail('POST attendu.', 405);
-    require_role('moderator', 'admin');
+    require_perm('news');
+    $n = q('SELECT title FROM news WHERE id = ?', [(int) arg('id')])->fetch();
     q('DELETE FROM news WHERE id = ?', [(int) arg('id')]);
+    if ($n) audit('news.deleted', $n['title']);
     out(['ok' => true]);
 
 case 'admin_news':
-    require_role('moderator', 'admin');
+    require_perm('news');
     out(q('SELECT id, title, body, published, created_at FROM news ORDER BY id DESC LIMIT 100')->fetchAll());
 
 // ------------------------------------------------------------ daily job

@@ -72,7 +72,7 @@ function current_user(): ?array {
     start_session();
     $id = $_SESSION['uid'] ?? null;
     if (!$id) return null;
-    $u = q('SELECT id, email, name, role, verified, banned FROM users WHERE id = ?', [$id])->fetch();
+    $u = q('SELECT id, email, name, role, verified, banned, perms FROM users WHERE id = ?', [$id])->fetch();
     if (!$u || $u['banned']) {
         unset($_SESSION['uid']);
         return null;
@@ -81,7 +81,10 @@ function current_user(): ?array {
 }
 
 function public_user(?array $u): ?array {
-    return $u ? ['id' => (int) $u['id'], 'name' => $u['name'], 'email' => $u['email'], 'role' => $u['role'], 'verified' => (bool) $u['verified']] : null;
+    if (!$u) return null;
+    $r = roles_all()[$u['role']] ?? null;
+    return ['id' => (int) $u['id'], 'name' => $u['name'], 'email' => $u['email'], 'role' => $u['role'], 'verified' => (bool) $u['verified'],
+        'role_label' => $r['label'] ?? $u['role'], 'perms' => perms_of($u)];
 }
 
 function require_user(): array {
@@ -91,16 +94,83 @@ function require_user(): array {
     return $u;
 }
 
-function require_role(string ...$roles): array {
+// ------------------------------------------------------------ permissions
+// What a role can do in the administration. Administrators can do everything; the other
+// roles have a list of these, and a member can be given or refused some of them on top of it.
+const PERMS = [
+    'suggestions' => 'Valider ou refuser les corrections proposées',
+    'comments' => 'Modérer les avis (masquer, supprimer)',
+    'bugs' => 'Traiter les signalements de bug',
+    'news' => 'Publier et modifier les actualités',
+    'coupons' => 'Créer et gérer les codes promo',
+    'members' => 'Voir les membres et les profils privés',
+    'ban' => 'Suspendre ou réactiver des membres',
+    'assign' => 'Changer le rôle et les permissions des membres',
+    'roles' => 'Créer et modifier les rôles',
+    'settings' => 'Modifier les réglages du site (bandeau, inscriptions, avis)',
+    'logs' => 'Consulter le journal d\'activité',
+];
+const SYSTEM_ROLES = ['user', 'admin'];
+
+function roles_all(bool $fresh = false): array {
+    static $roles = null;
+    if ($roles === null || $fresh) {
+        $roles = [];
+        foreach (q('SELECT slug, label, color, perms, position FROM roles ORDER BY position, label')->fetchAll() as $r) {
+            $r['perms'] = $r['slug'] === 'admin' ? array_keys(PERMS) : array_values(array_intersect(json_decode($r['perms'] ?? '[]', true) ?: [], array_keys(PERMS)));
+            $roles[$r['slug']] = $r;
+        }
+    }
+    return $roles;
+}
+
+// Permissions of a member: those of the role, plus the ones given, minus the ones removed
+function user_overrides(array $u): array {
+    $o = json_decode($u['perms'] ?? '', true);
+    return ['grant' => array_values(array_intersect($o['grant'] ?? [], array_keys(PERMS))), 'deny' => array_values(array_intersect($o['deny'] ?? [], array_keys(PERMS)))];
+}
+
+function perms_of(array $u): array {
+    if ($u['role'] === 'admin') return array_keys(PERMS);
+    $o = user_overrides($u);
+    $p = array_merge(roles_all()[$u['role']]['perms'] ?? [], $o['grant']);
+    return array_values(array_diff(array_unique($p), $o['deny']));
+}
+
+function can(?array $u, string $perm): bool { return $u && in_array($perm, perms_of($u), true); }
+
+function is_staff(?array $u): bool { return $u && (bool) perms_of($u); }
+
+function require_perm(string $perm): array {
     $u = require_user();
-    if (!in_array($u['role'], $roles, true)) fail('Réservé à la modération.', 403);
+    if (!can($u, $perm)) fail('Vous n\'avez pas la permission de faire cela.', 403);
     return $u;
+}
+
+function require_staff(): array {
+    $u = require_user();
+    if (!is_staff($u)) fail('Réservé à l\'équipe du site.', 403);
+    return $u;
+}
+
+// Trace of what the team does in the administration
+function audit(string $action, string $target = '', string $detail = ''): void {
+    $u = current_user();
+    q('INSERT INTO admin_log (user_id, action, target, detail, created_at) VALUES (?, ?, ?, ?, ?)',
+        [$u['id'] ?? null, $action, mb_substr($target, 0, 160), $detail !== '' ? mb_substr($detail, 0, 2000) : null, now()]);
+}
+
+function setting(string $k, string $default = ''): string {
+    static $all = null;
+    if ($all === null) $all = array_column(q('SELECT k, v FROM settings')->fetchAll(), 'v', 'k');
+    return (string) ($all[$k] ?? $default);
 }
 
 function login_as(int $id): void {
     start_session();
     session_regenerate_id(true);
     $_SESSION['uid'] = $id;
+    q('UPDATE users SET last_seen = ? WHERE id = ?', [now(), $id]);
     // The account of admin_email (api/config.php) becomes administrator when it signs in,
     // once its address is confirmed (so an existing account can be promoted from the configuration)
     $admin = mb_strtolower(trim((string) cfg('admin_email', '')));
