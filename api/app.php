@@ -37,7 +37,8 @@ $post = $_SERVER['REQUEST_METHOD'] === 'POST';
 
 // Writes must come from the site itself: a custom header cannot be sent by
 // another website without a CORS preflight, which we never allow.
-if ($post && ($_SERVER['HTTP_X_MM'] ?? '') !== '1') fail('Requête refusée.', 403);
+// Exception: the anonymous click counter, sent with navigator.sendBeacon (which cannot add a header)
+if ($post && $action !== 'click' && ($_SERVER['HTTP_X_MM'] ?? '') !== '1') fail('Requête refusée.', 403);
 
 try {
     // Tables added after the first install (profiles) are created on the fly too
@@ -50,6 +51,7 @@ try {
     db()->query('SELECT perms FROM users LIMIT 1');
     db()->query('SELECT 1 FROM coupons LIMIT 1');
     db()->query('SELECT 1 FROM settings LIMIT 1');
+    db()->query('SELECT 1 FROM partners LIMIT 1');
 } catch (PDOException $e) {
     install_schema();
 }
@@ -127,6 +129,8 @@ function site_public(): array {
         'registrations' => setting('registrations', '1') === '1',
         'comments' => setting('comments', '1') === '1',
         'roles' => array_map(fn ($r) => ['label' => $r['label'], 'color' => $r['color']], roles_all()),
+        'partners' => array_map(fn ($p) => ['shop' => $p['shop'], 'domain' => $p['domain'] ?? '', 'link' => $p['link']],
+            q('SELECT shop, domain, link FROM partners WHERE active = 1 ORDER BY shop')->fetchAll()),
         'coupons' => array_map(fn ($c) => ['id' => (int) $c['id']] + array_filter($c, fn ($v, $k) => $k !== 'id' && $v !== null && $v !== '', ARRAY_FILTER_USE_BOTH), $coupons),
     ];
 }
@@ -678,6 +682,8 @@ case 'admin_stats':
         ],
         'coupons' => $count('SELECT COUNT(*) FROM coupons WHERE active = 1 AND (ends IS NULL OR ends >= ?)', [gmdate('Y-m-d')]),
         'coupon_uses' => $count('SELECT COALESCE(SUM(uses), 0) FROM coupons'),
+        'clicks' => $count('SELECT COALESCE(SUM(n), 0) FROM shop_clicks WHERE day >= ?', [gmdate('Y-m-d', time() - 29 * 86400)]),
+        'partners' => $count('SELECT COUNT(*) FROM partners WHERE active = 1'),
         'signups' => $days,
         'top_liked' => $top('SELECT ref, COUNT(*) AS n FROM likes GROUP BY ref ORDER BY n DESC LIMIT 5'),
         'top_reviewed' => $top("SELECT ref, COUNT(*) AS n FROM comments WHERE status = 'visible' GROUP BY ref ORDER BY n DESC LIMIT 5"),
@@ -867,6 +873,69 @@ case 'coupon_delete':
     $c = q('SELECT code, shop FROM coupons WHERE id = ?', [(int) arg('id')])->fetch();
     q('DELETE FROM coupons WHERE id = ?', [(int) arg('id')]);
     if ($c) audit('coupon.deleted', "{$c['code']} ({$c['shop']})");
+    out(['ok' => true]);
+
+// ------------------------------------------------------------ partner shops (affiliate links), clicks
+case 'click':
+    // A visitor opened a shop: counted per shop and per day only (no visitor data kept), once per visitor and shop every 10 minutes
+    if (!$post) fail('POST attendu.', 405);
+    $shop = arg('shop', 60);
+    if ($shop === '' || preg_match('/[<>"]/', $shop)) out(['ok' => false]);
+    $key = $shop . '|' . client_ip();
+    if (!q('SELECT 1 FROM throttle WHERE kind = ? AND k = ? AND at > ?', ['click', $key, gmdate('Y-m-d H:i:s', time() - 600)])->fetchColumn()) {
+        throttle('click', $key, 1, 10);
+        $day = gmdate('Y-m-d');
+        if (!q('UPDATE shop_clicks SET n = n + 1 WHERE shop = ? AND day = ?', [$shop, $day])->rowCount()) {
+            try { q('INSERT INTO shop_clicks (shop, day, n) VALUES (?, ?, 1)', [$shop, $day]); }
+            catch (PDOException $e) { q('UPDATE shop_clicks SET n = n + 1 WHERE shop = ? AND day = ?', [$shop, $day]); }
+        }
+    }
+    out(['ok' => true]);
+
+case 'admin_partners':
+    require_perm('partners');
+    $since = fn (int $days) => gmdate('Y-m-d', time() - ($days - 1) * 86400);
+    $sum = function (string $since) { $o = []; foreach (q('SELECT shop, SUM(n) AS n FROM shop_clicks WHERE day >= ? GROUP BY shop', [$since])->fetchAll() as $r) $o[$r['shop']] = (int) $r['n']; return $o; };
+    [$d7, $d30, $all] = [$sum($since(7)), $sum($since(30)), $sum('0000-00-00')];
+    $partners = q('SELECT * FROM partners ORDER BY active DESC, shop')->fetchAll();
+    foreach ($partners as &$p) $p += ['c7' => $d7[$p['shop']] ?? 0, 'c30' => $d30[$p['shop']] ?? 0, 'call' => $all[$p['shop']] ?? 0];
+    arsort($d30);
+    $days = [];
+    foreach (q('SELECT day, SUM(n) AS n FROM shop_clicks WHERE day >= ? GROUP BY day', [$since(30)])->fetchAll() as $r) $days[$r['day']] = (int) $r['n'];
+    $series = [];
+    for ($i = 29; $i >= 0; $i--) { $d = gmdate('Y-m-d', time() - $i * 86400); $series[] = ['d' => $d, 'n' => $days[$d] ?? 0]; }
+    out(['partners' => $partners, 'shops' => array_map(fn ($s, $n) => ['shop' => $s, 'n' => $n, 'c7' => $d7[$s] ?? 0], array_keys($d30), $d30), 'days' => $series]);
+
+case 'partner_save':
+    if (!$post) fail('POST attendu.', 405);
+    require_perm('partners');
+    $shop = arg('shop', 60);
+    if ($shop === '') fail('Indiquez la boutique.');
+    $domain = strtolower(preg_replace('~^(https?://)?(www\.)?([^/]+).*$~i', '$3', arg('domain', 120)));
+    if ($domain !== '' && !preg_match('/^[a-z0-9.-]+\.[a-z]{2,}$/', $domain)) fail('Domaine invalide (exemple : drone-fpv-racer.com).');
+    // Either parameters added to the shop's links (ref=multimotors), or a network link containing {url} (Awin, Effiliation…)
+    $link = ltrim(arg('link', 500), '?&');
+    if (str_contains($link, '{url}')) {
+        if (!preg_match('~^https://[^\s"<>]+$~', $link)) fail('Le lien d\'affiliation doit commencer par https:// et contenir {url}.');
+    } elseif (!preg_match('/^[A-Za-z0-9_.~-]+=[^\s&"<>]*(&[A-Za-z0-9_.~-]+=[^\s&"<>]*)*$/', $link)) {
+        fail('Indiquez le paramètre d\'affiliation (exemple : ref=multimotors) ou un lien contenant {url}.');
+    }
+    $vals = [$shop, $domain ?: null, $link, arg('note', 2000) ?: null, arg('active') === '0' ? 0 : 1];
+    if ((int) arg('id')) {
+        q('UPDATE partners SET shop = ?, domain = ?, link = ?, note = ?, active = ? WHERE id = ?', [...$vals, (int) arg('id')]);
+        audit('partner.updated', $shop);
+    } else {
+        q('INSERT INTO partners (shop, domain, link, note, active, created_at) VALUES (?, ?, ?, ?, ?, ?)', [...$vals, now()]);
+        audit('partner.created', $shop);
+    }
+    out(['ok' => true]);
+
+case 'partner_delete':
+    if (!$post) fail('POST attendu.', 405);
+    require_perm('partners');
+    $p = q('SELECT shop FROM partners WHERE id = ?', [(int) arg('id')])->fetch();
+    q('DELETE FROM partners WHERE id = ?', [(int) arg('id')]);
+    if ($p) audit('partner.deleted', $p['shop']);
     out(['ok' => true]);
 
 // ------------------------------------------------------------ settings, log

@@ -51,6 +51,11 @@ function install_schema(): void {
         "CREATE TABLE IF NOT EXISTS admin_log (
             id $id, user_id INT NULL, action VARCHAR(40) NOT NULL, target VARCHAR(160) NULL, detail TEXT NULL,
             created_at VARCHAR(19) NOT NULL)$engine",
+        "CREATE TABLE IF NOT EXISTS partners (
+            id $id, shop VARCHAR(60) NOT NULL, domain VARCHAR(120) NULL, link VARCHAR(500) NOT NULL, note TEXT NULL,
+            active TINYINT NOT NULL DEFAULT 1, created_at VARCHAR(19) NOT NULL)$engine",
+        "CREATE TABLE IF NOT EXISTS shop_clicks (
+            shop VARCHAR(60) NOT NULL, day VARCHAR(10) NOT NULL, n INT NOT NULL DEFAULT 0, PRIMARY KEY (shop, day))$engine",
         "CREATE TABLE IF NOT EXISTS settings (k VARCHAR(40) NOT NULL PRIMARY KEY, v TEXT NULL)$engine",
         "CREATE TABLE IF NOT EXISTS throttle (
             kind VARCHAR(20) NOT NULL, k VARCHAR(190) NOT NULL, at VARCHAR(19) NOT NULL)$engine",
