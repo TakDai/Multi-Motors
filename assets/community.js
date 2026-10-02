@@ -434,6 +434,7 @@
       <section class="d-extra card" id="d-prix">${pricesBlock(m)}</section>
       <section class="d-extra card" id="d-comments">${head("chat", "Avis des pilotes")}<div id="c-list"><p class="note">Chargement…</p></div></section>`);
     loadSocial(m.REF);
+    drawPriceHistory(m);
   };
 
   // Where the visitor lives: chosen in the price block, else the region of the browser language,
@@ -466,6 +467,108 @@
     ["AliExpress", "CN", (q) => `https://fr.aliexpress.com/w/wholesale-${encodeURIComponent(q.replace(/\s+/g, "-"))}.html`],
   ];
 
+  // ---------------------------------------------------------------- price graphs
+  // Line charts drawn in SVG at the width of their box: one line per shop, prices as steps (a price
+  // holds until it changes), shared tooltip with a crosshair, legend, and the values in a table.
+  const PALETTE = ["#2a78d6", "#eb6834", "#1baf7a", "#eda100", "#e87ba4", "#008300", "#4a3aa7", "#e34948"];
+  const dayMs = (d) => Date.parse(d + "T12:00:00Z");
+  const dayFr = (d, long) => new Date(dayMs(d)).toLocaleDateString("fr-FR", long ? { weekday: "short", day: "numeric", month: "long" } : { day: "numeric", month: "short" });
+  // Value of a series on a day: the last point on or before it (prices hold until they change)
+  const valueAt = (pts, d) => { let v = null; for (const [x, y] of pts) { if (x <= d) v = y; else break; } return v; };
+  function drawChart(box, { series, days, fmt, label }) {
+    series = series.filter((s) => s.pts.length).slice(0, PALETTE.length);
+    if (!series.length || !days.length) { box.innerHTML = ""; return; }
+    const W = Math.max(280, box.clientWidth || 600), H = 220, L = 54, R = 14, T = 12, B = 26;
+    const t0 = dayMs(days[0]), t1 = Math.max(dayMs(days[days.length - 1]), t0 + 864e5);
+    const vals = series.flatMap((s) => s.pts.map((p) => p[1])).filter((v) => v != null);
+    let lo = Math.min(...vals), hi = Math.max(...vals);
+    const pad = (hi - lo) * 0.15 || Math.max(Math.abs(hi) * 0.05, 0.5);
+    lo -= pad; hi += pad;
+    const x = (d) => L + ((dayMs(d) - t0) / (t1 - t0)) * (W - L - R), y = (v) => T + (1 - (v - lo) / (hi - lo)) * (H - T - B);
+    const ticks = [0, 1, 2, 3].map((i) => lo + ((hi - lo) * (i + 0.5)) / 4).filter((v, i, a) => i === 0 || fmt(v) !== fmt(a[i - 1]));
+    const xt = days.length > 6 ? [days[0], days[Math.floor(days.length / 2)], days[days.length - 1]] : days;
+    const path = (pts) => {
+      const ps = pts.filter((p) => p[0] <= days[days.length - 1]);
+      if (!ps.length) return "";
+      let dpath = `M${x(ps[0][0] < days[0] ? days[0] : ps[0][0]).toFixed(1)},${y(ps[0][1]).toFixed(1)}`;
+      for (let i = 1; i < ps.length; i++) dpath += `H${x(ps[i][0]).toFixed(1)}V${y(ps[i][1]).toFixed(1)}`;
+      return dpath + `H${x(days[days.length - 1]).toFixed(1)}`;
+    };
+    box.innerHTML = `<div class="ch-wrap"><svg class="ch" viewBox="0 0 ${W} ${H}" width="${W}" height="${H}" tabindex="0" role="img" aria-label="${esc(label)}">
+      ${ticks.map((v) => `<line class="ch-grid" x1="${L}" x2="${W - R}" y1="${y(v).toFixed(1)}" y2="${y(v).toFixed(1)}"/><text class="ch-yl" x="${L - 6}" y="${(y(v) + 4).toFixed(1)}">${esc(fmt(v))}</text>`).join("")}
+      <line class="ch-axis" x1="${L}" x2="${W - R}" y1="${H - B}" y2="${H - B}"/>
+      ${xt.map((d, i) => `<text class="ch-xl" x="${x(d).toFixed(1)}" y="${H - 8}" text-anchor="${i === 0 && xt.length > 1 ? "start" : i === xt.length - 1 && xt.length > 1 ? "end" : "middle"}">${esc(dayFr(d))}</text>`).join("")}
+      ${series.map((s, i) => `<path class="ch-line" d="${path(s.pts)}" stroke="${PALETTE[i]}"/>`).join("")}
+      ${series.map((s, i) => s.pts.filter((p) => p[0] >= days[0]).map((p) => `<circle class="ch-dot" cx="${x(p[0]).toFixed(1)}" cy="${y(p[1]).toFixed(1)}" r="4" fill="${PALETTE[i]}"/>`).join("")).join("")}
+      <line class="ch-cross" x1="0" x2="0" y1="${T}" y2="${H - B}" hidden/>
+      <rect class="ch-hit" x="${L}" y="0" width="${W - L - R}" height="${H}"/></svg><div class="ch-tip" hidden></div></div>
+      <ul class="ch-legend">${series.map((s, i) => `<li><i style="background:${PALETTE[i]}"></i>${esc(s.name)}</li>`).join("")}</ul>
+      <details class="ch-table"><summary>Voir les valeurs</summary><div class="tbl-wrap"><table><thead><tr><th>Date</th>${series.map((s) => `<th>${esc(s.name)}</th>`).join("")}</tr></thead><tbody>${
+        [...new Set(series.flatMap((s) => s.pts.map((p) => p[0])))].filter((d) => d >= days[0]).sort().reverse().map((d) => `<tr><td>${esc(dayFr(d))}</td>${series.map((s) => { const v = valueAt(s.pts, d); return `<td>${v == null ? "—" : esc(fmt(v))}</td>`; }).join("")}</tr>`).join("")
+      }</tbody></table></div></details>`;
+    // Shared tooltip: every series at the day under the pointer (or chosen with the arrow keys)
+    const svg = box.querySelector("svg"), tip = box.querySelector(".ch-tip"), cross = box.querySelector(".ch-cross");
+    let cur = days.length - 1;
+    const show = (i) => {
+      cur = Math.max(0, Math.min(days.length - 1, i));
+      const d = days[cur], cx = x(d);
+      cross.setAttribute("x1", cx); cross.setAttribute("x2", cx); cross.hidden = false;
+      tip.replaceChildren();
+      const h = document.createElement("b"); h.className = "ch-tip-d"; h.textContent = dayFr(d, true); tip.append(h);
+      series.forEach((s, k) => {
+        const v = valueAt(s.pts, d);
+        const row = document.createElement("div"), key = document.createElement("i"), val = document.createElement("strong"), nm = document.createElement("span");
+        key.style.background = PALETTE[k]; val.textContent = v == null ? "—" : fmt(v); nm.textContent = s.name;
+        row.append(key, val, nm); tip.append(row);
+      });
+      tip.hidden = false;
+      const left = (cx / W) * svg.clientWidth;
+      tip.style.left = `${Math.min(Math.max(left - tip.offsetWidth / 2, 0), svg.clientWidth - tip.offsetWidth)}px`;
+    };
+    const near = (ev) => { const r = svg.getBoundingClientRect(), px = ((ev.clientX - r.left) / r.width) * W; let best = 0; days.forEach((d, i) => { if (Math.abs(x(d) - px) < Math.abs(x(days[best]) - px)) best = i; }); return best; };
+    const hide = () => { tip.hidden = true; cross.hidden = true; };
+    svg.addEventListener("pointermove", (ev) => show(near(ev)));
+    svg.addEventListener("pointerleave", hide);
+    svg.addEventListener("focus", () => show(cur));
+    svg.addEventListener("blur", hide);
+    svg.addEventListener("keydown", (ev) => { if (ev.key === "ArrowLeft") { show(cur - 1); ev.preventDefault(); } if (ev.key === "ArrowRight") { show(cur + 1); ev.preventDefault(); } });
+  }
+  // Same as the offers: shops outside Europe get the French VAT, to compare like for like
+  const withVat = (eur, cur) => Math.round((cur === "USD" ? eur * (1 + VAT) : eur) * 100) / 100;
+  // Tiny step line of one price (the rows of the detailed report)
+  function spark(pts) {
+    if (!pts || pts.length < 2) return "";
+    const W = 84, H = 24, t0 = dayMs(pts[0][0]), t1 = Math.max(dayMs(pts[pts.length - 1][0]), t0 + 864e5);
+    const vs = pts.map((p) => p[1]), lo = Math.min(...vs), hi = Math.max(...vs), r = hi - lo || 1;
+    const x = (d) => 3 + ((dayMs(d) - t0) / (t1 - t0)) * (W - 6), y = (v) => 3 + (1 - (v - lo) / r) * (H - 6);
+    let d = `M${x(pts[0][0]).toFixed(1)},${y(pts[0][1]).toFixed(1)}`;
+    for (let i = 1; i < pts.length; i++) d += `H${x(pts[i][0]).toFixed(1)}V${y(pts[i][1]).toFixed(1)}`;
+    const last = pts[pts.length - 1];
+    return `<svg class="spark" viewBox="0 0 ${W} ${H}" width="${W}" height="${H}" role="img" aria-label="Historique : ${esc(pts.map((p) => `${dayFr(p[0])} ${euro(p[1])}`).join(", "))}"><path d="${d}"/><circle cx="${x(last[0]).toFixed(1)}" cy="${y(last[1]).toFixed(1)}" r="3"/></svg>`;
+  }
+  // Data of the graphs, loaded when first needed
+  const lazyJson = (() => { const cache = {}; return (name) => (cache[name] = cache[name] || fetch(`data/${name}.json`, { cache: "no-cache" }).then((r) => (r.ok ? r.json() : null)).catch(() => null)); })();
+
+  // Motor page: price history of the motor in each shop
+  async function drawPriceHistory(m) {
+    const box = document.querySelector("#d-prix .price-hist");
+    if (!box) return;
+    const hist = await lazyJson("prix_hist");
+    const shops = (hist && hist[m.REF]) || {};
+    const offers = (C.prices[m.REF] || {}).offers || [];
+    const order = offers.map((o) => o.shop), curOf = Object.fromEntries(offers.map((o) => [o.shop, o.cur]));
+    const series = Object.entries(shops).sort((a, b) => (order.indexOf(a[0]) + 1 || 99) - (order.indexOf(b[0]) + 1 || 99))
+      .map(([shop, pts]) => ({ name: shop, pts: pts.map((p) => [p[0], withVat(p[2], curOf[shop])]) }));
+    const changes = series.reduce((n, s) => n + s.pts.length - 1, 0);
+    const first = series.flatMap((s) => s.pts.map((p) => p[0])).sort()[0];
+    if (!series.length || !first) { box.hidden = true; return; }
+    const today = new Date().toISOString().slice(0, 10), days = [];
+    for (let t = dayMs(first); t <= dayMs(today); t += 864e5) days.push(new Date(t).toISOString().slice(0, 10));
+    box.hidden = false;
+    box.innerHTML = `<h4 class="ph-title">Historique des prix par boutique</h4><p class="ph-sub">${changes ? `${changes} changement${changes > 1 ? "s" : ""} de prix` : "Aucun changement de prix"} depuis le ${esc(dayFr(first))} : prix TTC d'un moteur, vérifiés chaque jour (TVA de 20 % ajoutée hors Europe).</p><div class="ph-chart"></div>`;
+    drawChart(box.querySelector(".ph-chart"), { series, days, fmt: (v) => euro(v), label: `Historique des prix de ${motorName(m.REF)} par boutique` });
+  }
+
   function pricesBlock(m) {
     const p = C.prices[m.REF], me = userCountry();
     const q = `${m.MARQUE} ${m.NOM || ""} ${m.KV ? m.KV + "KV" : ""}`.replace(/\s+/g, " ").trim();
@@ -492,9 +595,10 @@
             const f = (v) => `${v.toLocaleString("fr-FR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ${sym}`;
             return `sur la boutique : ${o.pack > 1 ? `lot de ${o.pack} à ${f(o.price)}, soit ${f(o.price / o.pack)} / moteur` : f(o.price)}${o.cur === "USD" ? " (hors TVA)" : ""}`;
           })()}</small></span>
-          <span class="o-stock">${o.stock ? "En stock" : "Rupture"}</span>
+          <span class="o-stock">${o.stock ? "En stock" : "Rupture"}${o.checked ? `<small>vérifié le ${esc(dayFr(o.checked))}</small>` : ""}</span>
           <span class="o-go">Voir l'offre →</span>
-        </a>${couponsFor(o.shop, m.MARQUE).map(couponLine).join("")}`).join("")}</div>${offers.some((o) => o.partner) ? partnerNote : ""}${more}`;
+        </a>${couponsFor(o.shop, m.MARQUE).map(couponLine).join("")}`).join("")}</div>${offers.some((o) => o.partner) ? partnerNote : ""}
+      <div class="price-hist" hidden></div>${more}`;
   }
 
   async function loadSocial(ref) {
@@ -684,7 +788,56 @@
         : `<p>Toutes les sources ont été vérifiées : pas de changement aujourd'hui.</p>`}
       ${drops.length ? `<h3 class="rep-h">Baisses de prix</h3><ul class="rep-drops">${drops.map((d) => `<li><a href="#m/${encodeURIComponent(d.ref)}">${esc(d.model)}</a><span><s>${euro(d.old)}</s> ${euro(d.new)}</span><em>−${d.pct} %</em></li>`).join("")}</ul>
         <p class="rep-note">Prix le plus bas relevé parmi les offres en stock (avant TVA pour les boutiques hors Europe).</p>` : ""}
-      <p class="rep-total">Catalogue : ${nf(r.total)} moteurs, ${nf(r.totalModels)} modèles identifiés.</p>`;
+      <p class="rep-total">Catalogue : ${nf(r.total)} moteurs, ${nf(r.totalModels)} modèles identifiés.</p>
+      <button type="button" class="n-all-btn" data-rep-detail="${esc(r.date)}" aria-expanded="false">Voir le rapport détaillé</button><div class="rep-detail" hidden></div>`;
+  }
+  // Detailed report of a day (data/rapports/AAAA-MM-JJ.json): every motor added or changed, every price change per shop
+  const motorLink = (x) => `<a href="#m/${encodeURIComponent(x.ref)}">${esc(x.model)}</a>${x.kv ? ` <small>${esc(x.kv)} KV</small>` : ""}`;
+  const pctTag = (p) => `<em class="pct ${p < 0 ? "down" : "up"}">${p > 0 ? "+" : "−"}${String(Math.abs(p)).replace(".", ",")} %</em>`;
+  const fieldVal = (v) => (v ? esc(/^https?:/.test(v) ? v.replace(/^https?:\/\/(www\.)?/, "").slice(0, 40) + "…" : v) : "<i>vide</i>");
+  // A variation of a price index (100 = unchanged): "+2,6 %", "−0,12 %", "0 %"
+  const pctFmt = (v) => { const d = v - 100, a = Math.abs(d); return a < 0.005 ? "0 %" : `${d > 0 ? "+" : "−"}${a.toFixed(a < 1 ? 2 : 1).replace(".", ",")} %`; };
+  // Long lists: 15 lines, then a button for the rest
+  const longList = (cls, items) => `<ul class="${cls}">${items.map((h, i) => `<li${i >= 15 ? " hidden" : ""}>${h}</li>`).join("")}</ul>${items.length > 15 ? `<button type="button" class="n-all-btn" data-rd-more>Afficher les ${nf(items.length - 15)} autres</button>` : ""}`;
+  const sec = (title, n, body, open = false) => `<details class="rd-sec"${open ? " open" : ""}><summary>${title} <i>${nf(n)}</i></summary>${body}</details>`;
+  async function openDetail(btn) {
+    const box = btn.nextElementSibling, open = btn.getAttribute("aria-expanded") !== "true";
+    btn.setAttribute("aria-expanded", String(open));
+    btn.textContent = open ? "Masquer le rapport détaillé" : "Voir le rapport détaillé";
+    box.hidden = !open;
+    if (!open || box.childElementCount) return;
+    box.innerHTML = `<p class="note">Chargement…</p>`;
+    const [d, idx] = await Promise.all([lazyJson(`rapports/${btn.dataset.repDetail}`), lazyJson("prix_boutiques")]);
+    if (!d) { box.innerHTML = `<p class="note">Le détail de ce jour n'est pas disponible.</p>`; return; }
+    const priceRows = (d.prices || []).map((x) => `<tr><td>${motorLink(x)}</td><td>${esc(x.shop)}</td><td>${euro(withVat(x.old, x.cur))}</td><td><b>${euro(withVat(x.new, x.cur))}</b></td><td>${pctTag(x.pct)}</td><td>${spark((x.hist || []).map((p) => [p[0], withVat(p[1], x.cur)]))}</td></tr>`).join("");
+    const parts = [];
+    if (d.pricesTotal || (d.stock || []).length || (d.offersNew || []).length) {
+      parts.push(sec("Prix", (d.pricesTotal || 0) + (d.stock || []).length + (d.offersNew || []).length, `
+        ${d.pricesTotal ? `<h4 class="rd-h">Évolution des prix par boutique</h4><p class="rd-sub">Variation moyenne des prix de chaque boutique depuis le premier relevé (0 % = prix inchangés).</p><div class="rd-chart"></div>
+        <div class="tbl-wrap"><table class="rd-table"><thead><tr><th>Boutique</th><th>Baisses</th><th>Hausses</th><th>Variation moyenne</th></tr></thead><tbody>${(d.shops || []).map((x) => `<tr><td>${esc(x.shop)}</td><td>${x.down}</td><td>${x.up}</td><td>${pctTag(x.avg)}</td></tr>`).join("")}</tbody></table></div>
+        <h4 class="rd-h">Prix changés <small>${nf(d.pricesTotal)}</small></h4><div class="tbl-wrap"><table class="rd-table"><thead><tr><th>Moteur</th><th>Boutique</th><th>Avant</th><th>Après</th><th>Variation</th><th>Historique</th></tr></thead><tbody>${priceRows}</tbody></table></div>` : ""}
+        ${(d.stock || []).length ? `<h4 class="rd-h">Stock</h4>${longList("rd-list", d.stock.map((x) => `${motorLink(x)} — ${esc(x.shop)} : <b class="${x.stock ? "st-in" : "st-out"}">${x.stock ? "de retour en stock" : "en rupture"}</b>`))}` : ""}
+        ${(d.offersNew || []).length ? `<h4 class="rd-h">Nouvelles offres</h4>${longList("rd-list", d.offersNew.map((x) => `${motorLink(x)} — ${esc(x.shop)} : ${euro(withVat(x.eur, x.cur))}${x.stock ? "" : " (rupture)"}`))}` : ""}`, true));
+    }
+    if ((d.added || []).length) parts.push(sec("Moteurs ajoutés", d.added.length, longList("rd-list", d.added.map((x) => `${motorLink(x)}${x.cls ? ` <small>classe ${esc(x.cls)}</small>` : ""}`))));
+    if ((d.changed || []).length) parts.push(sec("Fiches complétées ou corrigées", d.changedTotal || d.changed.length, `<ul class="rd-changes">${d.changed.map((x, i) => `<li${i >= 60 ? " hidden" : ""}>${motorLink(x)}<ul>${x.fields.map(([f, a, b]) => `<li><span>${esc(f)}</span> ${fieldVal(a)} → <b>${fieldVal(b)}</b></li>`).join("")}</ul></li>`).join("")}</ul>
+      ${d.changed.length > 60 ? `<button type="button" class="n-all-btn" data-rd-more>Afficher les ${nf(d.changed.length - 60)} autres</button>` : ""}`));
+    if ((d.media || []).length) parts.push(sec("Photos et vidéos ajoutées", d.media.length, longList("rd-list", d.media.map((x) => `${x.ref ? `<a href="#m/${encodeURIComponent(x.ref)}">${esc(x.model)}</a>` : esc(x.model)} : +${x.n} ${x.kind === "videos" ? `vidéo${x.n > 1 ? "s" : ""}${x.titles.length ? ` <small>(${esc(x.titles.join(" · "))})</small>` : ""}` : `photo${x.n > 1 ? "s" : ""}`}`))));
+    if ((d.removed || []).length) parts.push(sec("Retirés (doublons, fiches fusionnées)", d.removed.length, longList("rd-list", d.removed.map((x) => `${esc(x.model)}${x.kv ? ` <small>${esc(x.kv)} KV</small>` : ""}`))));
+    box.innerHTML = parts.join("") || `<p class="note">Aucun changement enregistré ce jour-là.</p>`;
+    const chartBox = box.querySelector(".rd-chart");
+    if (chartBox && idx && idx.days?.length) {
+      // The shops whose prices changed that day first, then the biggest shops (8 lines at most)
+      const changedShops = (d.shops || []).map((x) => x.shop);
+      const days = idx.days.filter((x) => x <= d.date);
+      // Only the shops whose prices moved in the period (flat lines at 0 % would hide each other)
+      const moved = (x) => x.idx.some((v, i) => v != null && idx.days[i] <= d.date && Math.abs(v - 100) >= 0.005);
+      const shops = idx.shops.filter(moved).sort((a, b) => (changedShops.includes(b.shop) - changedShops.includes(a.shop)) || b.offers - a.offers).slice(0, 8);
+      const still = idx.shops.filter((x) => !moved(x)).map((x) => x.shop);
+      if (still.length) chartBox.insertAdjacentHTML("afterend", `<p class="rd-sub">Prix inchangés sur la période : ${esc(still.join(", "))}.</p>`);
+      drawChart(chartBox, { days, label: "Variation moyenne des prix par boutique", fmt: pctFmt,
+        series: shops.map((x) => ({ name: x.shop, pts: idx.days.map((day, i) => [day, x.idx[i]]).filter((p) => p[1] != null && p[0] <= d.date) })) });
+    }
   }
   // Every motor of an announcement, listed on demand (brand, model, class, KV), freshly released ones marked
   function drawAll(btn) {
@@ -1581,6 +1734,8 @@
     const nd = t.closest("[data-news-del]");
     if (nd) { try { await api("news_delete", { id: nd.dataset.newsDel }); renderAdmin("news"); } catch (e) { toast(e.message, "bad"); } return; }
     const na = t.closest("[data-n-all]"); if (na) return drawAll(na);
+    const rd = t.closest("[data-rep-detail]"); if (rd) return openDetail(rd);
+    const rm = t.closest("[data-rd-more]"); if (rm) { rm.previousElementSibling.querySelectorAll(":scope > li[hidden]").forEach((li) => (li.hidden = false)); rm.remove(); return; }
     const af = t.closest("[data-actus]");
     if (af) { document.querySelectorAll("[data-actus]").forEach((b) => b.setAttribute("aria-selected", String(b === af))); drawFeed(af.dataset.actus); }
   });
@@ -1600,7 +1755,7 @@
       chosenCountry = ev.target.value;
       try { localStorage.setItem("mm-country", ev.target.value); } catch (e) { /* storage blocked: this page only */ }
       const box = ev.target.closest("#d-prix"), m = motorBy(decodeURIComponent((location.hash.match(/^#m\/(.+)$/) || [])[1] || ""));
-      if (box && m) { box.innerHTML = pricesBlock(m); box.querySelector("[data-country]")?.focus(); }
+      if (box && m) { box.innerHTML = pricesBlock(m); box.querySelector("[data-country]")?.focus(); drawPriceHistory(m); }
       return;
     }
     if ((ev.target.id === "pf-file" || ev.target.id === "pf-bfile") && ev.target.files[0]) {
