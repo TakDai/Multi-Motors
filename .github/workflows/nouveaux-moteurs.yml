@@ -41,6 +41,9 @@ jobs:
     timeout-minutes: 150
     steps:
       - uses: actions/checkout@v4
+        with:
+          # A few days of history: the daily report compares the catalogue with the day before
+          fetch-depth: 60
 
       - uses: actions/setup-python@v5
         with:
@@ -77,6 +80,8 @@ jobs:
       - name: Prix, photos et vidéos (400 familles par jour, toutes les boutiques)
         run: |
           tools/etape.sh python tools/prices.py --limit 400 --workers 6
+          # Every known offer checked again (price of the right variant, stock, product gone) + price history
+          tools/etape.sh python tools/prices_check.py
           tools/etape.sh python tools/videos.py --limit 300
           tools/etape.sh python tools/photos.py
           tools/etape.sh python tools/photos_sites.py
