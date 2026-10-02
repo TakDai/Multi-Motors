@@ -475,7 +475,7 @@
   const dayFr = (d, long) => new Date(dayMs(d)).toLocaleDateString("fr-FR", long ? { weekday: "short", day: "numeric", month: "long" } : { day: "numeric", month: "short" });
   // Value of a series on a day: the last point on or before it (prices hold until they change)
   const valueAt = (pts, d) => { let v = null; for (const [x, y] of pts) { if (x <= d) v = y; else break; } return v; };
-  function drawChart(box, { series, days, fmt, label }) {
+  function drawChart(box, { series, days, fmt, label, delta, best }) {
     series = series.filter((s) => s.pts.length).slice(0, PALETTE.length);
     if (!series.length || !days.length) { box.innerHTML = ""; return; }
     const W = Math.max(280, box.clientWidth || 600), H = 220, L = 54, R = 14, T = 12, B = 26;
@@ -498,35 +498,63 @@
       ${ticks.map((v) => `<line class="ch-grid" x1="${L}" x2="${W - R}" y1="${y(v).toFixed(1)}" y2="${y(v).toFixed(1)}"/><text class="ch-yl" x="${L - 6}" y="${(y(v) + 4).toFixed(1)}">${esc(fmt(v))}</text>`).join("")}
       <line class="ch-axis" x1="${L}" x2="${W - R}" y1="${H - B}" y2="${H - B}"/>
       ${xt.map((d, i) => `<text class="ch-xl" x="${x(d).toFixed(1)}" y="${H - 8}" text-anchor="${i === 0 && xt.length > 1 ? "start" : i === xt.length - 1 && xt.length > 1 ? "end" : "middle"}">${esc(dayFr(d))}</text>`).join("")}
-      ${series.map((s, i) => `<path class="ch-line" d="${path(s.pts)}" stroke="${PALETTE[i]}"/>`).join("")}
-      ${series.map((s, i) => s.pts.filter((p) => p[0] >= days[0]).map((p) => `<circle class="ch-dot" cx="${x(p[0]).toFixed(1)}" cy="${y(p[1]).toFixed(1)}" r="4" fill="${PALETTE[i]}"/>`).join("")).join("")}
+      ${series.map((s, i) => `<path class="ch-line" data-s="${i}" d="${path(s.pts)}" stroke="${PALETTE[i]}" pathLength="1" style="--d:${i * 0.08}s"/>`).join("")}
+      ${series.map((s, i) => s.pts.filter((p) => p[0] >= days[0]).map((p) => `<circle class="ch-dot" data-s="${i}" cx="${x(p[0]).toFixed(1)}" cy="${y(p[1]).toFixed(1)}" r="4" fill="${PALETTE[i]}"/>`).join("")).join("")}
       <line class="ch-cross" x1="0" x2="0" y1="${T}" y2="${H - B}" hidden/>
+      ${series.map((s, i) => `<circle class="ch-on" data-s="${i}" r="5.5" fill="${PALETTE[i]}" hidden/>`).join("")}
       <rect class="ch-hit" x="${L}" y="0" width="${W - L - R}" height="${H}"/></svg><div class="ch-tip" hidden></div></div>
-      <ul class="ch-legend">${series.map((s, i) => `<li><i style="background:${PALETTE[i]}"></i>${esc(s.name)}</li>`).join("")}</ul>
+      <ul class="ch-legend">${series.map((s, i) => `<li><button type="button" data-s="${i}" aria-pressed="true" title="Cliquer pour masquer ou afficher ${esc(s.name)}"><i style="background:${PALETTE[i]}"></i>${esc(s.name)}</button></li>`).join("")}</ul>
       <details class="ch-table"><summary>Voir les valeurs</summary><div class="tbl-wrap"><table><thead><tr><th>Date</th>${series.map((s) => `<th>${esc(s.name)}</th>`).join("")}</tr></thead><tbody>${
         [...new Set(series.flatMap((s) => s.pts.map((p) => p[0])))].filter((d) => d >= days[0]).sort().reverse().map((d) => `<tr><td>${esc(dayFr(d))}</td>${series.map((s) => { const v = valueAt(s.pts, d); return `<td>${v == null ? "—" : esc(fmt(v))}</td>`; }).join("")}</tr>`).join("")
       }</tbody></table></div></details>`;
     // Shared tooltip: every series at the day under the pointer (or chosen with the arrow keys)
     const svg = box.querySelector("svg"), tip = box.querySelector(".ch-tip"), cross = box.querySelector(".ch-cross");
+    const ons = [...box.querySelectorAll(".ch-on")], off = new Set();
     let cur = days.length - 1;
+    // Legend: hovering a shop brings its line forward, a click hides or shows it
+    box.querySelectorAll(".ch-legend button").forEach((b) => {
+      const i = +b.dataset.s;
+      b.addEventListener("mouseenter", () => { svg.dataset.focus = i; });
+      b.addEventListener("mouseleave", () => { delete svg.dataset.focus; });
+      b.addEventListener("click", () => {
+        off.has(i) ? off.delete(i) : off.add(i);
+        b.setAttribute("aria-pressed", String(!off.has(i)));
+        svg.querySelectorAll(`[data-s="${i}"]`).forEach((el) => el.classList.toggle("ch-off", off.has(i)));
+      });
+    });
     const show = (i) => {
       cur = Math.max(0, Math.min(days.length - 1, i));
       const d = days[cur], cx = x(d);
       cross.setAttribute("x1", cx); cross.setAttribute("x2", cx); cross.hidden = false;
       tip.replaceChildren();
       const h = document.createElement("b"); h.className = "ch-tip-d"; h.textContent = dayFr(d, true); tip.append(h);
+      const shown = series.map((s, k) => [k, valueAt(s.pts, d)]).filter(([k, v]) => v != null && !off.has(k));
+      const low = best && shown.length > 1 ? Math.min(...shown.map(([, v]) => v)) : null;
       series.forEach((s, k) => {
         const v = valueAt(s.pts, d);
+        if (off.has(k)) { ons[k].hidden = true; return; }
         const row = document.createElement("div"), key = document.createElement("i"), val = document.createElement("strong"), nm = document.createElement("span");
         key.style.background = PALETTE[k]; val.textContent = v == null ? "—" : fmt(v); nm.textContent = s.name;
-        row.append(key, val, nm); tip.append(row);
+        row.append(key, val, nm);
+        // Change since the price before (price graphs) and the cheapest shop that day
+        const before = delta && v != null ? [...s.pts].reverse().find((p) => p[0] < d && p[1] !== v && p[0] <= d) : null;
+        const lastChange = before && s.pts.find((p) => p[0] > before[0] && p[0] <= d);
+        if (before && lastChange) {
+          const dv = v - before[1], em = document.createElement("em");
+          em.className = dv < 0 ? "dn" : "up"; em.textContent = `${dv < 0 ? "▼" : "▲"} ${fmt(Math.abs(dv))}`;
+          em.title = `depuis le ${dayFr(lastChange[0])}`; row.append(em);
+        }
+        if (low != null && v === low) { const b = document.createElement("b"); b.className = "ch-best"; b.textContent = "le moins cher"; row.append(b); }
+        tip.append(row);
+        ons[k].hidden = v == null;
+        if (v != null) { ons[k].setAttribute("cx", cx); ons[k].setAttribute("cy", y(v)); }
       });
       tip.hidden = false;
       const left = (cx / W) * svg.clientWidth;
       tip.style.left = `${Math.min(Math.max(left - tip.offsetWidth / 2, 0), svg.clientWidth - tip.offsetWidth)}px`;
     };
     const near = (ev) => { const r = svg.getBoundingClientRect(), px = ((ev.clientX - r.left) / r.width) * W; let best = 0; days.forEach((d, i) => { if (Math.abs(x(d) - px) < Math.abs(x(days[best]) - px)) best = i; }); return best; };
-    const hide = () => { tip.hidden = true; cross.hidden = true; };
+    const hide = () => { tip.hidden = true; cross.hidden = true; ons.forEach((o) => (o.hidden = true)); };
     svg.addEventListener("pointermove", (ev) => show(near(ev)));
     svg.addEventListener("pointerleave", hide);
     svg.addEventListener("focus", () => show(cur));
@@ -544,10 +572,25 @@
     let d = `M${x(pts[0][0]).toFixed(1)},${y(pts[0][1]).toFixed(1)}`;
     for (let i = 1; i < pts.length; i++) d += `H${x(pts[i][0]).toFixed(1)}V${y(pts[i][1]).toFixed(1)}`;
     const last = pts[pts.length - 1];
-    return `<svg class="spark" viewBox="0 0 ${W} ${H}" width="${W}" height="${H}" role="img" aria-label="Historique : ${esc(pts.map((p) => `${dayFr(p[0])} ${euro(p[1])}`).join(", "))}"><path d="${d}"/><circle cx="${x(last[0]).toFixed(1)}" cy="${y(last[1]).toFixed(1)}" r="3"/></svg>`;
+    const label = `Historique : ${pts.map((p) => `${dayFr(p[0])} ${euro(p[1])}`).join(", ")}`;
+    return `<svg class="spark" viewBox="0 0 ${W} ${H}" width="${W}" height="${H}" role="img" aria-label="${esc(label)}"><title>${esc(label)}</title><path d="${d}" pathLength="1"/><circle cx="${x(last[0]).toFixed(1)}" cy="${y(last[1]).toFixed(1)}" r="3"/></svg>`;
   }
   // Data of the graphs, loaded when first needed
   const lazyJson = (() => { const cache = {}; return (name) => (cache[name] = cache[name] || fetch(`data/${name}.json`, { cache: "no-cache" }).then((r) => (r.ok ? r.json() : null)).catch(() => null)); })();
+
+  // Offers: arrow and amount when the price of the shop changed in the last 30 days (from the price history)
+  function decorateOffers(m, shops, curOf) {
+    const since = new Date(Date.now() - 30 * 864e5).toISOString().slice(0, 10);
+    document.querySelectorAll("#d-prix a.offer[data-shop]").forEach((a) => {
+      const pts = shops[a.dataset.shop] || shops[a.querySelector(".o-shop")?.childNodes[1]?.textContent || ""];
+      if (!pts || pts.length < 2 || a.querySelector(".o-trend")) return;
+      const last = pts[pts.length - 1], prev = [...pts].reverse().find((p) => p[1] !== last[1]);
+      if (!prev || last[0] < since) return;
+      const cur = curOf[a.dataset.shop], dv = withVat(last[2], cur) - withVat(prev[2], cur);
+      if (Math.abs(dv) < 0.01) return;
+      a.querySelector(".o-price b")?.insertAdjacentHTML("afterend", `<span class="o-trend ${dv < 0 ? "dn" : "up"} tt" tabindex="0" data-tip="${dv < 0 ? "Baisse" : "Hausse"} de ${euro(Math.abs(dv))} le ${dayFr(last[0], true)} (avant : ${euro(withVat(prev[2], cur))})">${dv < 0 ? "▼" : "▲"} ${euro(Math.abs(dv))}</span>`);
+    });
+  }
 
   // Motor page: price history of the motor in each shop
   async function drawPriceHistory(m) {
@@ -566,7 +609,8 @@
     for (let t = dayMs(first); t <= dayMs(today); t += 864e5) days.push(new Date(t).toISOString().slice(0, 10));
     box.hidden = false;
     box.innerHTML = `<h4 class="ph-title">Historique des prix par boutique</h4><p class="ph-sub">${changes ? `${changes} changement${changes > 1 ? "s" : ""} de prix` : "Aucun changement de prix"} depuis le ${esc(dayFr(first))} : prix TTC d'un moteur, vérifiés chaque jour (TVA de 20 % ajoutée hors Europe).</p><div class="ph-chart"></div>`;
-    drawChart(box.querySelector(".ph-chart"), { series, days, fmt: (v) => euro(v), label: `Historique des prix de ${motorName(m.REF)} par boutique` });
+    drawChart(box.querySelector(".ph-chart"), { series, days, fmt: (v) => euro(v), delta: true, best: true, label: `Historique des prix de ${motorName(m.REF)} par boutique` });
+    decorateOffers(m, shops, curOf);
   }
 
   function pricesBlock(m) {
@@ -590,7 +634,7 @@
       <div class="offers">${offers.map((o, i) => `${i === 0 || offers[i - 1].zone !== o.zone ? `<p class="o-zone">${esc(labels[o.zone])}</p>` : ""}
         <a class="offer ${o.ttc === best ? "best" : ""} ${o.stock ? "" : "oos"}" href="${esc(o.partner ? affiliate(o.url, o.partner) : o.url)}" target="_blank" rel="${o.partner ? "sponsored noopener" : "noopener"}" data-shop="${esc(o.partner ? o.partner.shop : o.shop)}"${o.partner ? " data-aff" : ""}>
           <span class="o-shop"><i class="o-flag" title="${esc(COUNTRIES[o.cc] || o.cc)}">${flag(o.cc)}</i>${esc(o.shop)}${o.ttc === best ? `<em>Meilleur prix</em>` : ""}${o.partner ? `<span class="o-aff" title="Lien affilié">Partenaire</span>` : ""}</span>
-          <span class="o-price">${priceTag(o.ttc)}<small class="o-orig">${(() => {
+          <span class="o-price">${priceTag(o.ttc)}${offers.length > 1 ? `<span class="o-gauge tt" data-tip="${o.ttc === best ? "Le moins cher des offres relevées" : `${euro(o.ttc - best)} de plus que le moins cher (${Math.round((o.ttc / best - 1) * 100)} %)`}"><i style="--p:${Math.round(((o.ttc - best) / ((Math.max(...offers.map((x) => x.ttc)) - best) || 1)) * 100)}%"></i></span>` : ""}<small class="o-orig">${(() => {
             const sym = o.cur === "USD" ? "$" : o.cur === "GBP" ? "£" : "€";
             const f = (v) => `${v.toLocaleString("fr-FR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ${sym}`;
             return `sur la boutique : ${o.pack > 1 ? `lot de ${o.pack} à ${f(o.price)}, soit ${f(o.price / o.pack)} / moteur` : f(o.price)}${o.cur === "USD" ? " (hors TVA)" : ""}`;
@@ -777,23 +821,43 @@
         ${i.refs?.length ? `<div class="n-motors">${i.refs.slice(0, 12).map((r) => { const m = motorBy(r); return m ? `<a class="n-motor" href="#m/${encodeURIComponent(r)}">${MM().photo(m)}<span>${MM().freshTag(m)}${esc(m.MARQUE)} ${esc(m.NOM || "")}<small>${esc(m.CLASSE || "")} · ${esc(m.KV || "")}KV</small></span></a>` : ""; }).join("")}</div>` : ""}
         ${i.all?.filter(motorBy).length > 1 ? `<button type="button" class="n-all-btn" data-n-all="${esc(i.at)}" aria-expanded="false">Voir les ${nf(i.all.filter(motorBy).length)} moteurs ajoutés</button><div class="n-all" hidden></div>` : ""}
       </article>`).join("") : `<p class="note">Aucune actualité pour l'instant.</p>`;
+    animateCounts($("feed"));
   }
   // Daily report: the figures of the day, and the price drops with a link to each motor
   function reportBlock(r) {
-    const tiles = [[r.motors, "nouveaux moteurs", r.models ? `dont ${nf(r.models)} nouveaux modèles` : ""], [r.values, "informations ajoutées", r.completed ? `sur ${nf(r.completed)} fiches` : ""],
-      [r.drops, "baisses de prix"], [r.priced, "nouveaux prix"], [r.photos, "nouvelles photos"], [r.videos, "nouvelles vidéos"],
-      [r.bench, "bancs d'essai"], [r.fab, "fiches fabricant"]].filter(([n]) => n > 0);
+    const tiles = [[r.motors, "nouveaux moteurs", r.models ? `dont ${nf(r.models)} nouveaux modèles` : "", "Moteurs entrés au catalogue ce jour-là (tableau, boutiques, sites des fabricants)"],
+      [r.values, "informations ajoutées", r.completed ? `sur ${nf(r.completed)} fiches` : "", "Caractéristiques remplies sur des fiches existantes : poids, dimensions, tension, shaft, lien…"],
+      [r.drops, "baisses de prix", "", "Modèles dont le prix le plus bas en stock a baissé d'au moins 5 %"], [r.priced, "nouveaux prix", "", "Modèles qui ont maintenant au moins une offre en stock"],
+      [r.photos, "nouvelles photos", "", "Photos ajoutées aux galeries des modèles"], [r.videos, "nouvelles vidéos", "", "Vidéos de test ou de review trouvées sur YouTube"],
+      [r.bench, "bancs d'essai", "", "Tableaux de poussée ajoutés"], [r.fab, "fiches fabricant", "", "Fiches techniques officielles lues sur les sites des fabricants"]].filter(([n]) => n > 0);
     const drops = (r.dropList || []).filter((d) => motorBy(d.ref));
-    return `${tiles.length ? `<div class="rep-tiles">${tiles.map(([n, l, sub]) => `<div class="rep-tile"><b>${nf(n)}</b><span>${l}</span>${sub ? `<small>${sub}</small>` : ""}</div>`).join("")}</div>`
+    return `${activityStrip(r.date)}${tiles.length ? `<div class="rep-tiles">${tiles.map(([n, l, sub, tip], i) => `<div class="rep-tile tt" tabindex="0" data-tip="${esc(tip)}" style="--i:${i}"><b data-count="${n}">${nf(n)}</b><span>${l}</span>${sub ? `<small>${sub}</small>` : ""}</div>`).join("")}</div>`
         : `<p>Toutes les sources ont été vérifiées : pas de changement aujourd'hui.</p>`}
-      ${drops.length ? `<h3 class="rep-h">Baisses de prix</h3><ul class="rep-drops">${drops.map((d) => `<li><a href="#m/${encodeURIComponent(d.ref)}">${esc(d.model)}</a><span><s>${euro(d.old)}</s> ${euro(d.new)}</span><em>−${d.pct} %</em></li>`).join("")}</ul>
+      ${drops.length ? `<h3 class="rep-h">Baisses de prix</h3><ul class="rep-drops">${drops.map((d) => `<li><a href="#m/${encodeURIComponent(d.ref)}">${esc(d.model)}</a><span><s>${euro(d.old)}</s> ${euro(d.new)}</span><em class="tt" tabindex="0" data-tip="Économie de ${euro(d.old - d.new)} par moteur">▼ ${d.pct} %</em></li>`).join("")}</ul>
         <p class="rep-note">Prix le plus bas relevé parmi les offres en stock (avant TVA pour les boutiques hors Europe).</p>` : ""}
       <p class="rep-total">Catalogue : ${nf(r.total)} moteurs, ${nf(r.totalModels)} modèles identifiés.</p>
       <button type="button" class="n-all-btn" data-rep-detail="${esc(r.date)}" aria-expanded="false">Voir le rapport détaillé</button><div class="rep-detail" hidden></div>`;
   }
+  // Activity of the last 14 reports up to this one: one bar per day (motors, information, prices, photos and videos)
+  function activityStrip(day) {
+    const reps = (C.actus || []).filter((a) => a.type === "rapport" && a.date <= day).sort((a, b) => a.date.localeCompare(b.date)).slice(-14);
+    if (reps.length < 2) return "";
+    const total = (r) => (r.motors || 0) + (r.values || 0) + (r.priced || 0) + (r.drops || 0) + (r.photos || 0) + (r.videos || 0);
+    const max = Math.max(1, ...reps.map(total));
+    return `<div class="rep-strip" role="img" aria-label="Activité des ${reps.length} derniers jours">${reps.map((r, i) => `<span class="tt${r.date === day ? " on" : ""}${i >= reps.length / 2 ? " r" : ""}" tabindex="0" style="--h:${Math.max(6, Math.round((total(r) / max) * 100))}%;--i:${i}" data-tip="${esc(dayFr(r.date, true))} : ${nf(total(r))} changements${r.motors ? `, ${nf(r.motors)} moteurs` : ""}${r.values ? `, ${nf(r.values)} informations` : ""}${r.priced ? `, ${nf(r.priced)} prix` : ""}"></span>`).join("")}<small>14 derniers jours</small></div>`;
+  }
+  // Figures that count up when a report comes into view
+  const countIn = new ("IntersectionObserver" in window ? IntersectionObserver : class { observe() {} })((entries, obs) => entries.forEach((en) => {
+    if (!en.isIntersecting) return;
+    obs.unobserve(en.target);
+    const el = en.target, n = +el.dataset.count, t0 = performance.now();
+    const tick = (now) => { const t = Math.min(1, (now - t0) / 700), e = 1 - (1 - t) ** 3; el.textContent = nf(Math.round(n * e)); if (t < 1) requestAnimationFrame(tick); };
+    requestAnimationFrame(tick);
+  }), { threshold: 0.6 });
+  const animateCounts = (root) => { if (matchMedia("(prefers-reduced-motion: reduce)").matches) return; root.querySelectorAll(".rep-tile [data-count]").forEach((el) => countIn.observe(el)); };
   // Detailed report of a day (data/rapports/AAAA-MM-JJ.json): every motor added or changed, every price change per shop
   const motorLink = (x) => `<a href="#m/${encodeURIComponent(x.ref)}">${esc(x.model)}</a>${x.kv ? ` <small>${esc(x.kv)} KV</small>` : ""}`;
-  const pctTag = (p) => `<em class="pct ${p < 0 ? "down" : "up"}">${p > 0 ? "+" : "−"}${String(Math.abs(p)).replace(".", ",")} %</em>`;
+  const pctTag = (p) => `<em class="pct ${p < 0 ? "down" : "up"}">${p < 0 ? "▼" : "▲"} ${String(Math.abs(p)).replace(".", ",")} %</em>`;
   const fieldVal = (v) => (v ? esc(/^https?:/.test(v) ? v.replace(/^https?:\/\/(www\.)?/, "").slice(0, 40) + "…" : v) : "<i>vide</i>");
   // A variation of a price index (100 = unchanged): "+2,6 %", "−0,12 %", "0 %"
   const pctFmt = (v) => { const d = v - 100, a = Math.abs(d); return a < 0.005 ? "0 %" : `${d > 0 ? "+" : "−"}${a.toFixed(a < 1 ? 2 : 1).replace(".", ",")} %`; };
