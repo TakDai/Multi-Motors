@@ -5,6 +5,11 @@ videos, test benches, maker sheets) is kept in catalogue/etat_jour.json. Each ru
 current state with the state at the end of the previous day and writes the report of the day
 in catalogue/rapports.json (several runs the same day update the same report). actus.py puts
 the reports in the news feed.
+Detailed report of the day (site/data/rapports/AAAA-MM-JJ.json, opened from the news): every
+motor added, removed or completed (field, old and new value, from the catalogue as it was at the
+end of the day before in git), every price and stock change per shop (site/data/prix_hist.json,
+kept by prices_check.py), the photos and videos added. Plus site/data/prix_boutiques.json: a price
+index per shop over the last 60 days (mean of price / first price seen in that period, 100 = no change).
 
 Usage: run by actus.py every day (python tools/rapport.py does the same)
        python tools/rapport.py --backfill 5     (reports of the last days, rebuilt from the git history)
@@ -21,6 +26,15 @@ SPECS = ["CLASSE", "KV", "POIDS", "D MOTEUR", "H MOTEUR", "D SHAFT", "L SHAFT", 
          "L CABLE", "TYPE CABLE", "HELICE", "PUISSANCE", "AMP", "CONFIG", "RESISTANCE", "UTILISATION", "LIEN", "IMG"]
 UNNAMED = re.compile(r"KV · [\d.]+ g$")
 KEEP = 120  # days of reports kept
+DETAILS = ROOT / "site" / "data" / "rapports"
+HIST = ROOT / "site" / "data" / "prix_hist.json"
+INDEX = ROOT / "site" / "data" / "prix_boutiques.json"
+INDEX_FROM = "2026-09-29"
+LABELS = {"CLASSE": "Classe", "KV": "KV", "POIDS": "Poids", "D MOTEUR": "Ø moteur", "H MOTEUR": "H moteur", "D SHAFT": "Ø shaft",
+          "L SHAFT": "L shaft", "TYPE SHAFT": "Type de shaft", "VIS HEL": "Fixation hélice", "VIS FIX": "Vis de fixation",
+          "ENTRAXE FIX": "Entraxe", "LIPO": "Voltage", "L CABLE": "L câble", "TYPE CABLE": "Section câble", "HELICE": "Hélice",
+          "PUISSANCE": "Puissance", "AMP": "Intensité", "CONFIG": "Configuration", "RESISTANCE": "Résistance",
+          "UTILISATION": "Utilisation", "LIEN": "Lien", "IMG": "Photo", "NOM": "Nom", "MARQUE": "Marque"}
 
 
 def state_of(read):
@@ -77,6 +91,109 @@ def report(day, base, cur, new_refs):
     return r
 
 
+def detail(day, base_read, cur_read, hist, new_refs):
+    """Everything that changed that day, motor by motor (base_read: the catalogue at the end of the day before)."""
+    js_ = lambda read, n: json.loads(read(n) or "{}") if read else {}
+    rows = lambda read: {r["REF"]: r for r in csv.DictReader(io.StringIO(read("cat") or "")) if r.get("REF")}
+    cur, base = rows(cur_read), rows(base_read) if base_read else {}
+    model = lambda r: f"{r['MARQUE']} {r['NOM']}".strip()
+    who = lambda ref, r: {"ref": ref, "model": model(r), "kv": r.get("KV", ""), "cls": r.get("CLASSE", "")}
+    new_refs = set(new_refs) | (set(cur) - set(base) if base else set())
+    added = [who(ref, cur[ref]) for ref in sorted(new_refs) if ref in cur]
+    removed = [who(ref, base[ref]) for ref in sorted(set(base) - set(cur))]
+    changed = []
+    for ref, r in cur.items():
+        o = base.get(ref)
+        if not o or ref in new_refs:
+            continue
+        f = [[LABELS.get(c, c), (o.get(c) or "")[:90], (r.get(c) or "")[:90]] for c in ["NOM"] + SPECS if (o.get(c) or "") != (r.get(c) or "")]
+        if f:
+            changed.append({**who(ref, r), "fields": f})
+    changed.sort(key=lambda x: (x["model"].lower(), x["kv"]))
+    # Prices: the history points of that day, against the point before (currency of each offer: the site adds VAT to USD prices)
+    prices, offers_new, stock = [], [], []
+    cur_of = {(ref, o["shop"]): o.get("cur", "EUR") for ref, v in js_(cur_read, "prix").items() for o in (v or {}).get("offers") or []}
+    for ref, shops in hist.items():
+        r = cur.get(ref)
+        if not r:
+            continue
+        for shop, pts in shops.items():
+            for i, p in enumerate(pts):
+                if p[0] != day:
+                    continue
+                cur_ = cur_of.get((ref, shop), "EUR")
+                if i == 0:
+                    offers_new.append({**who(ref, r), "shop": shop, "eur": p[2], "cur": cur_, "stock": p[3]})
+                    continue
+                q = pts[i - 1]
+                if p[1] != q[1]:
+                    prices.append({**who(ref, r), "shop": shop, "cur": cur_, "old": q[2], "new": p[2], "oldPrice": q[1], "newPrice": p[1],
+                                   "pct": round((p[1] / q[1] - 1) * 100, 1) if q[1] else 0, "hist": [[x[0], x[2]] for x in pts][-30:]})
+                if p[3] != q[3]:
+                    stock.append({**who(ref, r), "shop": shop, "stock": p[3]})
+    prices.sort(key=lambda x: x["pct"])
+    by_shop = {}
+    for x in prices:
+        s_ = by_shop.setdefault(x["shop"], {"shop": x["shop"], "down": 0, "up": 0, "pcts": []})
+        s_["down" if x["pct"] < 0 else "up"] += 1
+        s_["pcts"].append(x["pct"])
+    shops = sorted(({"shop": v["shop"], "down": v["down"], "up": v["up"], "avg": round(sum(v["pcts"]) / len(v["pcts"]), 1)} for v in by_shop.values()),
+                   key=lambda v: -(v["down"] + v["up"]))
+    # Photos and videos added, per model
+    js = lambda read, n: json.loads(read(n) or "{}") if read else {}
+    media = []
+    for n, label in (("photos", "photos"), ("videos", "videos")):
+        b, c = js(base_read, n), js(cur_read, n)
+        for k, v in c.items():
+            d = len(v or []) - len(b.get(k) or [])
+            if d > 0 and base_read:
+                ref = next((ref for ref, r in cur.items() if f"{r['MARQUE']}|{r['NOM']}".upper() == k.upper()), "")
+                media.append({"model": k.replace("|", " "), "ref": ref, "kind": label, "n": d,
+                              "titles": [x.get("t", "") for x in (v or [])[-d:]][:3] if n == "videos" else []})
+    media.sort(key=lambda x: (x["kind"], x["model"].lower()))
+    return {"date": day, "added": added[:1500], "removed": removed[:500], "changed": changed[:2000], "changedTotal": len(changed),
+            "prices": prices[:800], "pricesTotal": len(prices), "shops": shops, "offersNew": offers_new[:800], "stock": stock[:500],
+            "media": media[:800]}
+
+
+def shop_index(hist, days=60):
+    """Price index of each shop (mean over its offers of the price that day / first price in the period, x100)."""
+    today = datetime.date.today()
+    span = [(today - datetime.timedelta(days=i)).isoformat() for i in range(days - 1, -1, -1)]
+    start = min((p[0] for shops in hist.values() for pts in shops.values() for p in pts), default=span[-1])
+    # Prices were matched again with the right variant on 28/09: the index starts after that
+    span = [d for d in span if d >= max(start, INDEX_FROM)]
+    per_shop = {}
+    for shops in hist.values():
+        for shop, pts in shops.items():
+            per_shop.setdefault(shop, []).append(pts)
+    out = []
+    for shop, offers in per_shop.items():
+        if len(offers) < 8:
+            continue
+        idx = []
+        for d in span:
+            ratios = []
+            for pts in offers:
+                # Reference: the price at the start of the period (or the first one seen after it)
+                first = next((p for p in reversed(pts) if p[0] <= span[0] and p[1]), None) or next((p for p in pts if p[1]), None)
+                now = next((p for p in reversed(pts) if p[0] <= d), None)
+                if first and now and first[0] <= d:
+                    ratios.append(now[1] / first[1])
+            idx.append(round(sum(ratios) / len(ratios) * 100, 2) if ratios else None)
+        changes = sum(1 for pts in offers for a, b in zip(pts, pts[1:]) if a[1] != b[1])
+        out.append({"shop": shop, "offers": len(offers), "changes": changes, "idx": idx})
+    out.sort(key=lambda x: -x["offers"])
+    return {"days": span, "shops": out}
+
+
+def save_detail(d):
+    DETAILS.mkdir(parents=True, exist_ok=True)
+    (DETAILS / f"{d['date']}.json").write_text(json.dumps(d, ensure_ascii=False, separators=(",", ":")), encoding="utf-8")
+    for f in sorted(DETAILS.glob("*.json"))[:-KEEP]:
+        f.unlink()
+
+
 def save_report(r):
     reports = json.loads(REPORTS.read_text()) if REPORTS.exists() else []
     reports = [x for x in reports if x["date"] != r["date"]] + [r]
@@ -100,11 +217,15 @@ def backfill(days):
         last_of_day.setdefault(d, h)  # newest first: the first seen is the last commit of the day
     dates = sorted(last_of_day)
     refs = lambda c: {r["REF"] for r in csv.DictReader(io.StringIO(git_read(c)("cat") or "")) if r.get("REF")}
+    hist = json.loads(HIST.read_text()) if HIST.exists() else {}
     for prev, day in list(zip(dates, dates[1:]))[-days:]:
         new = refs(last_of_day[day]) - refs(last_of_day[prev])
         r = report(day, state_of(git_read(last_of_day[prev])), state_of(git_read(last_of_day[day])), new)
         save_report(r)
-        print(r["title"])
+        d = detail(day, git_read(last_of_day[prev]), git_read(last_of_day[day]), hist, new)
+        save_detail(d)
+        print(r["title"], f"| détail : {len(d['changed'])} moteurs modifiés, {d['pricesTotal']} prix changés")
+    INDEX.write_text(json.dumps(shop_index(hist), ensure_ascii=False, separators=(",", ":")))
 
 
 def main():
@@ -133,6 +254,14 @@ def daily():
     r = report(today, base, cur, [ref for ref, d in first.items() if d == today])
     save_report(r)
     print(r["title"])
+    # The catalogue at the end of the day before: last commit before today (needs a git history of a few days)
+    prev = subprocess.run(["git", "rev-list", "-1", f"--before={today}T00:00:00Z", "HEAD"], cwd=ROOT, capture_output=True, text=True).stdout.strip()
+    hist = json.loads(HIST.read_text()) if HIST.exists() else {}
+    cur_read = lambda n: (ROOT / FILES[n]).read_text(encoding="utf-8") if (ROOT / FILES[n]).exists() else None
+    d = detail(today, git_read(prev) if prev else None, cur_read, hist, [ref for ref, x in first.items() if x == today])
+    save_detail(d)
+    INDEX.write_text(json.dumps(shop_index(hist), ensure_ascii=False, separators=(",", ":")))
+    print(f"  détail : {len(d['added'])} ajoutés, {d['changedTotal']} modifiés, {d['pricesTotal']} prix changés, {len(d['stock'])} stocks, {len(d['media'])} médias")
     for d in r["dropList"]:
         print(f"  baisse {d['model']} : {d['old']} € -> {d['new']} € (-{d['pct']} %)")
 
