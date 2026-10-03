@@ -18,4 +18,6 @@ return [
     // Starting the daily search from the site (OVH scheduled task api/cron.php, "run now" button):
     // fine-grained GitHub token, only this repository, permission "Actions: read and write"
     'github_token' => '',
+    // Key of https://multi-motors.fr/api/cron.php?key=… for an online cron service (any long random text)
+    'cron_key' => '',
 ];
