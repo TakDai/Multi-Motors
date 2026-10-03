@@ -8,7 +8,13 @@ on:
     - cron: "23 3 * * *"
     - cron: "53 4 * * *"
     - cron: "37 6 * * *"
-  workflow_dispatch: {}
+  # Started by the site every morning (OVH scheduled task api/cron.php, auto=true) or by hand / "run now" (auto=false)
+  workflow_dispatch:
+    inputs:
+      auto:
+        description: "Lancement automatique : ne rien faire si la recherche a déjà réussi aujourd'hui"
+        type: boolean
+        default: false
 
 permissions:
   contents: write
@@ -28,8 +34,8 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          # Lancement à la main : toujours ; programmé : seulement si aucune recherche n'a réussi aujourd'hui
-          if [ "${{ github.event_name }}" != "schedule" ]; then echo "run=true" >> "$GITHUB_OUTPUT"; exit 0; fi
+          # Lancement à la main : toujours ; programmé ou automatique (site) : seulement si aucune recherche n'a réussi aujourd'hui
+          if [ "${{ github.event_name }}" != "schedule" ] && [ "${{ inputs.auto }}" != "true" ]; then echo "run=true" >> "$GITHUB_OUTPUT"; exit 0; fi
           n=$(gh run list -R "${{ github.repository }}" --workflow nouveaux-moteurs.yml --status success --created "$(date -u +%F)" --json databaseId --jq length)
           echo "Recherches réussies aujourd'hui : $n"
           if [ "$n" = "0" ]; then echo "run=true" >> "$GITHUB_OUTPUT"; else echo "run=false" >> "$GITHUB_OUTPUT"; fi

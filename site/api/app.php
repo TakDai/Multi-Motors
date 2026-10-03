@@ -4,6 +4,7 @@
 declare(strict_types=1);
 require __DIR__ . '/lib.php';
 require __DIR__ . '/schema.php';
+require __DIR__ . '/github.php';
 
 const FIELDS = ['NOM', 'VERSION', 'CLASSE', 'KV', 'POIDS', 'D MOTEUR', 'H MOTEUR', 'D SHAFT', 'L SHAFT', 'TYPE SHAFT',
     'VIS HEL', 'VIS FIX', 'ENTRAXE FIX', 'LIPO', 'L CABLE', 'TYPE CABLE', 'HELICE', 'PUISSANCE', 'AMP', 'AIMANT',
@@ -963,6 +964,19 @@ case 'settings_save':
     }
     if ($changed) audit('settings', implode(', ', $changed));
     out(['ok' => true, 'message' => $changed ? 'Réglages enregistrés.' : 'Rien à modifier.']);
+
+case 'search_status':
+    require_perm('settings');
+    out(gh_last_runs() + ['configured' => (string) cfg('github_token', '') !== '']);
+
+case 'search_run':
+    if (!$post) fail('POST attendu.', 405);
+    require_perm('settings');
+    throttle('search_run', 'site', 3, 60);
+    [$ok, $msg] = gh_start_search(false);
+    if (!$ok) fail($msg, 502);
+    audit('search.run', 'recherche quotidienne');
+    out(['ok' => true, 'message' => 'Recherche lancée : elle prend environ une heure, le site est mis à jour à la fin.']);
 
 case 'admin_log':
     require_perm('logs');

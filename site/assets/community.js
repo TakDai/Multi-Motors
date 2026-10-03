@@ -929,7 +929,7 @@
     "user.banned": "a suspendu", "user.unbanned": "a réactivé", "user.verified": "a confirmé l'email de", "user.note": "a annoté la fiche de",
     "role.created": "a créé le rôle", "role.updated": "a modifié le rôle", "role.deleted": "a supprimé le rôle", "coupon.created": "a créé le code",
     "coupon.updated": "a modifié le code", "coupon.deleted": "a supprimé le code", "partner.created": "a ajouté la boutique partenaire", "partner.updated": "a modifié la boutique partenaire", "partner.deleted": "a retiré la boutique partenaire", "news.created": "a publié", "news.updated": "a modifié l'actualité",
-    "news.deleted": "a supprimé l'actualité", settings: "a modifié les réglages :",
+    "news.deleted": "a supprimé l'actualité", settings: "a modifié les réglages :", "search.run": "a lancé la",
   };
   const COUPON_STATE = { on: ["Actif", "good"], later: ["Programmé", "blue"], expired: ["Expiré", "grey"], off: ["Désactivé", "grey"] };
   const A = { meta: null, users: [], q: "", role: "" };
@@ -1151,7 +1151,9 @@
           <fieldset><legend>Communauté</legend>
             <label class="inline"><input type="checkbox" name="registrations" ${s.registrations !== "0" ? "checked" : ""}> Inscriptions ouvertes <small>(les comptes existants peuvent toujours se connecter)</small></label>
             <label class="inline"><input type="checkbox" name="comments" ${s.comments !== "0" ? "checked" : ""}> Avis ouverts <small>(l'équipe peut toujours publier)</small></label></fieldset>
-          <p class="m-error" role="alert" hidden></p><button class="btn-red" type="submit">Enregistrer les réglages</button></form>`;
+          <p class="m-error" role="alert" hidden></p><button class="btn-red" type="submit">Enregistrer les réglages</button></form>
+          <section class="adm-new adm-search"><h3>Recherche quotidienne</h3><div id="adm-search"><p class="note">Chargement…</p></div></section>`;
+        drawSearchStatus();
       } else if (tab === "log") {
         const kind = Object.keys(LOG_LABELS).includes(status) ? status : "";
         status = kind;
@@ -1161,6 +1163,24 @@
       }
     } catch (e) { body.innerHTML = `<p class="note">${esc(e.message)}</p>`; }
     v.dataset.tab = tab; v.dataset.status = status;
+  }
+  // Daily search (GitHub Actions): last runs and a button to start it now
+  const RUN_STATE = { success: ["Réussie", "good"], failure: ["Échec", "bad"], cancelled: ["Annulée", "grey"], skipped: ["Ignorée", "grey"] };
+  const RUN_EVENT = { schedule: "programmée par GitHub", workflow_dispatch: "lancée par le site ou à la main", push: "publication" };
+  async function drawSearchStatus() {
+    const box = $("adm-search");
+    if (!box) return;
+    let st;
+    try { st = await get("search_status"); } catch (e) { box.innerHTML = `<p class="note">${esc(e.message)}</p>`; return; }
+    const runs = st.runs || [];
+    box.innerHTML = `${st.configured ? "" : `<p class="note">Pour lancer la recherche depuis le site (et chaque matin à l'heure par la tâche planifiée OVH), ajoutez le jeton <code>github_token</code> dans <code>api/config.php</code>.</p>`}
+      ${st.error ? `<p class="note">${esc(st.error)}</p>` : ""}
+      ${runs.length ? `<ol class="adm-log run-list">${runs.map((r) => {
+        const [lbl, cls] = r.status !== "completed" ? ["En cours", "blue"] : RUN_STATE[r.conclusion] || [r.conclusion || "—", "grey"];
+        const min = Math.round((Date.parse(r.updated_at) - Date.parse(r.created_at)) / 60000);
+        return `<li><time>${dateFr(r.created_at.replace("T", " ").slice(0, 19))}</time><span><span class="st ${cls}">${lbl}</span> ${esc(RUN_EVENT[r.event] || r.event)}${r.status === "completed" ? ` · ${min} min` : ""} · <a href="${esc(r.url)}" target="_blank" rel="noopener">détails</a></span></li>`;
+      }).join("")}</ol>` : ""}
+      <p><button type="button" class="btn-red" data-search-run ${st.configured ? "" : "disabled"}>Lancer la recherche maintenant</button></p>`;
   }
   const readPerms = (f) => [...f.querySelectorAll('input[name="perm"]:checked')].map((i) => i.value);
 
@@ -1193,6 +1213,11 @@
     if (row && t.closest("[data-coupon-del]")) {
       if (!confirm("Supprimer définitivement ce code promo ?")) return;
       try { await api("coupon_delete", { id: JSON.parse(row.dataset.coupon).id }); toast("Code supprimé.", "good"); await refreshSite(); renderAdmin("coupons"); } catch (e) { toast(e.message, "bad"); }
+      return;
+    }
+    if (t.closest("[data-search-run]")) {
+      const b = t.closest("[data-search-run]"); b.disabled = true;
+      try { const r = await api("search_run", {}); toast(r.message, "good"); setTimeout(drawSearchStatus, 4000); } catch (e) { toast(e.message, "bad"); b.disabled = false; }
       return;
     }
     if (t.closest("[data-coupon-new]")) { $("coupon-edit").innerHTML = `<h3>Nouveau code promo</h3>${couponForm()}`; return; }

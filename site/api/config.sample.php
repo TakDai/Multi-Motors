@@ -15,4 +15,7 @@ return [
     'site_url' => 'https://example.com/',
     // Secret used by the daily GitHub job to read approved changes
     'export_key' => 'change-me',
+    // Starting the daily search from the site (OVH scheduled task api/cron.php, "run now" button):
+    // fine-grained GitHub token, only this repository, permission "Actions: read and write"
+    'github_token' => '',
 ];

@@ -1917,3 +1917,4 @@ dialog.crop-modal { width: min(640px, calc(100vw - 32px)); }
 .rep-tile.tt::after, .rep-strip .tt::after { left: 0; transform: translate(0, 4px); }
 .rep-tile.tt:hover::after, .rep-tile.tt:focus-visible::after, .rep-strip .tt:hover::after, .rep-strip .tt:focus-visible::after { transform: none; }
 .rep-strip .tt.r::after { left: auto; right: 0; }
+.run-list li { grid-template-columns: 150px minmax(0, 1fr); } .adm-search { margin-top: 18px; }
