@@ -641,6 +641,8 @@ img.is-photo { mix-blend-mode: multiply; }
 /* ================= Responsive (révision) ================= */
 /* Navigation always in the flow: never over the title */
 .topnav { position: static; justify-content: flex-end; padding: 12px 14px 0; flex-wrap: wrap; }
+/* The nav stays in the flow but keeps its own layer: the account menu opens above the motor page header (logo, title) */
+.topnav { position: relative; z-index: 50; }
 .home-head { padding-top: 4px; }
 .d-top { padding-top: 6px; }
 .page { padding-top: 20px; }
