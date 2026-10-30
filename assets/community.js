@@ -227,6 +227,15 @@
   $("modal").addEventListener("close", () => $("m-backdrop")?.remove());
   document.addEventListener("click", (ev) => { if (ev.target.id === "m-backdrop") closeModal(); });
   document.addEventListener("keydown", (ev) => { if (ev.key === "Escape" && $("modal").open && !$("modal").matches(":modal")) closeModal(); });
+  // Escape also closes the account menu and gives the focus back to its button
+  document.addEventListener("keydown", (ev) => {
+    if (ev.key !== "Escape") return;
+    document.querySelectorAll(".acct-menu:not([hidden])").forEach((m) => {
+      m.hidden = true;
+      const b = m.previousElementSibling;
+      if (b) { b.setAttribute("aria-expanded", "false"); if (m.contains(document.activeElement)) b.focus(); }
+    });
+  });
   const when = (at) => {
     const d = new Date((at || "").replace(" ", "T") + "Z");
     return isNaN(d) ? "" : d.toLocaleDateString("fr-FR", { day: "numeric", month: "long", year: "numeric" });
@@ -1694,7 +1703,11 @@
     const at = t.closest("[data-auth-tab]"); if (at) return authForm(at.dataset.authTab);
     const ab = t.closest(".acct-btn");
     if (ab) { const menu = ab.nextElementSibling; menu.hidden = !menu.hidden; ab.setAttribute("aria-expanded", String(!menu.hidden)); return; }
-    if (!t.closest(".acct-menu")) document.querySelectorAll(".acct-menu").forEach((m) => (m.hidden = true));
+    // Close the account menu on a click outside it, or once one of its entries is chosen
+    if (!t.closest(".acct-menu") || t.closest(".acct-menu a, .acct-menu button")) {
+      document.querySelectorAll(".acct-menu").forEach((m) => (m.hidden = true));
+      document.querySelectorAll(".acct-btn").forEach((b) => b.setAttribute("aria-expanded", "false"));
+    }
     if (t.closest("[data-resend-verify]")) {
       try { toast((await api("resend_verify", {})).message, "good"); } catch (e) { toast(e.message, "bad"); }
       return;
