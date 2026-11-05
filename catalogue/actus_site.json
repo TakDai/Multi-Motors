@@ -28,5 +28,11 @@
   "date": "2026-10-30",
   "title": "Menu du compte réparé et nouvelle veille quotidienne du catalogue",
   "body": "Sur les fiches moteur, le menu du compte (Mon espace, Mon profil, Modifier mon profil, Administration) était caché sous le haut de la page et ne répondait plus aux clics : il s'ouvre maintenant au-dessus de la fiche, sur ordinateur comme sur mobile. Il se referme aussi dès qu'on choisit une page, ou avec la touche Échap. Nouveau : en plus de la recherche du matin, une veille sur le web passe chaque soir. Elle repère les nouvelles marques et les nouveaux moteurs, complète les caractéristiques manquantes, corrige les valeurs contredites par la fiche du fabricant et ajoute des vidéos de review. Chaque changement est fait d'après une source vérifiée."
+ },
+ {
+  "type": "site",
+  "date": "2026-11-05",
+  "title": "Veille du 5 novembre : 5 moteurs Hobbywing et RCinPower, 15 corrections",
+  "body": "La veille web du jour ajoute 5 moteurs : Hobbywing XRotor 2207.5 1780KV, XRotor 3110 900KV et 1150KV, XRotor 3115 1050KV, et RCinPower EVO 0802 Pro 28800KV. 53 caractéristiques ont été complétées sur 10 fiches (BetaFPV 1105, 1505 et LAVA 1104, Axisflying AF2406-X et AF310, Hobbywing XRotor) et 15 valeurs corrigées d'après les fiches des fabricants : puissance, courant et résistance de l'AF2406-X 2080KV, diamètre et hauteur de la FlyFishRC Flash 1804 qui étaient inversés, et fixation de la HGLRC Specter 1804 3500KV."
  }
 ]
