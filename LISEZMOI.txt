@@ -1,2 +1,2 @@
-Site Multi-Motors prêt à servir, généré automatiquement depuis la branche Moteurs (6391d56).
+Site Multi-Motors prêt à servir, généré automatiquement depuis la branche Moteurs (f26a7af).
 Ne pas modifier ici : les changements sont écrasés à chaque mise à jour.
